@@ -1,0 +1,4 @@
+List of features to add or bug fixes to squash
+* Change Save / Load format to png
+* Add other BBC modes 0,1,4,5,7
+* Add drawing brush types to other drawing tools, eg x2 tool to line, box, box fill
