@@ -233,7 +233,9 @@ Procedure dBrush(dx,dy,w,d)
           ; check For transparency
           If dc-dTrn>-1 Or (pat(pSel,pS)=1 And dCol=0)
             ;Box(lx*4+MA(0)\lx,ly*2+MA(0)\ly,4,2,bp(dc))
-            Box(lx*dMpx,ly*dMpy,dMpx,dMpy,bp(dc))
+            ;Box(lx*dMpx,ly*dMpy,dMpx,dMpy,bp(dc))
+            buf1(ly*640+lx)=dc
+        
           EndIf
         EndIf
       EndIf
@@ -855,10 +857,14 @@ For i=0 To 7
   bpFlash(15-i)=bp(i)
 Next
 
+    For i=0 To 7
+      ct(i)=bp(i)
+      ct(i+8)=bpFlash(i+8*flashing)
+    Next
 
-; For i=0 To 163839
-;   buf1(i)=Random(15,8)
-; Next
+;  For i=0 To 163839
+;    buf1(i)=Random(15,8)
+;  Next
 
 
 ; define beeb modes
@@ -981,6 +987,7 @@ EndIf
 Repeat
   Event = WaitWindowEvent()
   
+    
   ; handle flashing colours
   If Event = #PB_Event_Timer
     flashing=(flashing+1) & 1
@@ -990,31 +997,6 @@ Repeat
       ct(i+8)=bpFlash(i+8*flashing)
     Next
     
-    If StartDrawing(ImageOutput(iBeebSCRN))
-      Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
-      Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
-      PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
-      
-      If PixelFormat = #PB_PixelFormat_32Bits_RGB
-      Else                        ; Else it's 32bits_BGR
-      EndIf
-      
-      For y = 0 To #drwH-1
-        *Line.Pixel = Buffer+Pitch*y
-        yMul=(y/2)*#drwW
-        
-        x=0
-        Repeat
-          dc.a = buf1(x/dMpx+yMul)
-          For i=0 To dMpx-1
-            *Line\Pixel = ct(dc) ; Write the pixel directly to the memory !
-            *Line+4
-          Next
-          x+dMpx
-        Until x >=#drwW-1
-      Next
-      StopDrawing()
-    EndIf
     
   EndIf
     
@@ -1061,7 +1043,7 @@ Repeat
           ; determine tool being used
           Select tCur
             Case 4 ; brush tool
-              If StartDrawing(ImageOutput(iBeebSCRN))
+              ;If StartDrawing(ImageOutput(iBeebSCRN))
                 Select dSel
                   Case 20 ; standard brush
                     dbrush(px(mx),py(my),dWid,0)
@@ -1072,8 +1054,8 @@ Repeat
                   Case 24 ; standard X2 brush
                     dbrush(px(mx),py(my),dWid,1)
                 EndSelect
-                StopDrawing()
-              EndIf
+                ;StopDrawing()
+              ;EndIf
             Case 5 ; line tool
               If StartDrawing(ImageOutput(iBeebSCRN))
                 DrawingMode(#PB_2DDrawing_XOr)
@@ -1291,11 +1273,37 @@ Repeat
     ;-------- Update Screen --------
     ;      
     
+
+    
+    
     ; update screen
     If StartDrawing(CanvasOutput(0))
+      Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
+      Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
+      PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
+      
+      If PixelFormat = #PB_PixelFormat_32Bits_RGB
+      Else                        ; Else it's 32bits_BGR
+      EndIf
+      
+      For y = 0 To #drwH-1
+        *Line.Pixel = Buffer+Pitch*y
+        yMul=(y/2)*#drwW
+        
+        x=0
+        Repeat
+          dc.a = buf1(x/dMpx+yMul)
+          For i=0 To dMpx-1
+            *Line\Pixel = RGBA(63,127,191,255);ct(7) ; Write the pixel directly to the memory !
+            *Line+4
+          Next
+          x+dMpx
+        Until x >=#drwW-1
+      Next
+    EndIf 
       
       ; update drawing area
-      DrawImage(ImageID(iBeebSCRN),MA(0)\lx,MA(0)\ly)
+;      DrawImage(ImageID(iBeebSCRN),MA(0)\lx,MA(0)\ly)
       
       ;update tool strip toggles
       If ListSize(lToggle())
@@ -1322,7 +1330,8 @@ Repeat
       StopDrawing()    
     EndIf
     
-  EndIf
+
+
 Until Event = #PB_Event_CloseWindow
 
 End
@@ -1404,8 +1413,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 861
-; FirstLine = 837
+; CursorPosition = 1272
+; FirstLine = 1272
 ; Folding = -----
 ; EnableXP
 ; Executable = ART_PB_010_x86.exe
