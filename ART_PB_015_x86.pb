@@ -23,7 +23,7 @@
 ; * Layers, not sure how this will work, needs more thought
 ; 
 
-; colour map, flashing colour default is 400ms
+; colour map, flashing colour default is 540ms
 ; 0   black
 ; 1	  red
 ; 2	  green
@@ -60,6 +60,7 @@ Structure MouseArea
   ry.w
   name.s
   img.a
+  gad.w
 EndStructure
 
 Structure beebModes
@@ -86,6 +87,13 @@ Structure Pixel
   Pixel.l
 EndStructure
 
+Structure rgbTable
+  r.a
+  g.a
+  b.a
+EndStructure
+
+
 ; globals
 Global pCol.a=0 ; pattern colour selected
 Global pSel.a=8 ; pattern selected
@@ -104,17 +112,20 @@ Global tCur.a=4 ; tool selected
 Global tTog.a=3 ; tool toggle colour
 Global tQSv.a=0 ; quick save toggle
 Global tSel.a=0 ; new tool select 
+Global gCur.w=0 ; current gadget id
 
-Global maCount.a=7 ; mouse area count 0-n
+Global maCount.a=8 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
 Global iBeebSCRN, imgToolStrip; image handles
 Global flashing.b=0 ; flashing colour toggle
 Global flashCol.a   ; flashing colour index
+Global fSpeed=540  ; flash speed in ms
 Global drawFlag=0   ; redraw buffer flag
 
 Global Dim buf1.a(163839) ; screen buffer
 Global Dim pat.a(17,15) ; drawing patterns
 Global Dim bp(15)       ; beeb palette
+Global Dim rgbT.rgbTable(15) ; rgb lookup table
 Global Dim ct(15)       ; colour table look for redrawing main canvas
 Global Dim bpFlash(15)  ; flash palette 0-7 phase 1, 8-15 phase 2
 Global Dim mode.beebModes(6) ; beeb mode data
@@ -142,33 +153,31 @@ Procedure px(x)
   ProcedureReturn (x-MA(i)\lx) / dMpx
 EndProcedure
 Procedure py(y)
-  ProcedureReturn (y-MA(i)\ly) / dMpy
+  ProcedureReturn 255-((y-MA(i)\ly) / dMpy)
 EndProcedure
 
 ; display program stats
 Procedure showstats()
   Protected x,y
-  x=34
-  y=4
+  x=MA(4)\lx+30
+  y=MA(4)\ly
   
-  Box(MA(4)\lx+x,MA(4)\ly+1,90,MA(4)\ry-MA(4)\ly-2,bp(0))
-  ;Box(MA(4)\lx+148+x,MA(4)\ly+1,88,MA(4)\ry-MA(4)\ly-2,bp(0))
+  ; MA: 756,164,204,200
+  ; Gadget x: 648 ,  y: 0
   
-  DrawText(MA(4)\lx+x,MA(4)\ly+y,StrU(mx,#PB_Long))
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+16,StrU(my,#PB_Long))
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+32,StrU(px(mx),#PB_Long))
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+48,StrU(py(my),#PB_Long))
+  Box(x,y+1,90,198,bp(0))
   
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+80,StrU(mact,#PB_Long))
+  DrawText(x,y,StrU(mx,#PB_Long))
+  DrawText(x,y+16,StrU(my,#PB_Long))
+  DrawText(x,y+32,StrU(px(mx),#PB_Long))
+  DrawText(x,y+48,StrU(py(my),#PB_Long))
   
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+96,StrU(tCur,#PB_Long))
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+112,StrU(tSel,#PB_Long))
+  DrawText(x,y+80,StrU(mact,#PB_Long))
   
-  ;DrawText(MA(4)\lx+30+x,MA(4)\ly+64+y,StrU(ListSize(lines()),#PB_Long))
-  
-  ;dt(M{(4)}.bx%+60,M{(4)}.by%+68,2,STR$(tool%),4)
-  ;dt(M{(4)}.bx%+268,M{(4)}.by%+68,2,STR$(cT%),4)
-  
+  DrawText(x,y+96,StrU(tCur,#PB_Long))
+  DrawText(x,y+112,StrU(tSel,#PB_Long))
+  DrawText(x,y+128,StrU(gCur,#PB_Long))
+  DrawText(x,y+144,StrU(dCol,#PB_Long))
   
 EndProcedure
 
@@ -184,7 +193,7 @@ EndProcedure
 ; check if mouse is in range of mouse area object, return '1' if in range
 Procedure range(i)
   Protected r.a=0
-  If mx>=MA(i)\lx And mx<=MA(i)\rx And my>=MA(i)\ly And my<=MA(i)\ry
+  If mx>=MA(i)\lx And mx<=MA(i)\rx And my>=MA(i)\ly And my<=MA(i)\ry And gCur=MA(i)\gad
     r=1
   EndIf
   ProcedureReturn r
@@ -237,7 +246,7 @@ Procedure dBrush(dx,dy,w,d)
             ;Box(lx*4+MA(0)\lx,ly*2+MA(0)\ly,4,2,bp(dc))
             ;Box(lx*dMpx,ly*dMpy,dMpx,dMpy,bp(dc))
             If buf1(ly*640+lx)<>dc
-              buf1(ly*640+lx)=12
+              buf1(ly*640+lx)=dc
               drawFlag=1
             EndIf
             
@@ -305,7 +314,7 @@ Procedure updateBrush()
   
   ; highlight selected pattern and update selected brush size pattern
   Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(7))
-  dBrushSize()
+  
 EndProcedure
 
 ; update palette, assumes startdrawing is already active
@@ -322,7 +331,7 @@ Procedure updatePalette()
           If i=0 And dCol=0
             dc=bp(8)
           Else
-            dc=bp(dCol)
+            dc=bp(dCol % 8)
           EndIf
         EndIf
         
@@ -357,7 +366,11 @@ Procedure Vline2(x1,y1,y2)
         
         ; Check For transparency
         If dc-dTrn>-1
-          Box(x1*dMpx,ly*dMpy,dMpx,dMpy,bp(dc))   
+          If buf1(ly*640+x1)<>dc
+            buf1(ly*640+x1)=dc
+            drawFlag=1
+          EndIf          
+          ;Box(x1*dMpx,ly*dMpy,dMpx,dMpy,bp(dc))   
         EndIf
       EndIf
     Next
@@ -381,7 +394,11 @@ Procedure Hline2(x1,x2,y1)
       
       ; Check For transparency
       If dc-dTrn>-1
-        Box(lx*dMpx,y1*dMpy,dMpx,dMpy,bp(dc))   
+        If buf1(y1*640+lx)<>dc
+          buf1(y1*640+lx)=dc
+          drawFlag=1
+        EndIf
+        ;Box(lx*dMpx,y1*dMpy,dMpx,dMpy,bp(dc))   
       EndIf
     EndIf
   Next
@@ -528,8 +545,12 @@ Procedure dBoxG(x1,y1,x2,y2,d)
         
         ; Check For transparency
         If dc-dTrn>-1
-          
-          Box(lx*dMpx,ly*dMpy,dMpx,dMpy,bp(dc))
+          If buf1(ly*640+lx)<>dc
+            buf1(ly*640+lx)=dc
+            drawFlag=1
+          EndIf
+
+          ;Box(lx*dMpx,ly*dMpy,dMpx,dMpy,bp(dc))
         EndIf
       EndIf
       If d=1
@@ -552,7 +573,26 @@ EndProcedure
 
 ; draw highlight box for colour selector
 Procedure drawColSel(i,c)
-  drawBox(MA(1)\lx+(c/8)*32,MA(1)\ry-i*22-22,MA(1)\lx+30+(c/8)*32,MA(1)\ry-i*22+1,bp(c))
+  x=i/8*28
+  i=i % 8
+  y=i*22  
+  drawBox(MA(1)\lx+x,MA(1)\ry-y-22,MA(1)\lx+30+x,MA(1)\ry-y+1,bp(c))
+EndProcedure
+
+; update flash speed
+Procedure updateFlashSpeed(t)
+    
+    y=t / 10
+    If Y>100
+      y=100
+    EndIf
+    
+    Box(MA(8)\lx+1,MA(8)\ly+1,57,127,bp(0))
+    Box(MA(8)\lx+24,MA(8)\ly+2,10,104,bp(1))
+    LineXY(MA(8)\lx+28,MA(8)\ly+6,MA(8)\lx+28,MA(8)\ly+102,bp(7))
+    Box(MA(8)\lx+11,MA(8)\ly+y,36,8,bp(7))
+    Box(MA(8)\lx+13,MA(8)\ly+y+2,32,4,bp(8))
+    DrawText(MA(8)\lx+4,MA(8)\ly+112,Right("00"+StrU(fSpeed),4)+"ms",bp(7))
 EndProcedure
 
 ; flood fill With current pattern
@@ -855,25 +895,28 @@ Next
 ; define beeb 2 palette
 Restore paletteData
 For i=1 To 15
-  Read.a r
-  Read.a g
-  Read.a b
-  bp(i)=RGB(r,g,b)
+  Read.a rgbT(i)\r
+  Read.a rgbT(i)\g
+  Read.a rgbT(i)\b
+  bp(i)=RGB(rgbT(i)\r,rgbT(i)\g,rgbT(i)\b)
 Next
+
 bp(0) = RGB(0,0,0)
+rgbT(0)\r=0
+rgbT(0)\g=0
+rgbT(0)\b=0
 
-; flashing palette
+; flashing palette - pointer to BP colour
 For i=0 To 7
-  bpFlash(i)=bp(i)  
-  bpFlash(15-i)=bp(i)
-  ct(i)=bp(i)
-  ct(i+8)=bpFlash(i+8*flashing)
+  bpFlash(i)=i  
+  bpFlash(i+8)=7-i
 Next
 
-
-For i=0 To 163839
-  ;buf1(i)=i % 8+8
-Next
+; For i=0 To 163839
+;   If i<16 
+;     buf1(i)=i % 15
+;     EndIf
+; Next
 
 
 ; define beeb modes
@@ -898,6 +941,9 @@ For i=0 To maCount
   Read.w y
   MA(i)\rx=MA(i)\lx+x-1
   MA(i)\ry=MA(i)\ly+y-1
+  Read.w MA(i)\gad
+  
+  ;MessageRequester("Debug",MA(i)\name+" "+StrU(MA(i)\gad))
 Next
 
 ; toolstrip image
@@ -920,20 +966,19 @@ If OpenWindowedScreen(WindowID(0), MA(0)\lx,MA(0)\ly, 640, 512)=0
     Exit_ART("Cannot init main canvas windowed screen object!")
 EndIf
 
-; init screen gadget and initial state
+; init screen gadgets and initial state
 CanvasGadget(0,0,520,648,#scrH-520) ; pallete gadget
 SetGadgetAttribute(0, #PB_Canvas_Cursor , #PB_Cursor_Cross)
 
- CanvasGadget(1,648,0,#scrW-648,#scrH) ; tool gadget
- SetGadgetAttribute(1, #PB_Canvas_Cursor , #PB_Cursor_Cross)
- 
- CanvasGadget(2,0,0,648,520) ; drawing gadget (never drawn to)
- SetGadgetAttribute(2, #PB_Canvas_Cursor , #PB_Cursor_Cross)
- 
+CanvasGadget(1,648,0,#scrW-648,#scrH) ; tool gadget
+SetGadgetAttribute(1, #PB_Canvas_Cursor , #PB_Cursor_Cross)
 
+CanvasGadget(2,0,0,648,520) ; drawing gadget (never drawn to)
+SetGadgetAttribute(2, #PB_Canvas_Cursor , #PB_Cursor_Cross)
+ 
 mact=-1
 
-AddWindowTimer(0,0,540)
+AddWindowTimer(0,0,fSpeed)
 
 ;
 ;-------- Draw controls --------
@@ -951,8 +996,8 @@ If StartDrawing(CanvasOutput(0))
   ;584,524,64,178
   ; draw colour select boxes
   For i=1 To 7
-    Box(584+4,178-i*22-19,24,18,bp(i))
-    Box(584+32,178-i*22-19,24,18,bp(i))
+    Box(MA(1)\lx+4,MA(1)\ry-i*22-19,24,18,bp(i))
+    Box(MA(1)\lx+32,MA(1)\ry-i*22-19,24,18,bp(i))
   Next  
   drawColSel(dCol,7)  
   
@@ -969,31 +1014,41 @@ If StartDrawing(CanvasOutput(1))
   
  ; draw tools strip and toggle defaults
   DrawImage(ImageID(imgToolStrip),4,2)
-;   toolToggle(2,8) ; undo
-;   toolToggle(3,8) ; redo
-;   toolToggle(tCur,tTog) ; standard
-;   toolToggle(18,2)      ; transparency
-;   toolToggle(dSel,6)    ; draw style  
+  toolToggle(2,8) ; undo
+  toolToggle(3,8) ; redo
+  toolToggle(tCur,tTog) ; standard
+  toolToggle(18,2)      ; transparency
+  toolToggle(dSel,6)    ; draw style  
   
     ; brush size control
-;   Circle(MA(3)\lx+33,MA(3)\ly+118,16,bp(6))
-;   Circle(MA(3)\lx+33,MA(3)\ly+84,12,bp(6))
-;   Circle(MA(3)\lx+33,MA(3)\ly+55,10,bp(6))
-;   Circle(MA(3)\lx+33,MA(3)\ly+33,7,bp(6))
-;   Circle(MA(3)\lx+33,MA(3)\ly+13,5,bp(6))
-;   
-;   Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(7))
-;   Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(7))
+  Circle(MA(3)\lx+33,MA(3)\ly+118,16,bp(6))
+  Circle(MA(3)\lx+33,MA(3)\ly+84,12,bp(6))
+  Circle(MA(3)\lx+33,MA(3)\ly+55,10,bp(6))
+  Circle(MA(3)\lx+33,MA(3)\ly+33,7,bp(6))
+  Circle(MA(3)\lx+33,MA(3)\ly+13,5,bp(6))
   
-;   DrawText(MA(4)\lx+4,MA(4)\ly+4,"mX:")
-;   DrawText(MA(4)\lx+4,MA(4)\ly+20,"mY:")
-;   DrawText(MA(4)\lx+4,MA(4)\ly+36,"pX:")
-;   DrawText(MA(4)\lx+4,MA(4)\ly+52,"pY:")
-;   DrawText(MA(4)\lx+4,MA(4)\ly+68,"mB:")
-;   DrawText(MA(4)\lx+4,MA(4)\ly+84,"mA:")
-;   DrawText(MA(4)\lx+4,MA(4)\ly+100,"CT:")
-;   DrawText(MA(4)\lx+4,MA(4)\ly+116,"TS:")  
+  Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(7))
+  Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(7))
   
+  dBrushSize()
+  
+  ; stats
+  x=MA(4)\lx
+  y=MA(4)\ly
+   DrawText(x,y,"mX:")
+   DrawText(x,y+16,"mY:")
+   DrawText(x,y+32,"pX:")
+   DrawText(x,y+48,"pY:")
+   DrawText(x,y+64,"mB:")
+   DrawText(x,y+80,"mA:")
+   DrawText(x,y+96,"CT:")
+   DrawText(x,y+112,"TS:")  
+   DrawText(x,y+128,"gC:")     
+   
+   ; flash speed
+   updateFlashSpeed(fSpeed)
+   drawbox(MA(8)\lx,MA(8)\ly,MA(8)\rx,MA(8)\ry,bp(8))
+   
   StopDrawing()
 EndIf
 
@@ -1022,324 +1077,376 @@ EndIf
 ;-------- MainLoop --------
 ;
 
-Repeat
-  
-  ; event loop
   Repeat
-  
-  Event = WindowEvent()
-  
-  Select event
-    Case #PB_Event_Timer  ; handle flashing colours
-      flashing=(flashing+1) & 1
-      
-      For i=0 To 7
-        ct(i+8)=bpFlash(i+8*flashing)
-      Next
     
-    Case #PB_Event_Gadget ; gadget events
-    ; read mouse
-;    mx = GetGadgetAttribute(EventGadget(), #PB_Canvas_MouseX)
-;    my = GetGadgetAttribute(EventGadget(), #PB_Canvas_MouseY)
+    ; event loop
+    Repeat
       
-      ; determine which gadget has triggered an event
-      Select EventGadget()
-        Case 0 ; palette area
+      Event = WindowEvent()
+      
+      Select event
+        Case #PB_Event_Timer  ; handle flashing colours
+          flashing=(flashing+1) & 1
           
-        Case 1 ; tools area
+          ; update flashing colour pointer
+          For i=0 To 7
+            If flashing
+              bpFlash(i+8)=7-i
+            Else
+              bpFlash(i+8)=i
+            EndIf
+          Next
           
-        Case 2 ; drawing area
-          mx = GetGadgetAttribute(2, #PB_Canvas_MouseX)
-          my = GetGadgetAttribute(2, #PB_Canvas_MouseY)
+          ; update flashing colour selection
+          If StartDrawing(CanvasOutput(0))
+            For i=0 To 7
+              Box(MA(1)\lx+32,MA(1)\ry-i*22-19,24,18,bp(bpFlash(i+8)))
+            Next
+            
+            StopDrawing()    
+          EndIf      
           
-           If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(2, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
+        Case #PB_Event_Gadget ; gadget events
+          gCur=EventGadget()
           
-          ; determine tool being used
-          Select tCur
-            Case 4 ; brush tool
-              ;If StartDrawing(ImageOutput(iBeebSCRN))
-                Select dSel
-                  Case 20 ; standard brush
-                    dbrush(px(mx),255-py(my),dWid,0)
-                  Case 21 ; circle brush
-                    dCircle(mx,my,dWid*2)
-                  Case 23 ; airbrush
-                    dbrush(px(mx),py(my),dWid,2)
-                  Case 24 ; standard X2 brush
-                    dbrush(px(mx),py(my),dWid,1)
-                EndSelect
-                ;StopDrawing()
-              ;EndIf
-            Case 5 ; line tool
-              If StartDrawing(ImageOutput(iBeebSCRN))
-                DrawingMode(#PB_2DDrawing_XOr)
-                LineXY(sx,sy,ox,oy,bp(7))
-                LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
-                StopDrawing()
-              EndIf
-              ox=mx-MA(0)\lx
-              oy=my-MA(0)\ly
+          ; set mouse action if none already set for left mouse click
+          If EventType() = #PB_EventType_LeftButtonDown
+            If mact=-1
               
-            Case 6,7 ; polygon tool
-              If StartDrawing(ImageOutput(iBeebSCRN))
-                DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
-                Circle(sx,sy,Abs(sx-ox),bp(7))
-                Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
-                DrawingMode(#PB_2DDrawing_Default)
-                StopDrawing()
-              EndIf
-              
-              ox=mx-MA(0)\lx
-              oy=my-MA(0)\ly
-            Case 8,9,12,13  ; boxes, gradient
-              If StartDrawing(ImageOutput(iBeebSCRN))
-                DrawingMode(#PB_2DDrawing_XOr)
-                drawBox(sx,sy,ox,oy,bp(7))
-                drawBox(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
-                DrawingMode(#PB_2DDrawing_Default)
-                StopDrawing()
-              EndIf
-              ox=mx-MA(0)\lx
-              oy=my-MA(0)\ly
-            Case 10 ; flood fill
-              If StartDrawing(CanvasOutput(0))
-                i=Point(mx,my)
-                If i<>dFil
-                  dFil=i
-                  Box(MA(7)\lx,MA(7)\ly,MA(7)\rx-MA(7)\lx,MA(7)\ry-MA(7)\ly,dFil)
+              ; set default action to none and check mouse area ranges to select current mouse area
+              mact=0
+              For i=0 To maCount
+                If range(i)=1
+                  mact=i+1
+                  Break
                 EndIf
-                StopDrawing()
+              Next
+              Select mact
+                Case 1 ; main drawing canvas - save undo
+                       ; clear redo when new drawing starts
+                  If ListSize(lRedo())
+                    ClearList(lRedo())
+                    addToggle(3,8)
+                  EndIf
+                  saveUndo()
+                  sx=mx-MA(0)\lx
+                  sy=my-MA(0)\ly
+                  ox=sx
+                  oy=sy
+                  ;MessageRequester("Debug","Undo Created")
+                  
+              EndSelect
+            EndIf
+          EndIf
+          
+          ; determine which gadget has triggered an event
+          Select gCur
+              ;
+              ;-------- Palette Gadget Area --------
+              ;  
+              
+            Case 0
+              mx = GetGadgetAttribute(gCur, #PB_Canvas_MouseX)
+              my = GetGadgetAttribute(gCur, #PB_Canvas_MouseY)
+              
+              If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
+                
+                Select mact
+                    
+                  Case 2 ; colour select
+                    i=7-((my-MA(1)\ly) / 22) + ((mx-MA(1)\lx) / 32)*8
+                    If dCol<>i And i>-1 And i<16
+                      If StartDrawing(CanvasOutput(0))    
+                        drawColSel(dCol,0)
+                        dCol=i
+                        drawColSel(dcol,7)
+                        updatePalette()
+                        StopDrawing()
+                      EndIf
+                      If StartDrawing(CanvasOutput(1))
+                        dBrushSize()
+                        StopDrawing()
+                      EndIf
+                    EndIf
+                  Case 3 ; pattern select
+                    i=7-((my-MA(2)\ly) / 22)
+                    j=((mx-MA(2)\lx) / 32)
+                    If i<0: i=0: EndIf
+                    If i>7: i=7: EndIf
+                    If j<0: j=0: EndIf
+                    If j>17: j=17: EndIf
+                    ;If i%>-1 And i%<8 And J%>-1 And J%<18 THEN
+                    If pCol<>i Or pSel<>j
+                      If StartDrawing(CanvasOutput(0))              
+                        Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(0))
+                        pCol=i
+                        pSel=j
+                        
+                        updateBrush()
+                        StopDrawing()
+                      EndIf
+                      If StartDrawing(CanvasOutput(1))
+                        dBrushSize()
+                        StopDrawing()
+                      EndIf
+                    EndIf
+                EndSelect
               EndIf
+              
+              ;
+              ;-------- Tools Gadget Area --------
+              ;              
+              
+            Case 1 ; tools area
+              mx = GetGadgetAttribute(gCur, #PB_Canvas_MouseX)
+              my = GetGadgetAttribute(gCur, #PB_Canvas_MouseY)
+              
+              If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
+                Select mact
+                    
+                  Case 4 ; brush size
+                    s=(my-MA(3)\ly-4) / 4
+                    If s<>dWid And s>-1 And s<33
+                      
+                      ; update brush size indicator
+                      If StartDrawing(CanvasOutput(1))
+                        For i=0 To 1
+                          Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(i*7))
+                          Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(i*7))
+                          dWid=s
+                        Next
+                        dBrushSize()
+                        StopDrawing()
+                      EndIf
+                    EndIf
+                    
+                  Case 9 ; flash speed
+                    s=(my-MA(8)\ly)*10
+                    If s<10: s=10: EndIf
+                    If s>1000: s=1000: EndIf
+                    If s<>fSpeed
+                      fspeed=s
+                      If StartDrawing(CanvasOutput(1))
+                        updateflashspeed(fspeed)
+                        StopDrawing()
+                      EndIf
+                    EndIf
+                    
+                EndSelect
+              EndIf
+              
+              ; left button release events
+              If EventType()=#PB_EventType_LeftButtonUp
+                
+                ; do any mouse up actions such as tools and pattern select
+                Select mact
+                    
+                  Case 7 ; tool select
+                         ; get button of tool clicked And action
+                    tSel=(mx-MA(6)\lx) / 50+((my-MA(6)\ly) / 50)*2
+                    
+                    If tSel>-1 And tSel<28
+                      Select tSel
+                        Case 0 ; save
+                          opensave(1)
+                        Case 1 ; load
+                          opensave(0)
+                        Case 2 ; undo
+                          undo()
+                        Case 3 ; redo
+                          redo()
+                        Case 19; CLS
+                          saveundo()
+                          If StartDrawing(ImageOutput(iBeebSCRN))
+                            Box(0,0,#drwW,#drwH,bp(0))
+                            StopDrawing()
+                          EndIf
+                        Case 18; toggle transparency
+                          dTrn=(dTrn+1) % 2
+                          addToggle(tSel,dTrn*2)
+                          
+                        Case 20,21,22,23,24 ; brush style
+                          If tSel<>dSel
+                            addToggle(dSel,0)
+                            dSel=tSel
+                            addToggle(dSel,6)
+                          EndIf
+                          
+                        Case 27 ; quick save toggle
+                          tQSv=(tQSv+1) % 2
+                          addToggle(tSel,tQSv*2)
+                          
+                        Default ; all other tools
+                          If tSel<>tCur
+                            addToggle(tCur,0)
+                            tCur=tSel
+                            addToggle(tCur,tTog)
+                          EndIf
+                      EndSelect
+                    EndIf
+                    
+                  Case 9 ; flash speed slider
+                        RemoveWindowTimer(0,0)
+                        AddWindowTimer(0,0,fSpeed)
+
+                EndSelect
+                
+                
+              EndIf 
+              
+              ;
+              ;-------- Drawing Gadget Area --------
+              ;              
+              
+            Case 2 ; drawing area
+              mx = GetGadgetAttribute(gCur, #PB_Canvas_MouseX)
+              my = GetGadgetAttribute(gCur, #PB_Canvas_MouseY)
+              
+              If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
+                
+                ; determine tool being used
+                Select tCur
+                  Case 4 ; brush tool
+                         ;If StartDrawing(ImageOutput(iBeebSCRN))
+                    Select dSel
+                      Case 20 ; standard brush
+                        dbrush(px(mx),py(my),dWid,0)
+                      Case 21 ; circle brush
+                        dCircle(mx,my,dWid*2)
+                      Case 23 ; airbrush
+                        dbrush(px(mx),py(my),dWid,2)
+                      Case 24 ; standard X2 brush
+                        dbrush(px(mx),py(my),dWid,1)
+                    EndSelect
+                    ;StopDrawing()
+                    ;EndIf
+                  Case 5 ; line tool
+                    If StartDrawing(ImageOutput(iBeebSCRN))
+                      DrawingMode(#PB_2DDrawing_XOr)
+                      LineXY(sx,sy,ox,oy,bp(7))
+                      LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
+                      StopDrawing()
+                    EndIf
+                    ox=mx-MA(0)\lx
+                    oy=my-MA(0)\ly
+                    
+                  Case 6,7 ; polygon tool
+                    If StartDrawing(ImageOutput(iBeebSCRN))
+                      DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
+                      Circle(sx,sy,Abs(sx-ox),bp(7))
+                      Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
+                      DrawingMode(#PB_2DDrawing_Default)
+                      StopDrawing()
+                    EndIf
+                    
+                    ox=mx-MA(0)\lx
+                    oy=my-MA(0)\ly
+                  Case 8,9,12,13  ; boxes, gradient
+                    If StartDrawing(ImageOutput(iBeebSCRN))
+                      DrawingMode(#PB_2DDrawing_XOr)
+                      drawBox(sx,sy,ox,oy,bp(7))
+                      drawBox(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
+                      DrawingMode(#PB_2DDrawing_Default)
+                      StopDrawing()
+                    EndIf
+                    ox=mx-MA(0)\lx
+                    oy=my-MA(0)\ly
+                  Case 10 ; flood fill
+                    If StartDrawing(CanvasOutput(0))
+                      i=Point(mx,my)
+                      If i<>dFil
+                        dFil=i
+                        Box(MA(7)\lx,MA(7)\ly,MA(7)\rx-MA(7)\lx,MA(7)\ry-MA(7)\ly,dFil)
+                      EndIf
+                      StopDrawing()
+                    EndIf
+                EndSelect
+                ; *** end drawing tool code
+              EndIf
+              
+              ;     ; left button release events
+              If EventType()=#PB_EventType_LeftButtonUp
+                
+                ; do any mouse up actions such as tools and pattern select
+                Select mact
+                  Case 1 ; drawing area
+                         ; determine tool being used
+                    Select tCur
+                      Case 5 ; line tool completion
+                        If StartDrawing(ImageOutput(iBeebSCRN))
+                          DrawingMode(#PB_2DDrawing_XOr)
+                          LineXY(sx,sy,ox,oy,bp(7))
+                          LineXY(sx,sy,sx,sy,bp(7))
+                          DrawingMode(#PB_2DDrawing_Default)
+                          
+                          dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
+                          StopDrawing()
+                        EndIf
+                        
+                      Case 6,7 ; polygon completion
+                        If StartDrawing(ImageOutput(iBeebSCRN))
+                          DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
+                          Circle(sx,sy,Abs(sx-ox),bp(7))
+                          DrawingMode(#PB_2DDrawing_Default)
+                          
+                          If tCur=6 
+                            dCircOut(sx,sy,Abs(sx-ox))
+                          Else
+                            dCircle(sx,sy,Abs(sx-ox))
+                          EndIf
+                          
+                          StopDrawing()
+                        EndIf
+                        
+                        
+                      Case 8,9,12,13  ; boxes, gradient
+                        If StartDrawing(ImageOutput(iBeebSCRN))
+                          DrawingMode(#PB_2DDrawing_XOr)
+                          drawBox(sx,sy,ox,oy,bp(7))
+                          DrawingMode(#PB_2DDrawing_Default)
+                          
+                          If tCur>9
+                            If sx<>ox And sy<>oy 
+                              dBoxG(sx,sy,ox,oy,tCur-12)
+                            EndIf
+                          Else
+                            dBox(sx,sy,ox,oy,tCur-8)
+                          EndIf
+                          
+                          StopDrawing()
+                        EndIf
+                      Case 10 ; flood fill
+                        If StartDrawing(ImageOutput(iBeebSCRN))
+                          floodfill(mx-MA(0)\lx,my-MA(0)\ly)
+                          StopDrawing()
+                        EndIf
+                    EndSelect 
+                EndSelect
+                
+              EndIf
+              
           EndSelect
-          ; *** end drawing tool code
- EndIf
-      
+          
+          ; left button release events
+          If EventType()=#PB_EventType_LeftButtonUp
+            
+            
+            ; reset mouse action
+            mact=-1
+          EndIf
+          
+          
+        Case #PB_Event_CloseWindow ; close application event  
+          End
+          
       EndSelect
-    
-    Case #PB_Event_CloseWindow ; close application event  
-      End
       
-  EndSelect
-
+      
+    Until event=0
     
-;   If (Event = #PB_Event_Gadget And EventGadget() = 2) ;Or Event = #PB_Event_Timer
-;     
-;     
-;     ; left mouse button down and mouse move events
-;     If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(2, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
-;       
-;       ; set mouse action if none already set
-;       If mact=-1
-;         
-;         ; set default action to none and check mouse area ranges to select current mouse area
-;         mact=0
-;         For i=0 To maCount
-;           If range(i)=1
-;             mact=i+1
-;             Break
-;           EndIf
-;         Next
-;         Select mact
-;           Case 1 ; main drawing canvas - save undo
-;                  ; clear redo when new drawing starts
-;             If ListSize(lRedo())
-;               ClearList(lRedo())
-;               addToggle(3,8)
-;             EndIf
-;             saveUndo()
-;             sx=mx-MA(0)\lx
-;             sy=my-MA(0)\ly
-;             ox=sx
-;             oy=sy
-;             
-;             
-;             
-;         EndSelect
-;       EndIf
-;       
-;       ; do any drawing actions for mouse move
-;       Select mact
-;         Case 1 ; main drawing canvas
-;           
-;           
-;         Case 2 ; colour select
-;           i=7-((my-MA(1)\ly) / 22)
-;           If dCol<>i And i>-1 And i<8
-;             If StartDrawing(CanvasOutput(0))    
-;               drawColSel(dCol,0)
-;               dCol=i
-;               drawColSel(dcol,7)
-;               updatePalette()
-;               StopDrawing()
-;             EndIf
-;           EndIf
-;         Case 3 ; pattern select
-;           i=7-((my-MA(2)\ly) / 22)
-;           j=((mx-MA(2)\lx) / 32)
-;           If i<0: i=0: EndIf
-;           If i>7: i=7: EndIf
-;           If j<0: j=0: EndIf
-;           If j>17: j=17: EndIf
-;           ;If i%>-1 And i%<8 And J%>-1 And J%<18 THEN
-;           If pCol<>i Or pSel<>j
-;             If StartDrawing(CanvasOutput(0))              
-;               Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(0))
-;               pCol=i
-;               pSel=j
-;               
-;               updateBrush()
-;               StopDrawing()
-;             EndIf
-;           EndIf
-;           
-;         Case 4 ; brush size
-;           s=(my-MA(3)\ly-4) / 4
-;           If s<>dWid And s>-1 And s<33
-;             
-;             ; update brush size indicator
-;             If StartDrawing(CanvasOutput(0))
-;               For i=0 To 1
-;                 Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(i*7))
-;                 Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(i*7))
-;                 dWid=s
-;               Next
-;               dBrushSize()
-;               StopDrawing()
-;             EndIf
-;           EndIf
-;           
-;       EndSelect
-;     EndIf
-;     
-;     ;
-;     ;-------- Mouse Up --------
-;     ;      
-;     
-;     ; left button release events
-;     If EventType()=#PB_EventType_LeftButtonUp
-;       
-;       ; do any mouse up actions such as tools and pattern select
-;       Select mact
-;         Case 1 ; drawing area
-;                ; determine tool being used
-;           Select tCur
-;             Case 5 ; line tool completion
-;               If StartDrawing(ImageOutput(iBeebSCRN))
-;                 DrawingMode(#PB_2DDrawing_XOr)
-;                 LineXY(sx,sy,ox,oy,bp(7))
-;                 LineXY(sx,sy,sx,sy,bp(7))
-;                 DrawingMode(#PB_2DDrawing_Default)
-;                 
-;                 dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
-;                 StopDrawing()
-;               EndIf
-;               
-;             Case 6,7 ; polygon completion
-;               If StartDrawing(ImageOutput(iBeebSCRN))
-;                 DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
-;                 Circle(sx,sy,Abs(sx-ox),bp(7))
-;                 DrawingMode(#PB_2DDrawing_Default)
-;                 
-;                 If tCur=6 
-;                   dCircOut(sx,sy,Abs(sx-ox))
-;                 Else
-;                   dCircle(sx,sy,Abs(sx-ox))
-;                 EndIf
-;                 
-;                 StopDrawing()
-;               EndIf
-;               
-;               
-;             Case 8,9,12,13  ; boxes, gradient
-;               If StartDrawing(ImageOutput(iBeebSCRN))
-;                 DrawingMode(#PB_2DDrawing_XOr)
-;                 drawBox(sx,sy,ox,oy,bp(7))
-;                 DrawingMode(#PB_2DDrawing_Default)
-;                 
-;                 If tCur>9
-;                   If sx<>ox And sy<>oy 
-;                     dBoxG(sx,sy,ox,oy,tCur-12)
-;                   EndIf
-;                 Else
-;                   dBox(sx,sy,ox,oy,tCur-8)
-;                 EndIf
-;                 
-;                 StopDrawing()
-;               EndIf
-;             Case 10 ; flood fill
-;               If StartDrawing(ImageOutput(iBeebSCRN))
-;                 floodfill(mx-MA(0)\lx,my-MA(0)\ly)
-;                 StopDrawing()
-;               EndIf
-;           EndSelect            
-;           
-;         Case 3 ; pattern select
-;           If range(2)=1
-;             ;col+1
-;             ;If col>7
-;             ;  col=0
-;             ;EndIf
-;             
-;             ;updatepalette()
-;           EndIf
-;         Case 7 ; tool select
-;           
-;           ; get button of tool clicked And action
-;           tSel=(mx-MA(6)\lx) / 50+((my-MA(6)\ly) / 50)*2
-;           
-;           If tSel>-1 And tSel<28
-;             Select tSel
-;               Case 0 ; save
-;                 opensave(1)
-;               Case 1 ; load
-;                 opensave(0)
-;               Case 2 ; undo
-;                 undo()
-;               Case 3 ; redo
-;                 redo()
-;               Case 19; CLS
-;                 saveundo()
-;                 If StartDrawing(ImageOutput(iBeebSCRN))
-;                   Box(0,0,#drwW,#drwH,bp(0))
-;                   StopDrawing()
-;                 EndIf
-;               Case 18; toggle transparency
-;                 dTrn=(dTrn+1) % 2
-;                 addToggle(tSel,dTrn*2)
-;                 
-;               Case 20,21,22,23,24 ; brush style
-;                 If tSel<>dSel
-;                   addToggle(dSel,0)
-;                   dSel=tSel
-;                   addToggle(dSel,6)
-;                 EndIf
-;                 
-;               Case 27 ; quick save toggle
-;                 tQSv=(tQSv+1) % 2
-;                 addToggle(tSel,tQSv*2)
-;                 
-;               Default ; all other tools
-;                 If tSel<>tCur
-;                   addToggle(tCur,0)
-;                   tCur=tSel
-;                   addToggle(tCur,tTog)
-;                 EndIf
-;             EndSelect
-;           EndIf
-;       EndSelect
-;       
-;       ; reset mouse action
-;       mact=-1
-;     EndIf 
-;     
-
-;   EndIf 
-  
-  Until event=0
-  
-     ;
-     ;-------- Update Screen --------
-     ;         
+    ;
+    ;-------- Update Screen --------
+    ;         
     
     ; update screen
     ;If drawFlag
@@ -1348,79 +1455,76 @@ Repeat
       Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
       PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
       
+      ; configure palette for RGB or BGR
       If PixelFormat = #PB_PixelFormat_32Bits_RGB
-      Else                        ; Else it's 32bits_BGR
+        For i=0 To 15
+          ct(i)=bp(bpFlash(i))
+        Next
+      Else ; Else it's 32bits_BGR
+        For i=0 To 15
+          ct(i)=rgbT(bpFlash(i))\b+rgbT(bpFlash(i))\g<<8+rgbT(bpFlash(i))\r<<16
+        Next
       EndIf
       
       For y = 0 To 511 
         *Line.Pixel = Buffer+Pitch*y
-        yMul=y/2*640
+        yMul=(y/2)*640
         
         For x=0 To 159
           dc = ct(buf1(x+yMul))
           
-            *Line\Pixel = dc ; Write the pixel directly to the memory !
-            *line+4
-            *Line\Pixel = dc ; Write the pixel directly to the memory !
-            *Line+4
-            *Line\Pixel = dc ; Write the pixel directly to the memory !
-            *Line+4
-            *Line\Pixel = dc ; Write the pixel directly to the memory !
-            *Line+4
+          *Line\Pixel = dc ; Write the pixel directly to the memory !
+          *line+4
+          *Line\Pixel = dc ; Write the pixel directly to the memory !
+          *Line+4
+          *Line\Pixel = dc ; Write the pixel directly to the memory !
+          *Line+4
+          *Line\Pixel = dc ; Write the pixel directly to the memory !
+          *Line+4
           
-          Next
         Next
+      Next
       StopDrawing()
     EndIf
     ;drawFlag=0
     ;EndIf
     
-  If StartDrawing(ScreenOutput())
-    DrawImage(ImageID(iBeebSCRN),0,0)
-    StopDrawing()
-  EndIf
+    If StartDrawing(ScreenOutput())
+      DrawImage(ImageID(iBeebSCRN),0,0)
+      StopDrawing()
+    EndIf
     
-
-
-  
-  If StartDrawing(CanvasOutput(0))
-    ; update drawing area
-    ;DrawImage(ImageID(iBeebSCRN),MA(0)\lx,MA(0)\ly)
     
-;     ;update tool strip toggles
-;     If ListSize(lToggle())
-;       ForEach lToggle()
-;         toolToggle(lToggle()\b,lToggle()\c)
-;       Next
-;       ClearList(lToggle())
-;     EndIf
     
-    For i=0 To 7
-      If flashing
-        flashCol=7-i
-      Else
-        flashCol=i
+    ; update tools
+    If StartDrawing(CanvasOutput(1))
+      
+      ;update tool strip toggles
+      If ListSize(lToggle())
+        ForEach lToggle()
+          toolToggle(lToggle()\b,lToggle()\c)
+        Next
+        ClearList(lToggle())
       EndIf
       
-      Box(584+32,178-i*22-19,24,18,bp(flashCol))      
-    Next  
+      ; show stats
+      showstats()
+      
+      StopDrawing()    
+    EndIf
     
-    
-    ; show stats
-    showstats()
-    
-    StopDrawing()    
-  EndIf
-  
     FlipBuffers()
-  
-  ExamineKeyboard() ;Keyboard
-  
+    
+    ExamineKeyboard() ;Keyboard
+    
   Until KeyboardPushed(#PB_Key_Escape)
   
   End
   
 
+  ;
+  ;-------- Data Section --------
+  ;         
 
 DataSection
   
@@ -1452,6 +1556,7 @@ DataSection
   Data.a 192,192,000,000,000,192,192,000,192,000,192,192,192,192,192
   
   ; mode data
+  ; x,y, .....
   modeData:
   Data.w 640,256,1,2,1,2,2 ; mode 0 - 640,256 2 colour (flashing not implemented)
   Data.w 320,256,2,2,2,2,4 ; mode 1 - 320,256 4 colour (flashing not implemented)
@@ -1464,42 +1569,46 @@ DataSection
   
   
   
-  dx.w ; image horizontal pixels
-  dy.w ; image vertical pixels
-  px.w ; horizontal pixel size
-  py.w ; vertical pixel size
-  wx.w ; draw width horizontal
-  wy.w ; draw width vertical
-  cc.w ; palette colour count
+;   dx.w ; image horizontal pixels
+;   dy.w ; image vertical pixels
+;   px.w ; horizontal pixel size
+;   py.w ; vertical pixel size
+;   wx.w ; draw width horizontal
+;   wy.w ; draw width vertical
+;   cc.w ; palette colour count
+  
   
   ; mouse area Data
   ; ensure to update maCount index to match number of mouse areas
+  ; x,y,w,h,gad
   mouseData:
   Data.s "Drawing Area"
-  Data.w 4,4,640,512
+  Data.w 4,4,640,512,2
   Data.s "Colour Select"
-  Data.w 584,524,64,178
+  Data.w 584,4,64,178,0
   Data.s "Pattern Select"
-  Data.w 2,524,576,178
+  Data.w 2,4,576,178,0
   Data.s "Brush Size"
-  Data.w 756,18,204,140
+  Data.w 108,18,204,140,1
   Data.s "Stats"
-  Data.w 756,164,204,200
+  Data.w 104,500,204,200,1
   Data.s "Selected Pattern"
-  Data.w 760,524,72,72
+  Data.w 112,524,72,72,1
   Data.s "Tool Strip"
-  Data.w 654,2,100,700
+  Data.w 4,2,100,700,1
   Data.s "Fill Colour"
-  Data.w 760,604,72,72
+  Data.w 112,604,72,72,1
+  Data.s "Flash Speed"
+  Data.w 112,168,60,130,1
   
   ; inline toolstrip bmp
   ToolStripMain:       : IncludeBinary #PB_Compiler_FilePath + "/toolstrip.bmp"
 EndDataSection
 
 
-; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 1396
-; FirstLine = 1371
+; IDE Options = PureBasic 5.62 (Windows - x86)
+; CursorPosition = 594
+; FirstLine = 582
 ; Folding = -----
 ; EnableXP
 ; Executable = ART_PB_015_x86.exe
