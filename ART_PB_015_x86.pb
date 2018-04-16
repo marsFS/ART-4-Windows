@@ -114,11 +114,12 @@ Global tQSv.a=0 ; quick save toggle
 Global tSel.a=0 ; new tool select 
 Global gCur.w=0 ; current gadget id
 
-Global maCount.a=8 ; mouse area count 0-n
+Global maCount.a=10 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
 Global iBeebSCRN, imgToolStrip; image handles
 Global flashing.b=0 ; flashing colour toggle
-Global flashCol.a   ; flashing colour index
+Global flashBak=-1   ; flashing colour index background
+Global flashFor=7   ; flashing colour index foreground
 Global fSpeed=540  ; flash speed in ms
 Global drawFlag=0   ; redraw buffer flag
 
@@ -193,7 +194,7 @@ EndProcedure
 ; check if mouse is in range of mouse area object, return '1' if in range
 Procedure range(i)
   Protected r.a=0
-  If mx>=MA(i)\lx And mx<=MA(i)\rx And my>=MA(i)\ly And my<=MA(i)\ry And gCur=MA(i)\gad
+  If gCur=MA(i)\gad And mx>=MA(i)\lx And mx<=MA(i)\rx And my>=MA(i)\ly And my<=MA(i)\ry
     r=1
   EndIf
   ProcedureReturn r
@@ -579,6 +580,63 @@ Procedure drawColSel(i,c)
   drawBox(MA(1)\lx+x,MA(1)\ry-y-22,MA(1)\lx+30+x,MA(1)\ry-y+1,bp(c))
 EndProcedure
 
+; update flash colours
+Procedure updateFlashColours()
+  
+  fc=flashFor
+  If fc<0:fc=8:EndIf
+  
+  bc=flashBak
+  If bc<0:bc=8:EndIf
+  
+  Box(MA(9)\lx+2,MA(9)\ly+2,MA(9)\rx-MA(9)\lx-3,MA(9)\ry-MA(9)\ly-3,bp(bc))
+  Box(MA(10)\lx+2,MA(10)\ly+2,MA(10)\rx-MA(10)\lx-3,MA(10)\ry-MA(10)\ly-3,bp(fc))
+  
+  If fc=8 
+    DrawingMode(#PB_2DDrawing_Transparent)
+    DrawText(MA(9)\lx+6,MA(9)\ly+2,"D",bp(7))
+    DrawingMode(#PB_2DDrawing_Default)
+  EndIf
+  
+  If bc=8 
+    DrawingMode(#PB_2DDrawing_Transparent)
+    DrawText(MA(10)\lx+6,MA(10)\ly+2,"D",bp(7))
+    DrawingMode(#PB_2DDrawing_Default)
+  EndIf
+  
+EndProcedure
+
+; update highlight for flash colour selector
+Procedure drawFlashSel(m)
+  i=7-(my-MA(m)\ry-2) / 22
+  If m=9
+    c=flashBak
+  Else
+    c=flashFor
+  EndIf
+  
+  If c<>i And i>-1 And i<8
+    If StartDrawing(CanvasOutput(1))    
+      If c>-1 And c<8
+        drawBox(MA(m)\lx+1,MA(m)\ry+3+(7-c)*22,MA(m)\lx+30,MA(m)\ry+25+(7-c)*22,bp(0))
+      EndIf
+      c=i
+      
+      drawBox(MA(m)\lx+1,MA(m)\ry+3+(7-c)*22,MA(m)\lx+30,MA(m)\ry+25+(7-c)*22,bp(7))
+      If m=9
+        flashBak=c
+      Else
+        flashFor=c
+      EndIf
+      
+      updateFlashColours()
+      StopDrawing()
+      
+    EndIf
+  EndIf                    
+  
+EndProcedure
+
 ; update flash speed
 Procedure updateFlashSpeed(t)
     
@@ -594,6 +652,8 @@ Procedure updateFlashSpeed(t)
     Box(MA(8)\lx+13,MA(8)\ly+y+2,32,4,bp(8))
     DrawText(MA(8)\lx+4,MA(8)\ly+112,Right("00"+StrU(fSpeed),4)+"ms",bp(7))
 EndProcedure
+
+
 
 ; flood fill With current pattern
 Procedure floodFill(sx,sy)
@@ -912,6 +972,8 @@ For i=0 To 7
   bpFlash(i+8)=7-i
 Next
 
+Font1 = LoadFont(#PB_Any, "Arial"  ,  7)
+
 ; For i=0 To 163839
 ;   If i<16 
 ;     buf1(i)=i % 15
@@ -1012,7 +1074,7 @@ If StartDrawing(CanvasOutput(1))
   
   DrawText(132,0,"ART for Windows (PB)")
   
- ; draw tools strip and toggle defaults
+  ; draw tools strip and toggle defaults
   DrawImage(ImageID(imgToolStrip),4,2)
   toolToggle(2,8) ; undo
   toolToggle(3,8) ; redo
@@ -1020,7 +1082,7 @@ If StartDrawing(CanvasOutput(1))
   toolToggle(18,2)      ; transparency
   toolToggle(dSel,6)    ; draw style  
   
-    ; brush size control
+  ; brush size control
   Circle(MA(3)\lx+33,MA(3)\ly+118,16,bp(6))
   Circle(MA(3)\lx+33,MA(3)\ly+84,12,bp(6))
   Circle(MA(3)\lx+33,MA(3)\ly+55,10,bp(6))
@@ -1035,20 +1097,31 @@ If StartDrawing(CanvasOutput(1))
   ; stats
   x=MA(4)\lx
   y=MA(4)\ly
-   DrawText(x,y,"mX:")
-   DrawText(x,y+16,"mY:")
-   DrawText(x,y+32,"pX:")
-   DrawText(x,y+48,"pY:")
-   DrawText(x,y+64,"mB:")
-   DrawText(x,y+80,"mA:")
-   DrawText(x,y+96,"CT:")
-   DrawText(x,y+112,"TS:")  
-   DrawText(x,y+128,"gC:")     
-   
-   ; flash speed
-   updateFlashSpeed(fSpeed)
-   drawbox(MA(8)\lx,MA(8)\ly,MA(8)\rx,MA(8)\ry,bp(8))
-   
+  DrawText(x,y,"mX:")
+  DrawText(x,y+16,"mY:")
+  DrawText(x,y+32,"pX:")
+  DrawText(x,y+48,"pY:")
+  DrawText(x,y+64,"mB:")
+  DrawText(x,y+80,"mA:")
+  DrawText(x,y+96,"CT:")
+  DrawText(x,y+112,"TS:")  
+  DrawText(x,y+128,"gC:")     
+  
+  ; flash speed
+  updateFlashSpeed(fSpeed)
+  drawbox(MA(8)\lx,MA(8)\ly,MA(8)\rx,MA(8)\ry,bp(8))
+  DrawingFont(FontID(Font1))   
+  DrawText(MA(8)\lx,MA(8)\ly-18,"FLASH SPEED",bp(7))
+  
+  ; flash colour picker
+  drawbox(MA(9)\lx,MA(9)\ly,MA(9)\rx,MA(9)\ry,bp(7))
+  DrawText(MA(9)\lx,MA(9)\ly-18,"DRAW",bp(7))
+  
+  drawbox(MA(10)\lx,MA(10)\ly,MA(10)\rx,MA(10)\ry,bp(7))
+  DrawText(MA(10)\lx,MA(10)\ly-18,"CYCLE",bp(7))
+  updateFlashColours()
+  
+  
   StopDrawing()
 EndIf
 
@@ -1134,6 +1207,32 @@ EndIf
                   ox=sx
                   oy=sy
                   ;MessageRequester("Debug","Undo Created")
+                  
+                Case 10 ; flash draw colour (background), save menu background and display menu
+                  If StartDrawing(CanvasOutput(1))
+                    Box(MA(9)\lx,MA(9)\ry+2,32,180,bp(0))
+                    drawbox(MA(9)\lx,MA(9)\ry+2,MA(9)\lx+31,MA(9)\ry+181,bp(15))
+                    For i=1 To 7
+                      Box(MA(9)\lx+4,MA(9)\ry-16+i*22,24,18,bp(8-i))
+                    Next  
+                    ;drawColSel(dCol,7)  
+                    
+                    StopDrawing()
+                    
+                  EndIf
+                    
+                Case 11 ; flash cycle colour (foreground), save menu background and display menu
+                  If StartDrawing(CanvasOutput(1))
+                  
+                    Box(MA(10)\lx,MA(10)\ry+2,32,180,bp(0))
+                    drawbox(MA(10)\lx,MA(10)\ry+2,MA(10)\lx+31,MA(10)\ry+181,bp(15))
+                    For i=1 To 7
+                      Box(MA(10)\lx+4,MA(10)\ry-16+i*22,24,18,bp(8-i))
+                    Next  
+                    ;drawColSel(dCol,7)  
+                    
+                    StopDrawing()
+                      EndIf
                   
               EndSelect
             EndIf
@@ -1232,6 +1331,12 @@ EndIf
                       EndIf
                     EndIf
                     
+                  Case 10 ; flash draw colour (background)
+                    drawFlashSel(9)
+
+                  Case 11 ; flash cycle colour (foreground)
+                    drawFlashSel(10)
+                    
                 EndSelect
               EndIf
               
@@ -1288,7 +1393,23 @@ EndIf
                   Case 9 ; flash speed slider
                         RemoveWindowTimer(0,0)
                         AddWindowTimer(0,0,fSpeed)
-
+                        
+                Case 10 ; flash draw colour (background), save menu background and display menu
+                  If StartDrawing(CanvasOutput(1))
+                    Box(MA(9)\lx,MA(9)\ry+2,32,180,bp(0))
+                    
+                    StopDrawing()
+                    
+                  EndIf
+                    
+                Case 11 ; flash cycle colour (foreground), save menu background and display menu
+                  If StartDrawing(CanvasOutput(1))
+                  
+                    Box(MA(10)\lx,MA(10)\ry+2,32,180,bp(0))
+                    StopDrawing()
+                      EndIf
+                        
+                        
                 EndSelect
                 
                 
@@ -1599,7 +1720,12 @@ DataSection
   Data.s "Fill Colour"
   Data.w 112,604,72,72,1
   Data.s "Flash Speed"
-  Data.w 112,168,60,130,1
+  Data.w 112,184,60,130,1
+  Data.s "Flash Draw Colour"
+  Data.w 180,184,32,32,1
+  Data.s "Flash Cycle Colour"
+  Data.w 220,184,32,32,1
+  
   
   ; inline toolstrip bmp
   ToolStripMain:       : IncludeBinary #PB_Compiler_FilePath + "/toolstrip.bmp"
@@ -1607,8 +1733,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 594
-; FirstLine = 582
+; CursorPosition = 974
+; FirstLine = 1005
 ; Folding = -----
 ; EnableXP
 ; Executable = ART_PB_015_x86.exe
