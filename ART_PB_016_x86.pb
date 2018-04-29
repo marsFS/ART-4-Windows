@@ -810,7 +810,7 @@ Procedure openSave(a)
   
   Protected lastFN.s, filename.s, action.s, F.s, ff.s, N.w, iTMP
   
-  ff = "PNG files (*.PNG)|*.PNG"
+  ff = "PNG files (*.PNG)|*.PNG|BBC files (*.BBC)|*.BBC"
   
   If a=1
     If tQSv=0
@@ -861,8 +861,26 @@ Procedure openSave(a)
         action="opened"
         iTMP=LoadImage(#PB_Any,filename)
         If iTMP
-          If StartDrawing(ImageOutput(iBeebSCRN))
-            DrawImage(ImageID(iTMP),0,0)
+          If StartDrawing(ImageOutput(iTMP))
+            Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
+            Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
+            PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format.           
+            For y = 0 To 511 
+              *Line.Pixel = Buffer+Pitch*y
+              yMul=(y/2)*640
+              
+              For x=0 To 159
+                For i=0 To 7
+                  If *Line\Pixel=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
+                    buf1(x+yMul)=i
+                    Break
+                  EndIf
+                  
+                Next
+                *line+16  
+              Next
+            Next
+            
             StopDrawing()
             FreeImage(iTMP)            
           EndIf          
@@ -1191,9 +1209,10 @@ If StartDrawing(CanvasOutput(1))
   
   drawbox(MA(10)\lx,MA(10)\ly,MA(10)\rx,MA(10)\ry,bp(7))
   DrawText(MA(10)\lx,MA(10)\ly-18,"CYCLE",bp(7))
+  DrawingFont(#PB_Default)
+  
   updateFlashColours(9)
   updateFlashColours(10)
-  
   
   StopDrawing()
 EndIf
@@ -1825,9 +1844,9 @@ DataSection
 EndDataSection
 
 
-; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 808
-; FirstLine = 847
+; IDE Options = PureBasic 5.61 (Windows - x86)
+; CursorPosition = 665
+; FirstLine = 660
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
