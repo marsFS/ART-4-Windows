@@ -134,6 +134,8 @@ Global drawFlag=0             ; redraw buffer flag
 Global animExport=-1          ; export animation frames
 Global animFile.s=""          ; export filename
 Global animSave=0             ; frame save flag
+Global savePattern=0          ; save file pattern selector
+Global loadPattern=0          ; load file pattern selector
 
 Global Dim bSCRN.a(#SCRNsize) ; screen buffer
 Global Dim pat.a(17,15)       ; drawing patterns
@@ -143,6 +145,8 @@ Global Dim ct(15)             ; colour table look for redrawing main canvas
 Global Dim bpFlash(15)        ; flash palette 0-7 phase 1, 8-15 phase 2
 Global Dim mode.beebModes(6)  ; beeb mode data
 Global Dim MA.MouseArea(maCount) ; mouse area structure array
+Global Dim rawBBC.a(15)       ; raw bbc file format data
+Global Dim revBBC.a(85)       ; reverse lookup bbc file format data
 
 Global NewList lUndo.undoArray()
 Global NewList lRedo.undoArray()
@@ -157,7 +161,7 @@ Global NewList lFS.fillStack()
 ; Exit program and display a message
 Procedure Exit_ART(m.s)
   If m<>"" 
-    MessageRequester("Error", m, 0)
+    MessageRequester("Error", m, #PB_MessageRequester_Info)
   EndIf
   
   End
@@ -800,9 +804,9 @@ EndProcedure
 ; open save handler
 Procedure openSave(mode)
   
-  Protected lastFN.s, filename.s, action.s, F.s, ff.s, N.w, iTMP, eIndex
+  Protected lastFN.s, filename.s, action.s, F.s, ff.s, N.w, iTMP, a.b,b.a
   
-  ff = "PNG files (*.PNG)|*.PNG|BBC files (*.BBC)|*.BBC"
+  ff = "PNG files (*.PNG)|*.PNG|BBC files (*.*)|*.*"
   
   If mode=1 ; save dialog
     If tQSv=0
@@ -811,26 +815,26 @@ Procedure openSave(mode)
         ok=#PB_MessageRequester_Yes
         
         ; show save dialog and prompt if file exists
-        filename=SaveFileRequester(" Save Image",GetCurrentDirectory(),ff,1)
-        eIndex=SelectedFilePattern()
+        filename=SaveFileRequester(" Save Image",GetCurrentDirectory(),ff,savePattern)
+        savePattern=SelectedFilePattern()
         If filename
-          Select eIndex
+          Select savePattern
             Case 0 ; png
               If Right(UCase(filename),4)<>".PNG"
                 filename=filename+".PNG"
               EndIf
               
             Case 1 ; bbc raw
-              If Right(UCase(filename),4)<>".BBC"
-                filename=filename+".BBC"
-              EndIf
+              ;If Right(UCase(filename),4)<>".BBC"
+              ;  filename=filename+".BBC"
+              ;EndIf
               
           EndSelect
           
-          MessageRequester("Validate",filename)
+          ;MessageRequester("Validate",filename)
           
           If FileSize(filename)>-1
-            ok=MessageRequester(" Confirm File Overwrite",GetFilePart(filename)+" already exists. Do you want to replace it?",#PB_MessageRequester_YesNo)
+            ok=MessageRequester(" Confirm File Overwrite",GetFilePart(filename)+" already exists. Do you want to replace it?",#PB_MessageRequester_YesNo|#PB_MessageRequester_Warning)
           EndIf
         EndIf
       Until ok=#PB_MessageRequester_Yes
@@ -849,12 +853,13 @@ Procedure openSave(mode)
         EndIf
       Until filename<>"" Or N>99999
       If N>99999 
-        MessageRequester(" File Error","ERROR: Cannot quicksave! File number limit reached, archive some files!!!")
+        MessageRequester(" File Error","ERROR: Cannot quicksave! File number limit reached, archive some files!!!",#PB_MessageRequester_Error)
       EndIf
     EndIf
     
   Else ; get filename to load
-    filename=OpenFileRequester(" Load Image",GetCurrentDirectory(),ff,0)
+    filename=OpenFileRequester(" Load Image",GetCurrentDirectory(),ff,loadPattern)
+    loadPattern=SelectedFilePattern()
   EndIf
   
   ; action file operation
@@ -864,7 +869,7 @@ Procedure openSave(mode)
     Select mode 
       Case 0 ; load image and copy to drawing area
         action="opened"
-        Select eIndex
+        Select loadPattern
           Case 0 ; png file
             
             iTMP=LoadImage(#PB_Any,filename)
@@ -894,40 +899,94 @@ Procedure openSave(mode)
                 FreeImage(iTMP)            
               EndIf          
             Else
-              MessageRequester(" File Error","ERROR: Cannot load file" + #CRLF$ + #CRLF$ + filename)
+              MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
             EndIf
           Case 1 ; bbc raw format
             
+            ;check file size
+            If FileSize(filename)=20000
+            ; create temp buffer and fill with file data
+            *MemoryID = AllocateMemory(20000)       ; allocate 20k memory block
+            If *MemoryID
+              
+              If ReadFile(0, filename)
+                ReadData(0,*MemoryID,20000)
+                CloseFile(0)
+                
+                x=0
+                y=255
+                
+                For i=0 To 19999
+                  a=(PeekB(*MemoryID+i) & 170)>>1
+                  b=PeekB(*MemoryID+i) & 85
+                  
+                  bSCRN(x+y*640)=revBBC(a)
+                  bSCRN(x+1+y*640)=revBBC(b)
+                  
+                  y-1
+                  If ((y+1)%8)=0
+                    y+8
+                    x+2
+                    If x=160
+                      y-8
+                      x=0
+                    EndIf
+                  EndIf
+                Next
+
+              Else
+                MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
+              EndIf
+              FreeMemory(*MemoryID)
+            EndIf
+          Else
+          MessageRequester(" File Error","ERROR: File must be exactly 20000 bytes..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)  
+          EndIf
+          
         EndSelect
         
         ;filename$+""" "+STR$(M{(0)}.mx%)+","+STR$(M{(0)}.my%)+"
       Case 1 ; save drawing image to file
-        Select eIndex
+        Select savePattern
           Case 0 ; png file
             action$="saved"
             
             SaveImage(iBeebSCRN, filename, #PB_ImagePlugin_PNG);,10,4)
             
           Case 1 ; bbc raw
-            If 1=0
-              ; create temp buffer
+              ; create temp buffer and fill with screen data
               *MemoryID = AllocateMemory(20000)       ; allocate 20k memory block
               If *MemoryID
-                
+                x=0
+                y=255
                 For i=0 To 19999
-                  a=bSCRN((i % 80)*2+(i / 640))
-                  b=bSCRN((i % 80)*2+1+(i / 640))
-                  PokeB(*MemoryID+i, val) 
+                  a=rawBBC(bSCRN(x+y*640))<<1
+                  b=rawBBC(bSCRN(x+1+y*640))
+                 ; MessageRequester("TEST",Str(a)+"  "+Str(b))
+                  PokeB(*MemoryID+i, (a | b)) 
+                  y-1
+                  If ((y+1)%8)=0
+                    y+8
+                    x+2
+                    If x=160
+                      y-8
+                      x=0
+                    EndIf
+                  EndIf
                 Next
                 
-                If CreateFile(0, GetHomeDirectory()+"Text.txt")           ; we create a new text file...
-                  WriteData(0, *MemoryID, SizeOf(Character)*Len("Store this string in the memory area"))          ; write the text from the memory block into the file
-                  CloseFile(0)                                                                                    ; close the previously opened file and so store the written data
+                ; create file and output temp buffer
+                If CreateFile(0, filename)
+                  WriteData(0, *MemoryID, 20000)
+                  CloseFile(0)
+                  
+                  ; create INF file
                 Else
-                  MessageRequester (" File Error","Cannot create file: "+filename)
+                  MessageRequester (" File Error","Cannot create file..."+#CRLF$+#CRLF$+filename,#PB_MessageRequester_Error)
                 EndIf
+                FreeMemory(*MemoryID)
               EndIf
-            EndIf
+
         
         EndSelect
         
@@ -956,7 +1015,7 @@ Procedure exportAnim()
       filename+"00.PNG"
       
       If FileSize(filename)>-1
-        ok=MessageRequester(" Confirm File Overwrite",GetFilePart(filename)+" already exists. Do you want to replace it?",#PB_MessageRequester_YesNo)
+        ok=MessageRequester(" Confirm File Overwrite",GetFilePart(filename)+" already exists. Do you want to replace it?",#PB_MessageRequester_YesNo|#PB_MessageRequester_Info)
       EndIf
     EndIf
   Until ok=#PB_MessageRequester_Yes
@@ -1134,6 +1193,12 @@ For i=0 To maCount
   
   ;MessageRequester("Debug",MA(i)\name+" "+StrU(MA(i)\gad))
 Next
+
+Restore rawFileData
+For i=0 To 15
+  Read.a rawBBC(i)
+  revBBC(rawBBC(i))=i
+Next  
 
 ; toolstrip image
 ;imgToolStrip=LoadImage(#PB_Any,"ToolStrip.bmp")
@@ -1752,7 +1817,7 @@ Repeat
       animExport=-1
       flashAnim=0
       addToggle(15,0)
-      MessageRequester(" Export Complete","Animation export complete, check output folder for images.")
+      MessageRequester(" Export Complete","Animation export complete, check output folder for images.",#PB_MessageRequester_Info)
     EndIf
   EndIf      
   
@@ -1846,15 +1911,34 @@ DataSection
   Data.s "Flash Cycle Colour"
   Data.w 220,184,32,32,1
   
+  ; bbc raw file format interlaced pixel data
+  rawFileData:
+  Data.a 0  ; 00000000
+  Data.a 1  ; 00000001
+  Data.a 4  ; 00000100
+  Data.a 5  ; 00000101
+  Data.a 16 ; 00010000
+  Data.a 17 ; 00010010
+  Data.a 20 ; 00010100
+  Data.a 21 ; 00010101
+  Data.a 64 ; 01000000
+  Data.a 65 ; 01000001
+  Data.a 68 ; 01000100
+  Data.a 69 ; 01000101
+  Data.a 80 ; 01010000
+  Data.a 81 ; 01010001
+  Data.a 84 ; 01010100
+  Data.a 85 ; 01010101
+  
   
   ; inline toolstrip bmp
   ToolStripMain:       : IncludeBinary #PB_Compiler_FilePath + "/toolstrip.bmp"
 EndDataSection
 
 
-; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 921
-; FirstLine = 900
+; IDE Options = PureBasic 5.61 (Windows - x86)
+; CursorPosition = 1132
+; FirstLine = 1129
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
