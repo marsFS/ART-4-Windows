@@ -827,9 +827,10 @@ Procedure openSave(mode)
               EndIf
               
             Case 1 ; bbc raw
-              ;If Right(UCase(filename),4)<>".BBC"
-              ;  filename=filename+".BBC"
-              ;EndIf
+              If GetExtensionPart(UCase(filename))<>""
+                MessageRequester(" File Name Error","ERROR: Filename must not contain an extension.",#PB_MessageRequester_Error)
+                ok=#PB_MessageRequester_No
+              EndIf
               
           EndSelect
           
@@ -872,7 +873,7 @@ Procedure openSave(mode)
       Case 0 ; load image and copy to drawing area
         action="opened"
         Select loadPattern
-          Case 0 ; png file
+          Case 0 ; load png file
             
             iTMP=LoadImage(#PB_Any,filename)
             If iTMP
@@ -903,7 +904,7 @@ Procedure openSave(mode)
             Else
               MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
             EndIf
-          Case 1 ; bbc raw format
+          Case 1 ; load bbc raw format
             
             ;check file size
             If FileSize(filename)=#RAWsize
@@ -950,12 +951,12 @@ Procedure openSave(mode)
         ;filename$+""" "+STR$(M{(0)}.mx%)+","+STR$(M{(0)}.my%)+"
       Case 1 ; save drawing image to file
         Select savePattern
-          Case 0 ; png file
+          Case 0 ; save png file
             action$="saved"
             
             SaveImage(iBeebSCRN, filename, #PB_ImagePlugin_PNG);,10,4)
             
-          Case 1 ; bbc raw
+          Case 1 ; save bbc raw
               ; create temp buffer and fill with screen data
               *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
               If *MemoryID
@@ -978,11 +979,20 @@ Procedure openSave(mode)
                 Next
                 
                 ; create file and output temp buffer
+                filename=UCase(filename)
                 If CreateFile(0, filename)
                   WriteData(0, *MemoryID, #RAWsize)
                   CloseFile(0)
                   
                   ; create INF file
+                  If CreateFile(1, filename+".INF")
+                    WriteString(1, "$."+GetFilePart(filename)+" 003000 000000 005000")
+                    
+                    CloseFile(1)
+                  Else
+                    MessageRequester (" File Error","Cannot create INF file..."+#CRLF$+#CRLF$+filename+".INF",#PB_MessageRequester_Error)
+                  EndIf
+                  
                 Else
                   MessageRequester (" File Error","Cannot create file..."+#CRLF$+#CRLF$+filename,#PB_MessageRequester_Error)
                 EndIf
@@ -1941,8 +1951,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 970
-; FirstLine = 948
+; CursorPosition = 833
+; FirstLine = 810
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
