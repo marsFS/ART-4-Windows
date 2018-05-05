@@ -122,6 +122,7 @@ Global gCur.w=0 ; current gadget id
 
 Global maCount.a=10 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
+Global fox,foy               ; flashing ox,oy
 Global iBeebSCRN, imgToolStrip; image handles
 Global flashing.b=0           ; flashing colour toggle
 Global flashBak=8             ; flashing colour index background
@@ -670,14 +671,14 @@ Procedure flashBrush(dx,dy)
   
   ; range check, set pattern colour And plot
   If dx>-1 And dx<dMdx And dy>-1 And dy<dMdy
-    If ox<>dx Or oy<>dy
+    If fox<>dx Or foy<>dy
       bSCRN(dy*640+dx)=flashCol
       flashCol+1
       If flashCol>15
         flashCol=8
       EndIf
-      ox=dx
-      oy=dy
+      fox=dx
+      foy=dy
     EndIf
   EndIf
   
@@ -1409,6 +1410,8 @@ Repeat
                 oy=sy
                 ;MessageRequester("Debug","Undo Created")
                 flashCol=8
+                fox=px(mx)
+                foy=py(my)
                 
               Case 10 ; flash draw colour (background), save menu background and display menu
                 pickFlashColour(9)
@@ -1937,8 +1940,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 1132
-; FirstLine = 1129
+; CursorPosition = 674
+; FirstLine = 660
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
