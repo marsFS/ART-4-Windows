@@ -52,6 +52,7 @@ UsePNGImageDecoder()
 #drwH=512
 #maxUndo=20
 #SCRNsize=163839 ; screen buffer array size
+#RAWsize=20480
 
 ; structures
 Structure MouseArea
@@ -905,19 +906,19 @@ Procedure openSave(mode)
           Case 1 ; bbc raw format
             
             ;check file size
-            If FileSize(filename)=20000
+            If FileSize(filename)=#RAWsize
             ; create temp buffer and fill with file data
-            *MemoryID = AllocateMemory(20000)       ; allocate 20k memory block
+            *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
             If *MemoryID
               
               If ReadFile(0, filename)
-                ReadData(0,*MemoryID,20000)
+                ReadData(0,*MemoryID,#RAWsize)
                 CloseFile(0)
                 
                 x=0
                 y=255
                 
-                For i=0 To 19999
+                For i=0 To #RAWsize-1
                   a=(PeekB(*MemoryID+i) & 170)>>1
                   b=PeekB(*MemoryID+i) & 85
                   
@@ -941,7 +942,7 @@ Procedure openSave(mode)
               FreeMemory(*MemoryID)
             EndIf
           Else
-          MessageRequester(" File Error","ERROR: File must be exactly 20000 bytes..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)  
+          MessageRequester(" File Error","ERROR: File must be exactly "+Str(#RAWsize)+" bytes..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)  
           EndIf
           
         EndSelect
@@ -956,11 +957,11 @@ Procedure openSave(mode)
             
           Case 1 ; bbc raw
               ; create temp buffer and fill with screen data
-              *MemoryID = AllocateMemory(20000)       ; allocate 20k memory block
+              *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
               If *MemoryID
                 x=0
                 y=255
-                For i=0 To 19999
+                For i=0 To #RAWsize-1
                   a=rawBBC(bSCRN(x+y*640))<<1
                   b=rawBBC(bSCRN(x+1+y*640))
                  ; MessageRequester("TEST",Str(a)+"  "+Str(b))
@@ -978,7 +979,7 @@ Procedure openSave(mode)
                 
                 ; create file and output temp buffer
                 If CreateFile(0, filename)
-                  WriteData(0, *MemoryID, 20000)
+                  WriteData(0, *MemoryID, #RAWsize)
                   CloseFile(0)
                   
                   ; create INF file
@@ -1940,8 +1941,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 674
-; FirstLine = 660
+; CursorPosition = 970
+; FirstLine = 948
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
