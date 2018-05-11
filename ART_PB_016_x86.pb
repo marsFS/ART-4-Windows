@@ -10,6 +10,7 @@
 ;
 
 ; TODO List
+; * attempt smaller screen footprint by making palette and tools pop in or pop up
 ; * implement all beeb modes - potentially other 8bit computer formats...
 ; * Partial complete - Flashing colour support
 ; * zoom at cursor
@@ -136,6 +137,8 @@ Global drawFlag=0             ; redraw buffer flag
 Global animExport=-1          ; export animation frames
 Global animFile.s=""          ; export filename
 Global animSave=0             ; frame save flag
+Global animType=0             ; animation selector
+Global animDir=1              ; animation direction
 Global savePattern=0          ; save file pattern selector
 Global loadPattern=0          ; load file pattern selector
 
@@ -381,7 +384,7 @@ Procedure Vline2(x1,y1,y2)
         EndIf
         
         ; Check For transparency
-        If dc-dTrn>-1
+        If dc-dTrn>-1 Or (pat(pSel,pS)=1 And dCol=0)
           bSCRN(ly*640+x1)=dc
         EndIf
       EndIf
@@ -405,7 +408,7 @@ Procedure Hline2(x1,x2,y1)
       EndIf
       
       ; Check For transparency
-      If dc-dTrn>-1
+      If dc-dTrn>-1 Or (pat(pSel,pS)=1 And dCol=0)
         bSCRN(y1*640+lx)=dc
       EndIf
     EndIf
@@ -581,6 +584,23 @@ Procedure drawColSel(i,c)
   i=i % 8
   y=i*22  
   drawBox(MA(1)\lx+x,MA(1)\ry-y-22,MA(1)\lx+30+x,MA(1)\ry-y+1,bp(c))
+EndProcedure
+
+; update colour select value
+Procedure updateColSel(c.b)
+    If StartDrawing(CanvasOutput(0))    
+      drawColSel(dCol,0)
+      dCol-c
+      If dcol=255:dCol=15:EndIf
+      If dcol=16:dCol=0:EndIf
+      drawColSel(dcol,7)
+      updatePalette()
+      StopDrawing()
+    EndIf
+    If StartDrawing(CanvasOutput(1))
+      dBrushSize()
+      StopDrawing()
+    EndIf  
 EndProcedure
 
 ; update flash colours
@@ -1019,7 +1039,7 @@ Procedure exportAnim()
     ok=#PB_MessageRequester_Yes
     
     ; show save dialog and prompt if file exists
-    filename=SaveFileRequester(" Export Animation",GetCurrentDirectory(),ff,0)
+    filename=SaveFileRequester(" Export Animation As PNG",GetCurrentDirectory(),ff,0)
     If filename<>""
       If Right(UCase(filename),4)=".PNG"
         filename=Left(filename,Len(filename)-4)
@@ -1291,6 +1311,7 @@ If StartDrawing(CanvasOutput(1))
   toolToggle(tCur,tTog) ; standard
   toolToggle(18,2)      ; transparency
   toolToggle(dSel,6)    ; draw style  
+  addToggle(16,(1-animType)*5) ; animation type
   
   ; brush size control
   Circle(MA(3)\lx+33,MA(3)\ly+118,16,bp(6))
@@ -1373,8 +1394,18 @@ Repeat
       Case #PB_Event_Timer  ; handle flashing colours
         flashing=(flashing+1) & 1
         
-        flashCycle+1
-        If flashCycle>15:flashCycle=8:EndIf
+        Select animType
+          Case 0
+            flashCycle+animDir
+            If flashCycle=15:animDir=-1:EndIf
+            If flashCycle=8:animDir=1:EndIf
+            
+          Case 1
+        
+            flashCycle+1
+            If flashCycle>15:flashCycle=8:EndIf
+        
+        EndSelect
         
         ; update flashing colour pointer
         For i=0 To 7
@@ -1451,18 +1482,9 @@ Repeat
                 Case 2 ; colour select
                   i=7-((my-MA(1)\ly) / 22) + ((mx-MA(1)\lx) / 32)*8
                   If dCol<>i And i>-1 And i<16
-                    If StartDrawing(CanvasOutput(0))    
-                      drawColSel(dCol,0)
-                      dCol=i
-                      drawColSel(dcol,7)
-                      updatePalette()
-                      StopDrawing()
-                    EndIf
-                    If StartDrawing(CanvasOutput(1))
-                      dBrushSize()
-                      StopDrawing()
-                    EndIf
+                    updateColSel(dCol-i)
                   EndIf
+
                 Case 3 ; pattern select
                   i=7-((my-MA(2)\ly) / 22)
                   j=((mx-MA(2)\lx) / 32)
@@ -1570,12 +1592,12 @@ Repeat
                         flashAnim=(flashAnim+1) % 2
                         addToggle(tSel,flashAnim*5)
                         
-                      Case 16 ; export animation frames
-                        If exportAnim()=1
-                          flashAnim=1
-                          animExport=0
-                          flashCycle=15
-                        EndIf  
+                      Case 16,17 ; animation type
+                        animType=tSel-16
+                        addToggle(16,(1-animType)*5)
+                        addToggle(17,animType*5)
+                        If flashCycle=8:animDir=1:EndIf
+                        If flashCycle=15:animDir=-1:EndIf
                         
                       Case 20,21,22,23,24 ; brush style
                         If tSel<>dSel
@@ -1583,6 +1605,16 @@ Repeat
                           dSel=tSel
                           addToggle(dSel,6)
                         EndIf
+                        
+                      Case 26 ; export animation frames
+                        If exportAnim()=1
+                          flashAnim=1
+                          animExport=0
+                          animType=1
+                          addToggle(16,(1-animType)*5)
+                          addToggle(17,animType*5)
+                          flashCycle=15
+                        EndIf  
                         
                       Case 27 ; quick save toggle
                         tQSv=(tQSv+1) % 2
@@ -1837,6 +1869,15 @@ Repeat
   
   ExamineKeyboard() ;Keyboard
   
+  If KeyboardReleased(#PB_Key_A)
+    updateColSel(1)
+  EndIf
+  
+  If KeyboardReleased(#PB_Key_S)
+    updateColSel(-1)
+  EndIf
+  
+  
 Until KeyboardPushed(#PB_Key_Escape)
 
 End
@@ -1951,8 +1992,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 833
-; FirstLine = 810
+; CursorPosition = 1865
+; FirstLine = 1833
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
