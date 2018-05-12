@@ -212,6 +212,7 @@ Procedure dBrushSize()
       If pat(pSel,pS)
         dc=pCol
         If pCol<>0: b=1: EndIf
+        If dc=0 And dCol=0:dc=8:EndIf
       Else
         dc=dCol
         If dCol<>0: b=1: EndIf
@@ -237,6 +238,7 @@ Procedure updateBrush()
       pS=(bx+lx) % 4+((by+ly) % 4)*4
       If pat(pSel,pS) 
         dc=pCol
+        If dc=0 And dCol=0:dc=8:EndIf
       Else
         dc=dCol
       EndIf
@@ -1319,8 +1321,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 1245
-; FirstLine = 1217
+; CursorPosition = 214
+; FirstLine = 195
 ; Folding = -----
 ; EnableXP
 ; Executable = ART_EXA_PB_010_x86.exe
