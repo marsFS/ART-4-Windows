@@ -13,8 +13,8 @@ UsePNGImageEncoder()
 UsePNGImageDecoder()
 
 ; constants
-#scrW=960
-#scrH=704
+#scrW=800; 960
+#scrH=600
 #drwW=640
 #drwH=512
 #maxUndo=20
@@ -43,6 +43,7 @@ EndStructure
 Global pCol.a=0 ; pattern colour selected
 Global pSel.a=8 ; pattern selected
 
+
 Global dCol.a=1 ; drawing colour
 Global dTrn.a=1 ; drawing transparency toggle
 Global dWid.a=8 ; drawing width
@@ -58,9 +59,9 @@ Global tTog.a=3 ; tool toggle colour
 Global tQSv.a=0 ; quick save toggle
 Global tSel.a=0 ; new tool select 
 
-Global maCount.a=7 ; mouse area count 0-n
+Global maCount.a=8 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
-Global iBeebSCRN, imgToolStrip; image handles
+Global iBeebSCRN, imgToolStrip, imgToolStrip2, imgPAL; image handles
 
 Global Dim pat.a(17,15) ; drawing patterns
 Global Dim bp(15)       ; beeb palette
@@ -94,27 +95,20 @@ EndProcedure
 ; display program stats
 Procedure showstats()
   Protected x,y
-  x=34
-  y=4
+  x=30
   
-  Box(MA(4)\lx+x,MA(4)\ly+1,90,MA(4)\ry-MA(4)\ly-2,bp(0))
-  ;Box(MA(4)\lx+148+x,MA(4)\ly+1,88,MA(4)\ry-MA(4)\ly-2,bp(0))
+  Box(MA(4)\lx+x,MA(4)\ly,64,64,bp(0))
+  Box(MA(4)\lx+x+100,MA(4)\ly,64,64,bp(0))
   
-  DrawText(MA(4)\lx+x,MA(4)\ly+y,Str(mx))
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+16,Str(my))
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+32,Str(px(mx)))
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+48,Str(py(my)))
+  DrawText(MA(4)\lx+x,MA(4)\ly,Str(mx))
+  DrawText(MA(4)\lx+x,MA(4)\ly+16,Str(my))
+  DrawText(MA(4)\lx+x,MA(4)\ly+32,Str(px(mx)))
+  DrawText(MA(4)\lx+x,MA(4)\ly+48,Str(py(my)))
   
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+80,Str(mact))
+  DrawText(MA(4)\lx+x+100,MA(4)\ly+16,Str(mact))
   
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+96,Str(tCur))
-  DrawText(MA(4)\lx+x,MA(4)\ly+y+112,Str(tSel))
-  
-  ;DrawText(MA(4)\lx+30+x,MA(4)\ly+64+y,StrU(ListSize(lines()),#PB_Long))
-  
-  ;dt(M{(4)}.bx%+60,M{(4)}.by%+68,2,STR$(tool%),4)
-  ;dt(M{(4)}.bx%+268,M{(4)}.by%+68,2,STR$(cT%),4)
-  
+  DrawText(MA(4)\lx+x+100,MA(4)\ly+32,Str(tCur))
+  DrawText(MA(4)\lx+x+100,MA(4)\ly+48,Str(tSel))
   
 EndProcedure
 
@@ -192,39 +186,6 @@ Procedure dBrush(dx,dy,w,d)
   
 EndProcedure
 
-; Draw brush size
-Procedure dBrushSize()
-  
-  Protected b,lx,ly,px,py,pS,dc
-  
-  ; get pixel coords
-  px=((MA(3)\lx+138) / 4)-dWid / 2-1
-  py=((MA(3)\ly+68) /2)-dWid
-  
-  Box(MA(3)\lx+68,MA(3)\ly+4,132,130,bp(0))
-  
-  b=0
-  
-  ;draw pattern loop
-  For lx=0 To dWid
-    For ly=0 To dWid*2
-      pS=(px+lx) % 4+((py+ly) % 4)*4
-      If pat(pSel,pS)
-        dc=pCol
-        If pCol<>0: b=1: EndIf
-        If dc=0 And dCol=0:dc=8:EndIf
-      Else
-        dc=dCol
-        If dCol<>0: b=1: EndIf
-      EndIf
-      Box((px+lx)*4,(py+ly)*2,4,2,bp(dc))
-    Next
-  Next
-  If b=0
-    drawbox(px*4,py*2,px*4+dWid*4+3,py*2+dWid*4+1,bp(8))
-  EndIf
-EndProcedure
-
 ; Draw box with current brush
 Procedure updateBrush()
   Protected bx,by,lx,ly,dc
@@ -246,9 +207,7 @@ Procedure updateBrush()
     Next
   Next
   
-  ; highlight selected pattern and update selected brush size pattern
-  Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(7))
-  dBrushSize()
+  ;dBrushSize()
 EndProcedure
 
 ; update palette, assumes startdrawing is already active
@@ -269,14 +228,17 @@ Procedure updatePalette()
           EndIf
         EndIf
         ; plot 4 pixels for this element offset 32 * 16 (+4 gap vertically)
-        Box(MA(2)\lx+p*32+(x % 4)*4,MA(2)\ly+156-i*22+(x / 4)*2,4,2,dc)
-        Box(MA(2)\lx+p*32+(x % 4)*4,MA(2)\ly+164-i*22+(x / 4)*2,4,2,dc)
-        Box(MA(2)\lx+16+p*32+(x % 4)*4,MA(2)\ly+156-i*22+(x / 4)*2,4,2,dc)
-        Box(MA(2)\lx+16+p*32+(x % 4)*4,MA(2)\ly+164-i*22+(x / 4)*2,4,2,dc)
+        Box(MA(8)\lx+p*32+(x % 4)*4,MA(2)\ly+156-i*22+(x / 4)*2-106,4,2,dc)
+        Box(MA(8)\lx+p*32+(x % 4)*4,MA(2)\ly+164-i*22+(x / 4)*2-106,4,2,dc)
+        Box(MA(8)\lx+16+p*32+(x % 4)*4,MA(2)\ly+156-i*22+(x / 4)*2-106,4,2,dc)
+        Box(MA(8)\lx+16+p*32+(x % 4)*4,MA(2)\ly+164-i*22+(x / 4)*2-106,4,2,dc)
       Next
     Next
   Next
   updateBrush()
+  ; highlight selected pattern and update selected brush size pattern
+  Box(MA(8)\lx+pSel*32,MA(8)\ly+174-pCol*22+4,32,2,bp(7))
+
   
 EndProcedure
 
@@ -496,22 +458,40 @@ EndProcedure
 
 ; draw highlight box for colour selector
 Procedure drawColSel(i,c)
-  drawBox(MA(1)\lx,MA(1)\ry-i*22-22,MA(1)\lx+39,MA(1)\ry-i*22+1,bp(c))
+  drawBox(MA(1)\lx+2+i*32,MA(1)\ly+2,MA(1)\lx+33+i*32,MA(1)\ly+33,bp(c))
 EndProcedure
 
 ; update colour select value
 Procedure updateColSel(c.b)
-    If StartDrawing(CanvasOutput(0))    
-      drawColSel(dCol,0)
-      dCol-c
-      If dcol=255:dCol=7:EndIf
-      If dcol=8:dCol=0:EndIf
-      drawColSel(dcol,7)
+  If StartDrawing(CanvasOutput(0))    
+    drawColSel(dCol,0)
+    dCol-c
+    If dcol=255:dCol=7:EndIf
+    If dcol=8:dCol=0:EndIf
+    drawColSel(dcol,7)
+    If mact=9
       updatePalette()
-      dBrushSize()
-      StopDrawing()
-    EndIf  
+    Else
+      updateBrush()
+    EndIf
+    
+    
+    StopDrawing()
+  EndIf  
 EndProcedure
+  
+; update pattern colour 
+Procedure updatepCol(c.b)
+  If StartDrawing(CanvasOutput(0))              
+    Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(0))
+    pCol+c
+    If pCol=8:pCol=0:EndIf
+    If pCol=255:pCol=7:EndIf
+    
+    updateBrush()
+    StopDrawing()
+  EndIf  
+EndProcedure  
 
 ; flood fill With current pattern
 Procedure floodFill(sx,sy)
@@ -833,12 +813,13 @@ Next
 ;  Exit_ART("Cannot load ToolStrip.bmp")
 ;EndIf
 imgToolStrip=CatchImage(#PB_Any,?ToolStripMain)
+imgToolStrip2=CatchImage(#PB_Any,?ToolStripMain2)
 
 ; main drawing area
 iBeebSCRN=CreateImage(#PB_Any,#drwW,#drwH,24)
 
 If StartDrawing(ImageOutput(iBeebSCRN))
-  Box(0,0,639,511,bp(0))
+  Box(0,0,#drwW-1,#drwH-1,bp(0))
   StopDrawing()
 EndIf
 
@@ -847,6 +828,8 @@ EndIf
 CanvasGadget(0,0,0,#scrW,#scrH)
 SetGadgetAttribute(0, #PB_Canvas_Cursor , #PB_Cursor_Cross)
 mact=-1
+
+tFont=LoadFont(#PB_Any,"Comic Sans MS",14,#PB_Font_Italic |#PB_Font_Bold)
 
 ;
 ;-------- Draw controls --------
@@ -861,15 +844,17 @@ If StartDrawing(CanvasOutput(0))
   drawBox(MA(0)\lx-3,MA(0)\ly-3,MA(0)\rx+3,MA(0)\ry+3,bp(7))
   
   ; colour select border
-  ;drawBox(MA(1)\lx-4,MA(1)\ly-6,MA(1)\rx+4,MA(1)\ry+6,bp(7))
+  drawBox(MA(1)\lx,MA(1)\ly,MA(1)\rx,MA(1)\ry,bp(8))
   
   ; pattern select border
   ;drawBox(MA(2)\lx-6,MA(2)\ly-6,MA(2)\rx+6,MA(2)\ry+6,bp(7))
-  
-  DrawText(754,0,"EXART",bp(1))
+  DrawingFont(FontID(tFont))
+  DrawText(MA(6)\lx+4,0,"EXA ART",bp(1))
+  DrawingFont(#PB_Default)
   
   ; draw tools strip and toggle defaults
   DrawImage(ImageID(imgToolStrip),MA(6)\lx,MA(6)\ly)
+  DrawImage(ImageID(imgToolStrip2),0,524)
   toolToggle(2,8) ; undo
   toolToggle(3,8) ; redo
   toolToggle(tCur,tTog) ; standard
@@ -888,32 +873,36 @@ If StartDrawing(CanvasOutput(0))
   Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(7))
   Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(7))
   
-  updatePalette()
+  DrawText(MA(3)\lx+4,MA(3)\ly-36,"Brush",bp(7))
+  DrawText(MA(3)\lx+8,MA(3)\ly-20,"Size",bp(7))
+  
+  updateBrush()
+  
   
   ; enable for debugging mouse area squares
-  ;   For i=0 To maCount
-  ;     drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
-  ;   Next
-  ;   
+;     For i=0 To maCount
+;       drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
+;     Next
+    
   ; draw colour select boxes
   drawColSel(dCol,7)
   For i=1 To 7
-    Box(MA(1)\lx+4,MA(1)\ry-i*22-19,32,18,bp(i))
+    Box(MA(1)\lx+4+i*32,MA(1)\ly+4,28,28,bp(i))
   Next  
   
-  DrawText(MA(4)\lx+4,MA(4)\ly+4,"mX:")
-  DrawText(MA(4)\lx+4,MA(4)\ly+20,"mY:")
-  DrawText(MA(4)\lx+4,MA(4)\ly+36,"pX:")
-  DrawText(MA(4)\lx+4,MA(4)\ly+52,"pY:")
-  DrawText(MA(4)\lx+4,MA(4)\ly+68,"mB:")
-  DrawText(MA(4)\lx+4,MA(4)\ly+84,"mA:")
-  DrawText(MA(4)\lx+4,MA(4)\ly+100,"CT:")
-  DrawText(MA(4)\lx+4,MA(4)\ly+116,"TS:")
+  DrawText(MA(4)\lx,MA(4)\ly,"mX:")
+  DrawText(MA(4)\lx,MA(4)\ly+16,"mY:")
+  DrawText(MA(4)\lx,MA(4)\ly+32,"pX:")
+  DrawText(MA(4)\lx,MA(4)\ly+48,"pY:")
+  DrawText(MA(4)\lx+100,MA(4)\ly,"mB:")
+  DrawText(MA(4)\lx+100,MA(4)\ly+16,"mA:")
+  DrawText(MA(4)\lx+100,MA(4)\ly+32,"CT:")
+  DrawText(MA(4)\lx+100,MA(4)\ly+48,"TS:")
   
-  DrawText(MA(5)\lx,MA(5)\ly-20,"Pat")
+  DrawText(MA(5)\lx,MA(5)\ly-20,"Pat",bp(7))
   drawBox(MA(5)\lx,MA(5)\ly,MA(5)\rx,MA(5)\ry,bp(7))
   
-  DrawText(MA(7)\lx,MA(7)\ly-20,"Fill")
+  DrawText(MA(7)\lx,MA(7)\ly-20,"Fill",bp(7))
   drawBox(MA(7)\lx,MA(7)\ly,MA(7)\rx,MA(7)\ry,bp(7))
   
   StopDrawing()
@@ -932,6 +921,40 @@ Repeat
       ; read mouse
       mx = GetGadgetAttribute(0, #PB_Canvas_MouseX)
       my = GetGadgetAttribute(0, #PB_Canvas_MouseY)
+      
+      ; check if mouse is in palette area
+      If EventType() = #PB_EventType_MouseMove
+        If mact=-1
+          If range(2)=1
+            mact=9
+            imgIN=GetGadgetAttribute(0,#PB_Canvas_Image)
+            imgTMP=CreateImage(#PB_Any,#scrW,#scrH)
+            If StartDrawing(ImageOutput(imgTMP))
+              DrawImage(imgIN,0,0)
+              StopDrawing()
+            EndIf
+            imgPAL=GrabImage(imgTMP,#PB_Any,0,414,586,186)
+            FreeImage(imgTMP)
+            If StartDrawing(CanvasOutput(0))
+              Box(0,414,586,186,bp(0))
+              drawBox(1,415,585,598,bp(7))
+              updatePalette()
+              StopDrawing()
+            EndIf
+          EndIf
+        EndIf
+        
+        If mact=9 
+          If EventType()=#PB_EventType_LeftButtonUp Or (range(8)=0 And (GetGadgetAttribute(0, #PB_Canvas_Buttons)=0))
+            mact=-1
+            If StartDrawing(CanvasOutput(0))
+              DrawImage(ImageID(imgPAL),0,414)
+              StopDrawing()
+            EndIf
+            FreeImage(imgPAL)
+          EndIf
+        EndIf
+      EndIf
       
       
       ; left mouse button down and mouse move events
@@ -1028,19 +1051,19 @@ Repeat
             ; *** end drawing tool code
             
           Case 2 ; colour select
-            i=7-((my-MA(1)\ly) / 22)
+            i=(mx-MA(1)\lx) / 32
             If dCol<>i And i>-1 And i<8
               If StartDrawing(CanvasOutput(0))    
                 drawColSel(dCol,0)
                 dCol=i
                 drawColSel(dcol,7)
-                updatePalette()
+                updateBrush()
                 StopDrawing()
               EndIf
             EndIf
-          Case 3 ; pattern select
-            i=7-((my-MA(2)\ly) / 22)
-            j=((mx-MA(2)\lx) / 32)
+          Case 9 ; pattern select2 - old palette select is mact=3
+            i=7-((my-MA(8)\ly) / 22)
+            j=((mx-MA(8)\lx) / 32)
             If i<0: i=0: EndIf
             If i>7: i=7: EndIf
             If j<0: j=0: EndIf
@@ -1048,11 +1071,14 @@ Repeat
             ;If i%>-1 And i%<8 And J%>-1 And J%<18 THEN
             If pCol<>i Or pSel<>j
               If StartDrawing(CanvasOutput(0))              
-                Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(0))
+                Box(MA(8)\lx+pSel*32,MA(8)\ly+174-pCol*22+4,32,2,bp(0))
                 pCol=i
                 pSel=j
                 
                 updateBrush()
+                ; highlight selected pattern and update selected brush size pattern
+                Box(MA(8)\lx+pSel*32,MA(8)\ly+174-pCol*22+4,32,2,bp(7))
+
                 StopDrawing()
               EndIf
             EndIf
@@ -1068,7 +1094,7 @@ Repeat
                   Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(i*7))
                   dWid=s
                 Next
-                dBrushSize()
+                ;dBrushSize()
                 StopDrawing()
               EndIf
             EndIf
@@ -1138,15 +1164,13 @@ Repeat
                 EndIf
             EndSelect            
             
-          Case 3 ; pattern select
-            If range(2)=1
-              ;col+1
-              ;If col>7
-              ;  col=0
-              ;EndIf
-              
-              ;updatepalette()
+          Case 9 ; pattern select2
+            If StartDrawing(CanvasOutput(0))
+              DrawImage(ImageID(imgPAL),0,414)
+              StopDrawing()
             EndIf
+            FreeImage(imgPAL)
+            
           Case 7 ; tool select
             
             ; get button of tool clicked And action
@@ -1197,12 +1221,17 @@ Repeat
         mact=-1
       EndIf 
       
-      ; update screen
+      ;-------- update screen
+      
       If StartDrawing(CanvasOutput(0))
         
         ; update drawing area
-        DrawImage(ImageID(iBeebSCRN),MA(0)\lx,MA(0)\ly)
-        
+        If mact<>9
+          DrawImage(ImageID(iBeebSCRN),MA(0)\lx,MA(0)\ly)
+          ; show stats
+          showstats()
+          
+        EndIf
         ;update tool strip toggles
         If ListSize(lToggle())
           ForEach lToggle()
@@ -1211,8 +1240,6 @@ Repeat
           ClearList(lToggle())
         EndIf
         
-        ; show stats
-        showstats()
         
         StopDrawing()    
       EndIf
@@ -1221,38 +1248,23 @@ Repeat
     
   ExamineKeyboard()
   
+  ; select colour
   If KeyboardReleased(#PB_Key_R)
     updateColSel(-1)
   EndIf  
+  
   If KeyboardReleased(#PB_Key_F)
     updateColSel(1)
   EndIf  
   
+  ; select pattern colour (background)
   If KeyboardReleased(#PB_Key_I)
-    If StartDrawing(CanvasOutput(0))              
-      Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(0))
-      ;pCol=i
-      pSel+1
-      If pSel=18:pSel=0:EndIf
-      updateBrush()
-      StopDrawing()
-    EndIf
+    updatepCol(1)
   EndIf
   
-  
   If KeyboardReleased(#PB_Key_J)
-    If StartDrawing(CanvasOutput(0))              
-      Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(0))
-      ;pCol=i
-      pSel-1
-      If pSel=255:pSel=17:EndIf
-      updateBrush()
-      StopDrawing()
-    EndIf
-    
+    updatepCol(-1)
   EndIf  
-  
-
     
   Else
     Delay(1)
@@ -1301,28 +1313,32 @@ DataSection
   Data.s "Drawing Area"
   Data.w 4,4,640,512
   Data.s "Colour Select"
-  Data.w 600,524,40,178
+  Data.w 388,524,260,36
   Data.s "Pattern Select"
-  Data.w 6,524,576,178
+  Data.w 0,524,72,75
   Data.s "Brush Size"
-  Data.w 756,18,204,140
+  Data.w 750,60,204,140
   Data.s "Stats"
-  Data.w 756,164,204,200
+  Data.w 184,524,100,64
   Data.s "Selected Pattern"
-  Data.w 756,446,44,44
+  Data.w 750,446,44,44
   Data.s "Tool Strip"
-  Data.w 654,2,100,550
+  Data.w 648,24,100,550
   Data.s "Fill Colour"
-  Data.w 756,526,44,44
+  Data.w 750,526,44,44
+  Data.s "Pattern Select2"
+  Data.w 6,414,584,186
   
-  ; inline toolstrip bmp
+  
+  ; inline toolstrip bmps
   ToolStripMain:       : IncludeBinary #PB_Compiler_FilePath + "/TOOLSTRIPEXA.BMP"
+  ToolStripMain2:      : IncludeBinary #PB_Compiler_FilePath + "/TOOLSTRIP2EXA.BMP"
 EndDataSection
 
 
-; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 214
-; FirstLine = 195
+; IDE Options = PureBasic 5.62 (Windows - x86)
+; CursorPosition = 1321
+; FirstLine = 1278
 ; Folding = -----
 ; EnableXP
 ; Executable = ART_EXA_PB_010_x86.exe
