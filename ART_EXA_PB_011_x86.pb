@@ -41,6 +41,7 @@ EndStructure
 
 Structure drawLayers
   IMG.l   ; image number
+  VIS.l   ; visible flag
   List lUndo.l()
   List lRedo.l()
 EndStructure
@@ -66,9 +67,9 @@ Global tTog.a=3 ; tool toggle colour
 Global tQSv.a=0 ; quick save toggle
 Global tSel.a=0 ; new tool select 
 
-Global maCount.a=8 ; mouse area count 0-n
+Global maCount.a=9 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
-Global imgToolStrip, imgToolStrip2, imgPAL; image handles
+Global imgToolStrip, imgToolStrip2, imgPAL, imgFinal; image handles
 
 Global Dim l.drawLayers(4) ; layers array
 
@@ -248,7 +249,7 @@ Procedure updatePalette()
   updateBrush()
   ; highlight selected pattern and update selected brush size pattern
   Box(MA(8)\lx+pSel*32,MA(8)\ly+174-pCol*22+4,32,2,bp(7))
-
+  
   
 EndProcedure
 
@@ -487,7 +488,7 @@ Procedure updateColSel(c.b)
     StopDrawing()
   EndIf  
 EndProcedure
-  
+
 ; update pattern colour 
 Procedure updatepCol(c.b)
   If StartDrawing(CanvasOutput(0))              
@@ -500,6 +501,27 @@ Procedure updatepCol(c.b)
     StopDrawing()
   EndIf  
 EndProcedure  
+
+; update layer selector
+Procedure updateLayers()
+  Box(MA(9)\lx,MA(9)\ly+20,MA(9)\rx-MA(9)\lx,MA(9)\ry-MA(9)\ly-20,bp(0))
+  For i=0 To ArraySize(l())
+    drawbox(MA(9)\lx+20,MA(9)\ly+20+i*32,MA(9)\lx+44,MA(9)\ly+44+i*32,bp(7))
+    
+    If l(i)\VIS
+      Box(MA(9)\lx+23,MA(9)\ly+23+i*32,19,19,bp(2))
+    EndIf
+    
+    If i=dLay
+      Box(MA(9)\lx,MA(9)\ly+20+i*32,16,24,bp(1))
+    EndIf
+    
+    DrawingMode(#PB_2DDrawing_Transparent)
+    DrawText(MA(9)\lx+4,MA(9)\ly+24+i*32,Str(i+1),bp(7))
+    DrawingMode(#PB_2DDrawing_Default)
+    
+  Next
+EndProcedure
 
 ; flood fill With current pattern
 Procedure floodFill(sx,sy)
@@ -799,9 +821,9 @@ For i=1 To 15
   Read.a r
   Read.a g
   Read.a b
-  bp(i)=RGB(r,g,b)
+  bp(i)=RGBA(r,g,b,255)
 Next
-bp(0) = RGB(0,0,0)
+bp(0) = RGBA(0,0,0,0)
 
 ; mouse area / tool location list
 Restore mouseData
@@ -824,13 +846,17 @@ imgToolStrip=CatchImage(#PB_Any,?ToolStripMain)
 imgToolStrip2=CatchImage(#PB_Any,?ToolStripMain2)
 
 ; create drawing layers
-For i=0 To ArraySize(l())-1
-  l(i)\IMG=CreateImage(#PB_Any,#drwW,#drwH,24)
+For i=0 To ArraySize(l())
+  l(i)\IMG=CreateImage(#PB_Any,#drwW,#drwH,32)
+  l(i)\VIS=1
   If StartDrawing(ImageOutput(l(i)\IMG))
-    Box(0,0,#drwW-1,#drwH-1,bp(0))
+    DrawingMode(#PB_2DDrawing_AlphaChannel) ; fill layer with transparent backgroup
+    Box(0, 0, 640, 512, bp(0))
+    DrawingMode(#PB_2DDrawing_Default)      
     StopDrawing()
   EndIf
 Next
+imgFinal=CreateImage(#PB_Any,640,512,32)
 
 ; init screen gadget and initial state
 CanvasGadget(0,0,0,#scrW,#scrH)
@@ -886,10 +912,10 @@ If StartDrawing(CanvasOutput(0))
   
   
   ; enable for debugging mouse area squares
-;     For i=0 To maCount
-;       drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
-;     Next
-    
+  ;       For i=0 To maCount
+  ;         drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
+  ;       Next
+  
   ; draw colour select boxes and double border
   drawColSel(dCol,7)
   For i=1 To 7
@@ -914,6 +940,10 @@ If StartDrawing(CanvasOutput(0))
   
   DrawText(MA(7)\lx,MA(7)\ly-20,"Fill",bp(7))
   drawBox(MA(7)\lx,MA(7)\ly,MA(7)\rx,MA(7)\ry,bp(7))
+  
+  DrawText(MA(9)\lx+4,MA(9)\ly,"Layer",bp(7))
+  
+  updateLayers()
   
   StopDrawing()
 EndIf
@@ -1007,6 +1037,7 @@ Repeat
             Select tCur
               Case 4 ; brush tool
                 If StartDrawing(ImageOutput(l(dLay)\IMG))
+                  DrawingMode(#PB_2DDrawing_AlphaBlend)
                   Select dSel
                     Case 16 ; standard brush
                       dbrush(px(mx),py(my),dWid,0)
@@ -1017,6 +1048,7 @@ Repeat
                     Case 20 ; standard X2 brush
                       dbrush(px(mx),py(my),dWid,1)
                   EndSelect
+                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
               Case 5 ; line tool
@@ -1090,7 +1122,7 @@ Repeat
                 updateBrush()
                 ; highlight selected pattern and update selected brush size pattern
                 Box(MA(8)\lx+pSel*32+4,MA(8)\ly+174-pCol*22+4,32,2,bp(7))
-
+                
                 StopDrawing()
               EndIf
             EndIf
@@ -1131,9 +1163,10 @@ Repeat
                   DrawingMode(#PB_2DDrawing_XOr)
                   LineXY(sx,sy,ox,oy,bp(7))
                   LineXY(sx,sy,sx,sy,bp(7))
-                  DrawingMode(#PB_2DDrawing_Default)
-                  
+;                  DrawingMode(#PB_2DDrawing_Default)
+                  DrawingMode(#PB_2DDrawing_AlphaBlend)
                   dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
+                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
                 
@@ -1141,14 +1174,14 @@ Repeat
                 If StartDrawing(ImageOutput(l(dLay)\IMG))
                   DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
                   Circle(sx,sy,Abs(sx-ox),bp(7))
-                  DrawingMode(#PB_2DDrawing_Default)
                   
+                  DrawingMode(#PB_2DDrawing_AlphaBlend)
                   If tCur=6 
                     dCircOut(sx,sy,Abs(sx-ox))
                   Else
                     dCircle(sx,sy,Abs(sx-ox))
                   EndIf
-                  
+                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
                 
@@ -1157,8 +1190,8 @@ Repeat
                 If StartDrawing(ImageOutput(l(dLay)\IMG))
                   DrawingMode(#PB_2DDrawing_XOr)
                   drawBox(sx,sy,ox,oy,bp(7))
-                  DrawingMode(#PB_2DDrawing_Default)
-                  
+                  DrawingMode(#PB_2DDrawing_AlphaBlend)
+                                    
                   If tCur>9
                     If sx<>ox And sy<>oy 
                       dBoxG(sx,sy,ox,oy,tCur-12)
@@ -1166,12 +1199,14 @@ Repeat
                   Else
                     dBox(sx,sy,ox,oy,tCur-8)
                   EndIf
-                  
+                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
               Case 10 ; flood fill
                 If StartDrawing(ImageOutput(l(dLay)\IMG))
+                  DrawingMode(#PB_2DDrawing_AlphaBlend)
                   floodfill(mx-MA(0)\lx,my-MA(0)\ly)
+                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
             EndSelect            
@@ -1194,7 +1229,9 @@ Repeat
                 Case 15; CLS
                   saveundo()
                   If StartDrawing(ImageOutput(l(dLay)\IMG))
+                    DrawingMode(#PB_2DDrawing_AlphaChannel)
                     Box(0,0,#drwW,#drwH,bp(0))
+                    DrawingMode(#PB_2DDrawing_Default)
                     StopDrawing()
                   EndIf
                 Case 14; toggle transparency
@@ -1220,20 +1257,64 @@ Repeat
                   EndIf
               EndSelect
             EndIf
+            
+          Case 10 ; layers
+            i=(my-MA(9)\ly-20) / 32
+            If i<0:i=0:EndIf
+            If i>4:i=4:EndIf
+            If mx-MA(9)\lx<23 ; select layer
+              If i<>dLay
+                dlay=i
+                If StartDrawing(CanvasOutput(0))
+                  updateLayers()
+                  StopDrawing()
+                EndIf
+              EndIf
+              
+            Else ; select visible layer
+              If l(i)\VIS
+                l(i)\VIS=0
+              Else
+                l(i)\VIS=1
+              EndIf
+              If StartDrawing(CanvasOutput(0))
+                updateLayers()
+                StopDrawing()
+              EndIf
+              
+            EndIf
+            
+            
         EndSelect
         
         ; reset mouse action
         mact=-1
       EndIf 
       
-      ;-------- update screen
+      ;-------- Update Screen
+      If StartDrawing(ImageOutput(imgFinal))
+        Box(0,0,640,512,#Black)
+        DrawingMode(#PB_2DDrawing_AlphaChannel) ; fill output layer with transparent backgroup
+        Box(0,0,640,512,bp(0))
+        
+        DrawingMode(#PB_2DDrawing_AlphaBlend) ; alpha blend each layer to appear solid
+        
+        For i=0 To ArraySize(l())
+          If l(i)\VIS
+            DrawAlphaImage(ImageID(l(i)\IMG),0,0)
+          EndIf
+        Next
+        DrawingMode(#PB_2DDrawing_Default)
+        StopDrawing()
+      EndIf
+      
       
       If StartDrawing(CanvasOutput(0))
         
         ; update drawing area
         If mact<>9
-          DrawImage(ImageID(l(dLay)\IMG),MA(0)\lx,MA(0)\ly)
-          ; show stats
+          DrawImage(ImageID(imgFinal),MA(0)\lx,MA(0)\ly)
+          
           showstats()
           
         EndIf
@@ -1251,25 +1332,25 @@ Repeat
       
     EndIf
     
-  ExamineKeyboard()
-  
-  ; select colour
-  If KeyboardReleased(#PB_Key_R)
-    updateColSel(-1)
-  EndIf  
-  
-  If KeyboardReleased(#PB_Key_F)
-    updateColSel(1)
-  EndIf  
-  
-  ; select pattern colour (background)
-  If KeyboardReleased(#PB_Key_I)
-    updatepCol(1)
-  EndIf
-  
-  If KeyboardReleased(#PB_Key_J)
-    updatepCol(-1)
-  EndIf  
+    ;     ExamineKeyboard()
+    ;     
+    ;     ; select colour
+    ;     If KeyboardReleased(#PB_Key_R)
+    ;       updateColSel(-1)
+    ;     EndIf  
+    ;     
+    ;     If KeyboardReleased(#PB_Key_F)
+    ;       updateColSel(1)
+    ;     EndIf  
+    ;     
+    ;     ; select pattern colour (background)
+    ;     If KeyboardReleased(#PB_Key_I)
+    ;       updatepCol(1)
+    ;     EndIf
+    ;     
+    ;     If KeyboardReleased(#PB_Key_J)
+    ;       updatepCol(-1)
+    ;     EndIf  
     
   Else
     Delay(1)
@@ -1333,6 +1414,9 @@ DataSection
   Data.w 750,526,44,44
   Data.s "Pattern Select2"
   Data.w 0,392,586,186
+  Data.s "Layers"
+  Data.w 750,212,50,200
+  
   
   
   ; inline toolstrip bmps
@@ -1341,11 +1425,9 @@ DataSection
 EndDataSection
 
 
-; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 719
-; FirstLine = 716
+; IDE Options = PureBasic 5.61 (Windows - x86)
+; CursorPosition = 1208
+; FirstLine = 1251
 ; Folding = -----
 ; EnableXP
-; UseIcon = Art-icon.ico
 ; Executable = ART_EXA_PB_011_x86.exe
-; DisableDebugger
