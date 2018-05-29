@@ -62,10 +62,12 @@ Global dMdy=256 ; current mode vertical pixels
 Global dMpx=4   ; current mode horizontal pixel size
 Global dMpy=2   ; current mode vertical pixel size
 Global dLay=0   ; current drawing layer
+Global dAll=1   ; all layers visible flag
 Global tCur.a=4 ; tool selected
 Global tTog.a=3 ; tool toggle colour
 Global tQSv.a=0 ; quick save toggle
 Global tSel.a=0 ; new tool select 
+Global dWire.a=0; draw wireframe 
 
 Global maCount.a=9 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
@@ -504,23 +506,32 @@ EndProcedure
 
 ; update layer selector
 Procedure updateLayers()
+  Protected t.s, h.a
+  
   Box(MA(9)\lx,MA(9)\ly+20,MA(9)\rx-MA(9)\lx,MA(9)\ry-MA(9)\ly-20,bp(0))
-  For i=0 To ArraySize(l())
+  
+  For i=0 To ArraySize(l())+1
     drawbox(MA(9)\lx+20,MA(9)\ly+20+i*32,MA(9)\lx+44,MA(9)\ly+44+i*32,bp(7))
     
-    If l(i)\VIS
-      Box(MA(9)\lx+23,MA(9)\ly+23+i*32,19,19,bp(2))
+    If i>ArraySize(l())
+      t="A"
+      h=dAll
+    Else      
+      h=l(i)\VIS
+      t=Str(i+1)
     EndIf
-    
     If i=dLay
       Box(MA(9)\lx,MA(9)\ly+20+i*32,16,24,bp(1))
     EndIf
+    If h
+      Box(MA(9)\lx+23,MA(9)\ly+23+i*32,19,19,bp(2))
+    EndIf
     
     DrawingMode(#PB_2DDrawing_Transparent)
-    DrawText(MA(9)\lx+4,MA(9)\ly+24+i*32,Str(i+1),bp(7))
+    DrawText(MA(9)\lx+4,MA(9)\ly+24+i*32,t,bp(7))
     DrawingMode(#PB_2DDrawing_Default)
-    
   Next
+  
 EndProcedure
 
 ; flood fill With current pattern
@@ -852,7 +863,6 @@ For i=0 To ArraySize(l())
   If StartDrawing(ImageOutput(l(i)\IMG))
     DrawingMode(#PB_2DDrawing_AlphaChannel) ; fill layer with transparent backgroup
     Box(0, 0, 640, 512, bp(0))
-    DrawingMode(#PB_2DDrawing_Default)      
     StopDrawing()
   EndIf
 Next
@@ -903,7 +913,7 @@ If StartDrawing(CanvasOutput(0))
   Circle(MA(3)\lx+33,MA(3)\ly+13,5,bp(6))
   
   Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(7))
-  Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(7))
+  ;Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(7))
   
   DrawText(MA(3)\lx+4,MA(3)\ly-36,"Brush",bp(7))
   DrawText(MA(3)\lx+8,MA(3)\ly-20,"Size",bp(7))
@@ -912,9 +922,9 @@ If StartDrawing(CanvasOutput(0))
   
   
   ; enable for debugging mouse area squares
-  ;       For i=0 To maCount
-  ;         drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
-  ;       Next
+;         For i=0 To maCount
+;           drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
+;         Next
   
   ; draw colour select boxes and double border
   drawColSel(dCol,7)
@@ -1048,50 +1058,30 @@ Repeat
                     Case 20 ; standard X2 brush
                       dbrush(px(mx),py(my),dWid,1)
                   EndSelect
-                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
-              Case 5 ; line tool
-                If StartDrawing(ImageOutput(l(dLay)\IMG))
-                  DrawingMode(#PB_2DDrawing_XOr)
-                  LineXY(sx,sy,ox,oy,bp(7))
-                  LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
-                  StopDrawing()
-                EndIf
+              Case 5,6,7,8,9,12,13 ; save ox,oy
                 ox=mx-MA(0)\lx
                 oy=my-MA(0)\ly
                 
-              Case 6,7 ; polygon tool
-                If StartDrawing(ImageOutput(l(dLay)\IMG))
-                  DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
-                  Circle(sx,sy,Abs(sx-ox),bp(7))
-                  Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
-                  DrawingMode(#PB_2DDrawing_Default)
-                  StopDrawing()
-                EndIf
-                
-                ox=mx-MA(0)\lx
-                oy=my-MA(0)\ly
-              Case 8,9,12,13  ; boxes, gradient
-                If StartDrawing(ImageOutput(l(dLay)\IMG))
-                  DrawingMode(#PB_2DDrawing_XOr)
-                  drawBox(sx,sy,ox,oy,bp(7))
-                  drawBox(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
-                  DrawingMode(#PB_2DDrawing_Default)
-                  StopDrawing()
-                EndIf
-                ox=mx-MA(0)\lx
-                oy=my-MA(0)\ly
               Case 10 ; flood fill
-                If StartDrawing(CanvasOutput(0))
-                  i=Point(mx,my)
-                  If i<>dFil
-                    dFil=i
-                    Box(MA(7)\lx+4,MA(7)\ly+4,MA(7)\rx-MA(7)\lx-7,MA(7)\ry-MA(7)\ly-7,dFil)
+                If range(0)
+                  If StartDrawing(ImageOutput(l(dLay)\IMG))
+                    DrawingMode(#PB_2DDrawing_AlphaBlend)
+                    i=Point(mx,my)
+                    StopDrawing()                    
+                    If i<>dFil
+                      dFil=i
+                      If StartDrawing(CanvasOutput(0))
+                        DrawingMode(#PB_2DDrawing_Default)
+                        Box(MA(7)\lx+4,MA(7)\ly+4,MA(7)\rx-MA(7)\lx-7,MA(7)\ry-MA(7)\ly-7,dFil)
+                        StopDrawing()
+                      EndIf
+                    EndIf
                   EndIf
-                  StopDrawing()
                 EndIf
             EndSelect
+            dWire=tCur
             ; *** end drawing tool code
             
           Case 2 ; colour select
@@ -1135,7 +1125,7 @@ Repeat
               If StartDrawing(CanvasOutput(0))
                 For i=0 To 1
                   Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(i*7))
-                  Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(i*7))
+                  ;Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(i*7))
                   dWid=s
                 Next
                 ;dBrushSize()
@@ -1156,40 +1146,29 @@ Repeat
         ; do any mouse up actions such as tools and pattern select
         Select mact
           Case 1 ; drawing area
-                 ; determine tool being used
+            
+            ; determine tool being used
             Select tCur
               Case 5 ; line tool completion
                 If StartDrawing(ImageOutput(l(dLay)\IMG))
-                  DrawingMode(#PB_2DDrawing_XOr)
-                  LineXY(sx,sy,ox,oy,bp(7))
-                  LineXY(sx,sy,sx,sy,bp(7))
-;                  DrawingMode(#PB_2DDrawing_Default)
                   DrawingMode(#PB_2DDrawing_AlphaBlend)
                   dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
-                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
                 
               Case 6,7 ; polygon completion
                 If StartDrawing(ImageOutput(l(dLay)\IMG))
-                  DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
-                  Circle(sx,sy,Abs(sx-ox),bp(7))
-                  
                   DrawingMode(#PB_2DDrawing_AlphaBlend)
                   If tCur=6 
                     dCircOut(sx,sy,Abs(sx-ox))
                   Else
                     dCircle(sx,sy,Abs(sx-ox))
                   EndIf
-                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
                 
-                
               Case 8,9,12,13  ; boxes, gradient
                 If StartDrawing(ImageOutput(l(dLay)\IMG))
-                  DrawingMode(#PB_2DDrawing_XOr)
-                  drawBox(sx,sy,ox,oy,bp(7))
                   DrawingMode(#PB_2DDrawing_AlphaBlend)
                                     
                   If tCur>9
@@ -1199,14 +1178,12 @@ Repeat
                   Else
                     dBox(sx,sy,ox,oy,tCur-8)
                   EndIf
-                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
               Case 10 ; flood fill
                 If StartDrawing(ImageOutput(l(dLay)\IMG))
                   DrawingMode(#PB_2DDrawing_AlphaBlend)
                   floodfill(mx-MA(0)\lx,my-MA(0)\ly)
-                  DrawingMode(#PB_2DDrawing_Default)
                   StopDrawing()
                 EndIf
             EndSelect            
@@ -1229,9 +1206,9 @@ Repeat
                 Case 15; CLS
                   saveundo()
                   If StartDrawing(ImageOutput(l(dLay)\IMG))
+                    Box(0,0,#drwW,#drwH,bp(0))
                     DrawingMode(#PB_2DDrawing_AlphaChannel)
                     Box(0,0,#drwW,#drwH,bp(0))
-                    DrawingMode(#PB_2DDrawing_Default)
                     StopDrawing()
                   EndIf
                 Case 14; toggle transparency
@@ -1261,9 +1238,9 @@ Repeat
           Case 10 ; layers
             i=(my-MA(9)\ly-20) / 32
             If i<0:i=0:EndIf
-            If i>4:i=4:EndIf
+            If i>5:i=5:EndIf
             If mx-MA(9)\lx<23 ; select layer
-              If i<>dLay
+              If i<5 And i<>dLay
                 dlay=i
                 If StartDrawing(CanvasOutput(0))
                   updateLayers()
@@ -1272,11 +1249,23 @@ Repeat
               EndIf
               
             Else ; select visible layer
-              If l(i)\VIS
-                l(i)\VIS=0
+              If i<5
+                If l(i)\VIS
+                  l(i)\VIS=0
+                Else
+                  l(i)\VIS=1
+                EndIf
               Else
-                l(i)\VIS=1
+                If dAll
+                  dAll=0
+                Else
+                  dAll=1
+                EndIf
+                For i=0 To ArraySize(l())
+                  l(i)\VIS=dAll
+                Next
               EndIf
+              
               If StartDrawing(CanvasOutput(0))
                 updateLayers()
                 StopDrawing()
@@ -1284,10 +1273,10 @@ Repeat
               
             EndIf
             
-            
         EndSelect
         
         ; reset mouse action
+        dWire=0
         mact=-1
       EndIf 
       
@@ -1304,7 +1293,21 @@ Repeat
             DrawAlphaImage(ImageID(l(i)\IMG),0,0)
           EndIf
         Next
-        DrawingMode(#PB_2DDrawing_Default)
+
+        If dWire
+          DrawingMode(#PB_2DDrawing_AlphaBlend|#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
+          Select tCur
+            Case 5 ; line tool
+              LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
+              
+            Case 6,7 ; polygon tool
+              Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
+            Case 8,9,12,13  ; boxes, gradient
+              Box(sx,sy,mx-MA(0)\lx-sx,my-MA(0)\ly-sy,bp(7))
+              
+          EndSelect
+        EndIf        
+        
         StopDrawing()
       EndIf
       
@@ -1332,29 +1335,31 @@ Repeat
       
     EndIf
     
-    ;     ExamineKeyboard()
-    ;     
-    ;     ; select colour
-    ;     If KeyboardReleased(#PB_Key_R)
-    ;       updateColSel(-1)
-    ;     EndIf  
-    ;     
-    ;     If KeyboardReleased(#PB_Key_F)
-    ;       updateColSel(1)
-    ;     EndIf  
-    ;     
-    ;     ; select pattern colour (background)
-    ;     If KeyboardReleased(#PB_Key_I)
-    ;       updatepCol(1)
-    ;     EndIf
-    ;     
-    ;     If KeyboardReleased(#PB_Key_J)
-    ;       updatepCol(-1)
-    ;     EndIf  
+ 
     
   Else
     Delay(1)
   EndIf
+  
+;     ExamineKeyboard()
+;     
+;     ; select colour
+;     If KeyboardReleased(#PB_Key_R)
+;       updateColSel(-1)
+;     EndIf  
+;     
+;     If KeyboardReleased(#PB_Key_F)
+;       updateColSel(1)
+;     EndIf  
+;     
+;     ; select pattern colour (background)
+;     If KeyboardReleased(#PB_Key_I)
+;       updatepCol(1)
+;     EndIf
+;     
+;     If KeyboardReleased(#PB_Key_J)
+;       updatepCol(-1)
+;     EndIf   
   
   
 Until Event = #PB_Event_CloseWindow
@@ -1415,7 +1420,7 @@ DataSection
   Data.s "Pattern Select2"
   Data.w 0,392,586,186
   Data.s "Layers"
-  Data.w 750,212,50,200
+  Data.w 750,212,50,210
   
   
   
@@ -1425,9 +1430,10 @@ DataSection
 EndDataSection
 
 
-; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 1208
-; FirstLine = 1251
+; IDE Options = PureBasic 5.62 (Windows - x86)
+; CursorPosition = 1361
+; FirstLine = 1321
 ; Folding = -----
 ; EnableXP
 ; Executable = ART_EXA_PB_011_x86.exe
+; DisableDebugger
