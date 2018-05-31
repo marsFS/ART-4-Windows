@@ -142,8 +142,8 @@ Procedure showstats()
   DrawText(MA(4)\lx+x+160,MA(4)\ly,Str(dWid))
   DrawText(MA(4)\lx+x+160,MA(4)\ly+16,Str(mact))
   
-  DrawText(MA(4)\lx+x+240,MA(4)\ly,Str(tCur))
-  DrawText(MA(4)\lx+x+240,MA(4)\ly+16,Str(tSel))
+  DrawText(MA(4)\lx+x+240,MA(4)\ly,Str(pCol))
+  DrawText(MA(4)\lx+x+240,MA(4)\ly+16,Str(dCol))
   
 EndProcedure
 
@@ -202,12 +202,13 @@ Procedure dBrush(dx,dy,w,d)
               pS=lx % 4+(ly % 4)*4
           EndSelect
           If pat(pSel,pS)
-            dc=pCol
-            If dcol=0
+              dc=pCol
+          Else
+            If dCol
+              dc=dCol              
+            Else
               dc=16
             EndIf
-          Else
-            dc=dCol
           EndIf
           
           ; check For transparency
@@ -275,7 +276,7 @@ Procedure updatePalette()
   Next
   updateBrush()
   ; highlight selected pattern and update selected brush size pattern
-  Box(MA(8)\lx+pSel*32,MA(8)\ly+174-pCol*22+4,32,2,bp(7))
+  Box(MA(8)\lx+pSel*32+4,MA(8)\ly+174-pCol*22+4,32,2,bp(7))
   
   
 EndProcedure
@@ -292,13 +293,14 @@ Procedure Vline2(x1,y1,y2)
       ; range check, set pattern colour And plot
       If ly>-1 And ly<dMdy
         pS=x1M+(ly % 4)*4
-        If pat(pSel,pS) 
+        If pat(pSel,pS)
           dc=pCol
-          If dCol=0
+        Else
+          If dCol
+            dc=dCol              
+          Else
             dc=16
           EndIf
-        Else
-          dc=dCol
         EndIf
         
         ; Check For transparency
@@ -319,13 +321,14 @@ Procedure Hline2(x1,x2,y1)
     ; range check, set pattern colour And plot
     If lx>-1 And lx<dMdx And y1>-1 And y1<dMdy
       pS=lx % 4+y1M
-      If pat(pSel,pS) 
+      If pat(pSel,pS)
         dc=pCol
-        If dcol=0
+      Else
+        If dCol
+          dc=dCol              
+        Else
           dc=16
         EndIf
-      Else
-        dc=dCol
       EndIf
       
       ; Check For transparency
@@ -471,11 +474,12 @@ Procedure dBoxG(x1,y1,x2,y2,d)
         pS=lx % 4+(ly % 4)*4
         If pat(Int(gR),pS)
           dc=pCol
-          If dCol=0
+        Else
+          If dCol
+            dc=dCol              
+          Else
             dc=16
           EndIf
-        Else
-          dc=dCol
         EndIf
         
         ; Check For transparency
@@ -510,28 +514,52 @@ EndProcedure
 
 ; update colour select value
 Procedure updateColSel(c.b)
+  Protected oldC
+  
   If StartDrawing(CanvasOutput(0))    
-    drawColSel(dCol,0)
+    oldC=dCol
     dCol-c
     If dcol=255:dCol=7:EndIf
     If dcol=8:dCol=0:EndIf
-    drawColSel(dcol,7)
-    If mact=9
-      updatePalette()
+    If mact<>9  
+      drawColSel(oldC,0)
+      drawColSel(dcol,7)
     Else
-      updateBrush()
+      updatePalette()
     EndIf
+    updateBrush()
     StopDrawing()
-  EndIf  
+EndIf
+
+EndProcedure
+
+; redraw colour select
+Procedure resetColSel()
+  Box(MA(1)\lx,MA(1)\ly,MA(1)\rx-MA(1)\lx,MA(1)\ry-MA(1)\ly,bp(0))
+  For i=1 To 7
+    Box(MA(1)\lx+4+i*32,MA(1)\ly+5,28,28,bp(i))
+  Next  
+  
+  drawBox(MA(1)\lx,MA(1)\ly,MA(1)\rx,MA(1)\ry,bp(7))
+  drawBox(MA(1)\lx+1,MA(1)\ly+1,MA(1)\rx-1,MA(1)\ry-1,bp(8))
+  
+  drawColSel(dCol,7)
 EndProcedure
 
 ; update pattern colour 
 Procedure updatepCol(c.b)
+  Protected oldP
+  oldP=pCol
+  
   If StartDrawing(CanvasOutput(0))              
-    Box(MA(2)\lx+pSel*32,MA(2)\ly+174-pCol*22,32,2,bp(0))
     pCol+c
     If pCol=8:pCol=0:EndIf
     If pCol=255:pCol=7:EndIf
+    
+    If mact=9
+      Box(MA(8)\lx+pSel*32+4,MA(8)\ly+174-oldP*22+4,32,2,bp(0))
+      Box(MA(8)\lx+pSel*32+4,MA(8)\ly+174-pCol*22+4,32,2,bp(7))
+    EndIf
     
     updateBrush()
     StopDrawing()
@@ -1173,6 +1201,8 @@ If StartDrawing(CanvasOutput(0))
   ;         Next
   
   ; draw colour select boxes and double border
+  resetColSel()
+  
   drawColSel(dCol,7)
   For i=1 To 7
     Box(MA(1)\lx+4+i*32,MA(1)\ly+5,28,28,bp(i))
@@ -1247,9 +1277,14 @@ Repeat
           mact=-1
           If StartDrawing(CanvasOutput(0))
             DrawImage(ImageID(imgPAL),MA(8)\lx,MA(8)\ly)
+            
+            ; update colour select panel
+            resetColSel()
+            
             StopDrawing()
           EndIf
           FreeImage(imgPAL)
+          
         EndIf
       EndIf
       
@@ -1525,8 +1560,11 @@ Repeat
       EndIf 
       
       ;-------- Update Screen
+        If mact<>9
+      
+      ; clear output buffer
       For x=0 To #SCRNsize
-        SCRNout(x)=0 ; clear output buffer
+        SCRNout(x)=0 
       Next
       
       ; copy visible screen buffer to output buffer
@@ -1601,11 +1639,10 @@ Repeat
         StopDrawing()
       EndIf
       
-      
+      ; update drawing canvas
       If StartDrawing(CanvasOutput(0))
         
-        ; update drawing area
-        If mact<>9
+        ; update drawing area and stats
           DrawImage(ImageID(imgFinal),MA(0)\lx,MA(0)\ly)
           
           showstats()
@@ -1631,25 +1668,25 @@ Repeat
     Delay(1)
   EndIf
   
-;   ExamineKeyboard()
-;   
-;   ; select colour
-;   If KeyboardReleased(#PB_Key_R)
-;     updateColSel(-1)
-;   EndIf  
-;   
-;   If KeyboardReleased(#PB_Key_F)
-;     updateColSel(1)
-;   EndIf  
-;   
-;   ; select pattern colour (background)
-;   If KeyboardReleased(#PB_Key_I)
-;     updatepCol(1)
-;   EndIf
-;   
-;   If KeyboardReleased(#PB_Key_J)
-;     updatepCol(-1)
-;   EndIf   
+  ExamineKeyboard()
+  
+  ; select colour
+  If KeyboardReleased(#PB_Key_R)
+    updateColSel(-1)
+  EndIf  
+  
+  If KeyboardReleased(#PB_Key_F)
+    updateColSel(1)
+  EndIf  
+  
+  ; select pattern colour (background)
+  If KeyboardReleased(#PB_Key_I)
+    updatepCol(1)
+  EndIf
+  
+  If KeyboardReleased(#PB_Key_J)
+    updatepCol(-1)
+  EndIf   
   
   
 Until Event = #PB_Event_CloseWindow
@@ -1738,8 +1775,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1632
-; FirstLine = 1616
+; CursorPosition = 204
+; FirstLine = 200
 ; Folding = -----
 ; EnableXP
 ; UseIcon = Art-icon.ico
