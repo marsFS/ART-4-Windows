@@ -56,7 +56,6 @@ Structure undoArray
 EndStructure
 
 Structure drawLayers
-  IMG.l                   ; image number
   VIS.l                   ; visible flag
   SCRN.a[#SCRNsize+1]     ; screen buffer
   List lUndo.undoArray()  ; undo buffer
@@ -96,7 +95,7 @@ Global Dim SCRNout.a(#SCRNsize) ; final output buffer
 Global Dim pat.a(17,15) ; drawing patterns
 Global Dim bp(16)       ; beeb palette
 Global Dim MA.MouseArea(maCount) ; mouse area structure array
-Global Dim rgbT.rgbTable(15)     ; rgb lookup table
+Global Dim rgbT.rgbTable(16)     ; rgb lookup table
 Global Dim ct(16)                ; colour table look for redrawing main canvas
 Global Dim rawBBC.a(15)          ; raw bbc file format data
 Global Dim revBBC.a(85)          ; reverse lookup bbc file format data
@@ -508,8 +507,10 @@ Procedure dBoxG(x1,y1,x2,y2,d)
 EndProcedure
 
 ; draw highlight box for colour selector
-Procedure drawColSel(i,c)
-  drawBox(MA(1)\lx+2+i*32,MA(1)\ly+3,MA(1)\lx+33+i*32,MA(1)\ly+34,bp(c))
+Procedure drawColSel(oldDC,newDC)
+  drawBox(MA(1)\lx+2+oldDC*32,MA(1)\ly+3,MA(1)\lx+33+oldDC*32,MA(1)\ly+34,bp(0))
+  dCol=newDC
+  drawBox(MA(1)\lx+2+dCol*32,MA(1)\ly+3,MA(1)\lx+33+dCol*32,MA(1)\ly+34,bp(7))
 EndProcedure
 
 ; update colour select value
@@ -522,8 +523,7 @@ Procedure updateColSel(c.b)
     If dcol=255:dCol=7:EndIf
     If dcol=8:dCol=0:EndIf
     If mact<>9  
-      drawColSel(oldC,0)
-      drawColSel(dcol,7)
+      drawColSel(oldC,dCol)
     Else
       updatePalette()
     EndIf
@@ -543,7 +543,7 @@ Procedure resetColSel()
   drawBox(MA(1)\lx,MA(1)\ly,MA(1)\rx,MA(1)\ry,bp(7))
   drawBox(MA(1)\lx+1,MA(1)\ly+1,MA(1)\rx-1,MA(1)\ry-1,bp(8))
   
-  drawColSel(dCol,7)
+  drawColSel(dCol,dCol)
 EndProcedure
 
 ; update pattern colour 
@@ -797,7 +797,7 @@ Procedure openSave(mode)
                   
                   For x=0 To 159
                     For i=0 To 7
-                      If *Line\Pixel=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
+                      If *Line\Pixel=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r)
                         dl(dlay)\SCRN[x+yMul]=i
                         Break
                       EndIf
@@ -905,7 +905,7 @@ Procedure openSave(mode)
                 Next
               Else ; Else it's 32bits_BGR
                 For i=0 To 16
-                  ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
+                  ct(i)=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r)
                 Next
               EndIf
               
@@ -988,7 +988,7 @@ Procedure saveUndo()
   ; remove first item in list if undo buffer full
   If ListSize(dl(dLay)\lUndo())>#maxUndo
     FirstElement(dl(dLay)\lUndo())
-    FreeImage(dl(dLay)\lUndo())
+    ;FreeImage(dl(dLay)\lUndo())
     DeleteElement(dl(dLay)\lUndo())
     LastElement(dl(dLay)\lUndo())
   EndIf
@@ -1084,24 +1084,14 @@ For i=0 To 17
   Next
 Next
 
-; define beeb 2 palette
+; define beeb 2 palette - includes colour 16 which is used for solid black, gets converted to transparent black on image save
 Restore paletteData
-For i=1 To 15
+For i=0 To 16
   Read.a rgbT(i)\r
   Read.a rgbT(i)\g
   Read.a rgbT(i)\b
-  bp(i)=RGBA(rgbT(i)\r,rgbT(i)\g,rgbT(i)\b,255)
+  bp(i)=RGB(rgbT(i)\r,rgbT(i)\g,rgbT(i)\b)
 Next
-
-bp(0) = RGB(0,0,0)
-rgbT(0)\r=0
-rgbT(0)\g=0
-rgbT(0)\b=0
-
-bp(16) = RGB(0,0,1)
-rgbT(16)\r=0
-rgbT(16)\g=0
-rgbT(16)\b=1
 
 ; mouse area / tool location list
 Restore mouseData
@@ -1123,22 +1113,12 @@ For i=0 To 15
 Next  
 
 ; toolstrip image
-;imgToolStrip=LoadImage(#PB_Any,"ToolStrip.bmp")
-;If imgToolStrip=0
-;  Exit_ART("Cannot load ToolStrip.bmp")
-;EndIf
 imgToolStrip=CatchImage(#PB_Any,?ToolStripMain)
 imgToolStrip2=CatchImage(#PB_Any,?ToolStripMain2)
 
 ; create drawing layers
 For i=0 To ArraySize(dl())
-  ;dl(i)\IMG=CreateImage(#PB_Any,#drwW,#drwH,32)
   dl(i)\VIS=1
-  ;If StartDrawing(ImageOutput(dl(i)\IMG))
-  ;  DrawingMode(#PB_2DDrawing_AlphaChannel) ; fill layer with transparent backgroup
-  ;  Box(0, 0, 640, 512, bp(0))
-  ;  StopDrawing()
-  ;EndIf
 Next
 imgFinal=CreateImage(#PB_Any,640,512,32)
 
@@ -1162,7 +1142,6 @@ If StartDrawing(CanvasOutput(0))
   drawBox(MA(0)\lx-3,MA(0)\ly-3,MA(0)\rx+3,MA(0)\ry+3,bp(7))
   
   ; pattern select border
-  ;drawBox(MA(2)\lx-6,MA(2)\ly-6,MA(2)\rx+6,MA(2)\ry+6,bp(7))
   DrawingFont(FontID(tFont))
   DrawText(MA(6)\lx+4,0,"EXA ART",bp(1))
   DrawingFont(#PB_Default)
@@ -1185,33 +1164,17 @@ If StartDrawing(CanvasOutput(0))
   Circle(MA(3)\lx+33,MA(3)\ly+55,10,bp(6))
   Circle(MA(3)\lx+33,MA(3)\ly+33,7,bp(6))
   Circle(MA(3)\lx+33,MA(3)\ly+13,5,bp(6))
-  
   Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(7))
-  ;Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(7))
   
   DrawText(MA(3)\lx+4,MA(3)\ly-36,"Brush",bp(7))
   DrawText(MA(3)\lx+8,MA(3)\ly-20,"Size",bp(7))
   
   updateBrush()
   
-  
-  ; enable for debugging mouse area squares
-  ;         For i=0 To maCount
-  ;           drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
-  ;         Next
-  
   ; draw colour select boxes and double border
   resetColSel()
   
-  drawColSel(dCol,7)
-  For i=1 To 7
-    Box(MA(1)\lx+4+i*32,MA(1)\ly+5,28,28,bp(i))
-  Next  
-  
-  drawBox(MA(1)\lx,MA(1)\ly,MA(1)\rx,MA(1)\ry,bp(7))
-  drawBox(MA(1)\lx+1,MA(1)\ly+1,MA(1)\rx-1,MA(1)\ry-1,bp(8))
-  
-  
+  ; stats area
   DrawText(MA(4)\lx,MA(4)\ly,"mX:")
   DrawText(MA(4)\lx,MA(4)\ly+16,"mY:")
   DrawText(MA(4)\lx+80,MA(4)\ly,"pX:")
@@ -1231,6 +1194,11 @@ If StartDrawing(CanvasOutput(0))
   
   updateLayers()
   
+  ; enable for debugging mouse area squares
+  ;         For i=0 To maCount
+  ;           drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
+  ;         Next  
+  
   StopDrawing()
 EndIf
 
@@ -1248,8 +1216,19 @@ Repeat
       mx = GetGadgetAttribute(0, #PB_Canvas_MouseX)
       my = GetGadgetAttribute(0, #PB_Canvas_MouseY)
       
-      ; check if mouse is in palette area
+      ; check if mouse is in pattern area
       If EventType() = #PB_EventType_MouseMove
+        x=GetGadgetAttribute(0, #PB_Canvas_Cursor)
+        If range(0) And mact<>9
+          If x<>#PB_Cursor_Invisible
+            SetGadgetAttribute(0, #PB_Canvas_Cursor , #PB_Cursor_Invisible)
+          EndIf
+        Else
+          If x<>#PB_Cursor_Cross
+            SetGadgetAttribute(0, #PB_Canvas_Cursor , #PB_Cursor_Cross)
+          EndIf
+        EndIf
+        
         If mact=-1
           If range(2)=1
             mact=9
@@ -1315,7 +1294,8 @@ Repeat
               sy=my-MA(0)\ly
               ox=sx
               oy=sy
-              
+            Case 9 ; ignore pattern area if not selected via mouse over hotspot
+              mact=-1
           EndSelect
         EndIf
         
@@ -1326,8 +1306,6 @@ Repeat
             ; determine tool being used
             Select tCur
               Case 4 ; brush tool
-                     ;If StartDrawing(ImageOutput(dl(dLay)\IMG))
-                     ;  DrawingMode(#PB_2DDrawing_AlphaBlend)
                 Select dSel
                   Case 16 ; standard brush
                     dbrush(px(mx),py(my),dWid,0)
@@ -1338,23 +1316,19 @@ Repeat
                   Case 20 ; standard X2 brush
                     dbrush(px(mx),py(my),dWid,1)
                 EndSelect
-                ; StopDrawing()
-                ;EndIf
               Case 5,6,7,8,9,12,13 ; save ox,oy
                 ox=mx-MA(0)\lx
                 oy=my-MA(0)\ly
                 
               Case 10 ; flood fill
                 If range(0)
-                  If StartDrawing(CanvasOutput(0))
-                    ;DrawingMode(#PB_2DDrawing_AlphaBlend)
-                    i=dl(dLay)\SCRN[px(mx)+640*py(my)];Point(mx,my)
-                    If i<>dFil
-                      dFil=i
+                  i=dl(dLay)\SCRN[px(mx)+640*py(my)];Point(mx,my) get pixel colour under cursor
+                  If i<>dFil ; continue if fill colour is not the same as last fill
+                    dFil=i
+                    If StartDrawing(CanvasOutput(0)) ; update fill colour box in tool box
                       Box(MA(7)\lx+4,MA(7)\ly+4,MA(7)\rx-MA(7)\lx-7,MA(7)\ry-MA(7)\ly-7,bp(dFil))
-                      
+                      StopDrawing()
                     EndIf
-                    StopDrawing()
                   EndIf
                 EndIf
             EndSelect
@@ -1365,9 +1339,7 @@ Repeat
             i=(mx-MA(1)\lx) / 32
             If dCol<>i And i>-1 And i<8
               If StartDrawing(CanvasOutput(0))    
-                drawColSel(dCol,0)
-                dCol=i
-                drawColSel(dcol,7)
+                drawColSel(dCol,i)
                 updateBrush()
                 StopDrawing()
               EndIf
@@ -1379,7 +1351,6 @@ Repeat
             If i>7: i=7: EndIf
             If j<0: j=0: EndIf
             If j>17: j=17: EndIf
-            ;If i%>-1 And i%<8 And J%>-1 And J%<18 THEN
             If pCol<>i Or pSel<>j
               If StartDrawing(CanvasOutput(0))              
                 Box(MA(8)\lx+pSel*32+4,MA(8)\ly+174-pCol*22+4,32,2,bp(0))
@@ -1560,89 +1531,111 @@ Repeat
       EndIf 
       
       ;-------- Update Screen
-        If mact<>9
-      
-      ; clear output buffer
-      For x=0 To #SCRNsize
-        SCRNout(x)=0 
-      Next
-      
-      ; copy visible screen buffer to output buffer
-      For i=0 To ArraySize(dl())
-        If dl(i)\VIS
-          For x=0 To #SCRNsize
-            If dl(i)\SCRN[x]
-              SCRNout(x)=dl(i)\SCRN[x]
-            EndIf
-          Next            
-        EndIf
-      Next
-      
-      ; copy output buffer to final image
-      If StartDrawing(ImageOutput(imgFinal))
-        Box(0,0,640,512,bp(0))          
-        Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
-        Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
-        PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
+      If mact<>9
         
-        ; configure palette for RGB or BGR
-        If PixelFormat = #PB_PixelFormat_32Bits_RGB
-          For i=0 To 16
-            ct(i)=bp(i)
-          Next
-        Else ; Else it's 32bits_BGR
-          For i=0 To 16
-            ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
-          Next
-        EndIf
-        
-        For y = 0 To 511 
-          *Line.Pixel = Buffer+Pitch*y
-          yMul=(y/2)*640
-          
-          For x=0 To 159
-            dc = ct(SCRNout(x+yMul))
-            
-            *Line\Pixel = dc ; Write the pixel directly to the memory !
-            *line+4
-            *Line\Pixel = dc ; Write the pixel directly to the memory !
-            *Line+4
-            *Line\Pixel = dc ; Write the pixel directly to the memory !
-            *Line+4
-            *Line\Pixel = dc ; Write the pixel directly to the memory !
-            *Line+4
-            
-          Next
+        ; clear output buffer
+        For x=0 To #SCRNsize
+          SCRNout(x)=0 
         Next
         
+        ; copy visible screen buffer to output buffer
+        For i=0 To ArraySize(dl())
+          If dl(i)\VIS
+            For x=0 To #SCRNsize
+              If dl(i)\SCRN[x]
+                SCRNout(x)=dl(i)\SCRN[x]
+              EndIf
+            Next            
+          EndIf
+        Next
         
-        DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
-        
-        If range(0)
-          LineXY(mx-4,MA(0)\ly-4,mx-4,MA(0)\ry,RGB(63,63,63))
-          LineXY(MA(0)\lx-4,my-4,MA(0)\rx,my-4,RGB(63,63,63))
+        ; copy output buffer to final image
+        If StartDrawing(ImageOutput(imgFinal))
+          Box(0,0,640,512,bp(0))          
+          Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
+          Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
+          PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
+          
+          ; configure palette for RGB or BGR
+          If PixelFormat = #PB_PixelFormat_32Bits_RGB
+            For i=0 To 16
+              ct(i)=bp(i)
+            Next
+          Else ; Else it's 32bits_BGR
+            For i=0 To 16
+              ct(i)=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r)
+            Next
+          EndIf
+          
+          For y = 0 To 511 
+            *Line.Pixel = Buffer+Pitch*y
+            yMul=(y/2)*640
+            
+            For x=0 To 159
+              dc = ct(SCRNout(x+yMul))
+              
+              *Line\Pixel = dc ; Write the pixel directly to the memory !
+              *line+4
+              *Line\Pixel = dc ; Write the pixel directly to the memory !
+              *Line+4
+              *Line\Pixel = dc ; Write the pixel directly to the memory !
+              *Line+4
+              *Line\Pixel = dc ; Write the pixel directly to the memory !
+              *Line+4
+              
+            Next
+          Next
+          
+          
+          DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
+          
+          ; big cross hair
+          If range(0)
+            LineXY(mx-4,MA(0)\ly-4,mx-4,MA(0)\ry,RGB(63,63,63))
+            LineXY(MA(0)\lx-4,my-4,MA(0)\rx,my-4,RGB(63,63,63))
+          EndIf
+          
+          ; drawsize guide
+          x=(mx-MA(0)\lx) / dMpx-dWid / 2
+          y=((my-MA(0)\ly) / dMpy)-dWid
+          
+          ; draw brush size guide or small circle
+          If dwid>3
+            
+            LineXY(x*4,y*2,x*4+8,y*2,bp(2));RGB(63,63,63))
+            LineXY(x*4,y*2,x*4,y*2+8,bp(2));,RGB(63,63,63))
+            
+            LineXY((x+dwid)*4-4,y*2,(x+dwid)*4+3,y*2,bp(2));RGB(63,63,63))
+            LineXY((x+dwid)*4+3,y*2,(x+dwid)*4+3,y*2+8,bp(2));,RGB(63,63,63))
+            
+            LineXY(x*4,(y+dWid*2)*2+1,x*4+8,(y+dWid*2)*2+1,bp(2));RGB(63,63,63))
+            LineXY(x*4,(y+dWid*2)*2-8,x*4,(y+dWid*2)*2+1,bp(2))  ;,RGB(63,63,63))
+            
+            LineXY((x+dwid)*4-4,(y+dWid*2)*2+1,(x+dwid)*4+3,(y+dWid*2)*2+1,bp(2));RGB(63,63,63))
+            LineXY((x+dwid)*4+3,(y+dWid*2)*2-8,(x+dwid)*4+3,(y+dWid*2)*2+1,bp(2));,RGB(63,63,63))
+          Else
+            Circle((x+dwid/2)*4,(y+dWid)*2,10,bp(2))
+          EndIf
+          
+          ; draw shape guides
+          Select dWire
+            Case 5 ; line tool
+              LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
+              
+            Case 6,7 ; polygon tool
+              Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
+            Case 8,9,12,13  ; boxes, gradient
+              Box(sx,sy,mx-MA(0)\lx-sx,my-MA(0)\ly-sy,bp(7))
+              
+          EndSelect
+          
+          StopDrawing()
         EndIf
         
-        Select dWire
-          Case 5 ; line tool
-            LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
-            
-          Case 6,7 ; polygon tool
-            Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
-          Case 8,9,12,13  ; boxes, gradient
-            Box(sx,sy,mx-MA(0)\lx-sx,my-MA(0)\ly-sy,bp(7))
-            
-        EndSelect
-        
-        
-        
-        StopDrawing()
-      EndIf
-      
-      ; update drawing canvas
-      If StartDrawing(CanvasOutput(0))
-        
-        ; update drawing area and stats
+        ; update drawing canvas
+        If StartDrawing(CanvasOutput(0))
+          
+          ; update drawing area and stats
           DrawImage(ImageID(imgFinal),MA(0)\lx,MA(0)\ly)
           
           showstats()
@@ -1721,9 +1714,9 @@ DataSection
   
   ; palette Data
   paletteData:
-  Data.a 255,000,000,000,255,000,255,255,000,000,000,255,255,000,255
-  Data.a 000,255,255,255,255,255,128,128,128,192,000,000,000,192,000
-  Data.a 192,192,000,000,000,192,192,000,192,000,192,192,192,192,192
+  Data.a 000,000,000,255,000,000,000,255,000,255,255,000,000,000,255,255,000,255
+  Data.a 000,255,255,255,255,255,128,128,128,192,000,000,000,192,000,192,192,000
+  Data.a 000,000,192,192,000,192,000,192,192,192,192,192,000,000,001
   
   ; mouse area Data
   ; ensure to update maCount index to match number of mouse areas
@@ -1775,8 +1768,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 204
-; FirstLine = 200
+; CursorPosition = 1621
+; FirstLine = 1604
 ; Folding = -----
 ; EnableXP
 ; UseIcon = Art-icon.ico
