@@ -141,8 +141,8 @@ Procedure showstats()
   DrawText(MA(4)\lx+x+160,MA(4)\ly,Str(dWid))
   DrawText(MA(4)\lx+x+160,MA(4)\ly+16,Str(mact))
   
-  DrawText(MA(4)\lx+x+240,MA(4)\ly,Str(pCol))
-  DrawText(MA(4)\lx+x+240,MA(4)\ly+16,Str(dCol))
+  DrawText(MA(4)\lx+x+240,MA(4)\ly,Str(tCur))
+  DrawText(MA(4)\lx+x+240,MA(4)\ly+16,Str(tSel))
   
 EndProcedure
 
@@ -201,7 +201,7 @@ Procedure dBrush(dx,dy,w,d)
               pS=lx % 4+(ly % 4)*4
           EndSelect
           If pat(pSel,pS)
-              dc=pCol
+            dc=pCol
           Else
             If dCol
               dc=dCol              
@@ -529,8 +529,8 @@ Procedure updateColSel(c.b)
     EndIf
     updateBrush()
     StopDrawing()
-EndIf
-
+  EndIf
+  
 EndProcedure
 
 ; redraw colour select
@@ -718,61 +718,63 @@ Procedure openSave(mode)
   
   Protected lastFN.s, filename.s, action.s, F.s, ff.s, N.w, iTMP, a.b,b.a
   
-  If mode=1 ; save dialog
-    ff = "PNG file - Save Current Layer (*.PNG)|*.PNG|PNG file - Save All Layers (*.PNG)|*.PNG|BBC file - Save Current Layer (*.*)|*.*|BBC file - Save All Layers (*.*)|*.*"
-    If tQSv=0
-      Repeat
-        ok=#PB_MessageRequester_Yes
-        
-        ; show save dialog and prompt if file exists
-        filename=SaveFileRequester(" Save Image",GetCurrentDirectory(),ff,savePattern)
-        savePattern=SelectedFilePattern()
-        If filename
-          Select savePattern
-            Case 0,1 ; png
-              If Right(UCase(filename),4)<>".PNG"
-                filename=filename+".PNG"
-              EndIf
-              
-            Case 2,3 ; bbc raw
-              If GetExtensionPart(UCase(filename))<>""
-                MessageRequester(" File Name Error","ERROR: Filename must not contain an extension.",#PB_MessageRequester_Error)
-                ok=#PB_MessageRequester_No
-              EndIf
-              
-          EndSelect
-          
-          ;MessageRequester("Validate",filename)
-          
-          If FileSize(filename)>-1
-            ok=MessageRequester(" Confirm File Overwrite",GetFilePart(filename)+" already exists. Do you want to replace it?",#PB_MessageRequester_YesNo|#PB_MessageRequester_Warning)
-          EndIf
-        EndIf
-      Until ok=#PB_MessageRequester_Yes
-    Else
-      ; Quick save file finder
-      lastFN=GetCurrentDirectory()+"ART_QS_"
+  Select mode
+    Case 0 ; get filename to load
+      ff = "PNG file - Load Current Layer (*.PNG)|*.PNG|BBC file - Load Current Layer (*.*)|*.*"
+      filename=OpenFileRequester(" Load Image",GetCurrentDirectory(),ff,loadPattern)
+      loadPattern=SelectedFilePattern()
       
-      N=0
-      F=""
-      Repeat
-        F=lastFN+Right("0000"+StrU(N),5)+".PNG"
-        If FileSize(F)<0
-          filename=F
-        Else
-          N+1
+    Case 1 ; save dialog
+      ff = "PNG file - Save Current Layer (*.PNG)|*.PNG|PNG file - Save All Layers (*.PNG)|*.PNG|BBC file - Save Current Layer (*.*)|*.*|BBC file - Save All Layers (*.*)|*.*"
+      If tQSv=0
+        Repeat
+          ok=#PB_MessageRequester_Yes
+          
+          ; show save dialog and prompt if file exists
+          filename=SaveFileRequester(" Save Image",GetCurrentDirectory(),ff,savePattern)
+          savePattern=SelectedFilePattern()
+          If filename
+            Select savePattern
+              Case 0,1 ; png
+                If Right(UCase(filename),4)<>".PNG"
+                  filename=filename+".PNG"
+                EndIf
+                
+              Case 2,3 ; bbc raw
+                If GetExtensionPart(UCase(filename))<>""
+                  MessageRequester(" File Name Error","ERROR: Filename must not contain an extension.",#PB_MessageRequester_Error)
+                  ok=#PB_MessageRequester_No
+                EndIf
+                
+            EndSelect
+            
+            ;MessageRequester("Validate",filename)
+            
+            If FileSize(filename)>-1
+              ok=MessageRequester(" Confirm File Overwrite",GetFilePart(filename)+" already exists. Do you want to replace it?",#PB_MessageRequester_YesNo|#PB_MessageRequester_Warning)
+            EndIf
+          EndIf
+        Until ok=#PB_MessageRequester_Yes
+      Else
+        ; Quick save file finder
+        lastFN=GetCurrentDirectory()+"ART_QS_"
+        
+        N=0
+        F=""
+        Repeat
+          F=lastFN+Right("0000"+StrU(N),5)+".PNG"
+          If FileSize(F)<0
+            filename=F
+          Else
+            N+1
+          EndIf
+        Until filename<>"" Or N>99999
+        If N>99999 
+          MessageRequester(" File Error","ERROR: Cannot quicksave! File number limit reached, archive some files!!!",#PB_MessageRequester_Error)
         EndIf
-      Until filename<>"" Or N>99999
-      If N>99999 
-        MessageRequester(" File Error","ERROR: Cannot quicksave! File number limit reached, archive some files!!!",#PB_MessageRequester_Error)
       EndIf
-    EndIf
-    
-  Else ; get filename to load
-    ff = "PNG file - Load Current Layer (*.PNG)|*.PNG|BBC file - Load Current Layer (*.*)|*.*"
-    filename=OpenFileRequester(" Load Image",GetCurrentDirectory(),ff,loadPattern)
-    loadPattern=SelectedFilePattern()
-  EndIf
+      
+  EndSelect
   
   ; action file operation
   If filename=""
@@ -901,11 +903,11 @@ Procedure openSave(mode)
               ; configure palette for RGB or BGR
               If PixelFormat = #PB_PixelFormat_32Bits_RGB
                 For i=0 To 16
-                  ct(i)=bp(i)
+                  ct(i)=RGBA(rgbT(i)\r,rgbT(i)\g,rgbT(i)\b,255)
                 Next
               Else ; Else it's 32bits_BGR
                 For i=0 To 16
-                  ct(i)=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r)
+                  ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
                 Next
               EndIf
               
@@ -1323,7 +1325,7 @@ Repeat
               Case 10 ; flood fill
                 If range(0)
                   i=dl(dLay)\SCRN[px(mx)+640*py(my)];Point(mx,my) get pixel colour under cursor
-                  If i<>dFil ; continue if fill colour is not the same as last fill
+                  If i<>dFil                        ; continue if fill colour is not the same as last fill
                     dFil=i
                     If StartDrawing(CanvasOutput(0)) ; update fill colour box in tool box
                       Box(MA(7)\lx+4,MA(7)\ly+4,MA(7)\rx-MA(7)\lx-7,MA(7)\ry-MA(7)\ly-7,bp(dFil))
@@ -1489,12 +1491,7 @@ Repeat
             If mx-MA(9)\lx<23 ; select layer
               If i<5 And i<>dLay
                 dlay=i
-                If StartDrawing(CanvasOutput(0))
-                  updateLayers()
-                  StopDrawing()
-                EndIf
               EndIf
-              
             Else ; select visible layer
               If i<5
                 If dl(i)\VIS
@@ -1512,12 +1509,22 @@ Repeat
                   dl(i)\VIS=dAll
                 Next
               EndIf
-              
-              If StartDrawing(CanvasOutput(0))
-                updateLayers()
-                StopDrawing()
-              EndIf
-              
+            EndIf
+            ; update layers view
+            If StartDrawing(CanvasOutput(0))
+              updateLayers()
+              StopDrawing()
+            EndIf
+            ; update undo and redo
+            If ListSize(dl(dLay)\lRedo())=0
+              addToggle(3,8)
+            Else
+              addToggle(3,7)
+            EndIf
+            If ListSize(dl(dLay)\lUndo())=0
+              addToggle(2,8)
+            Else
+              addToggle(2,7)
             EndIf
             
         EndSelect
@@ -1586,7 +1593,6 @@ Repeat
             Next
           Next
           
-          
           DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
           
           ; big cross hair
@@ -1598,24 +1604,31 @@ Repeat
           ; drawsize guide
           x=(mx-MA(0)\lx) / dMpx-dWid / 2
           y=((my-MA(0)\ly) / dMpy)-dWid
+          x2=(x+dWid)*4
+          y2=(y+dWid*2)*2
+          x*4
+          y*2
           
           ; draw brush size guide or small circle
+          Select tCur
+              Case 4,5 ; brush and line draw
           If dwid>3
             
-            LineXY(x*4,y*2,x*4+8,y*2,bp(2));RGB(63,63,63))
-            LineXY(x*4,y*2,x*4,y*2+8,bp(2));,RGB(63,63,63))
+            LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
+            LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
             
-            LineXY((x+dwid)*4-4,y*2,(x+dwid)*4+3,y*2,bp(2));RGB(63,63,63))
-            LineXY((x+dwid)*4+3,y*2,(x+dwid)*4+3,y*2+8,bp(2));,RGB(63,63,63))
+            LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
+            LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
             
-            LineXY(x*4,(y+dWid*2)*2+1,x*4+8,(y+dWid*2)*2+1,bp(2));RGB(63,63,63))
-            LineXY(x*4,(y+dWid*2)*2-8,x*4,(y+dWid*2)*2+1,bp(2))  ;,RGB(63,63,63))
+            LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
+            LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
             
-            LineXY((x+dwid)*4-4,(y+dWid*2)*2+1,(x+dwid)*4+3,(y+dWid*2)*2+1,bp(2));RGB(63,63,63))
-            LineXY((x+dwid)*4+3,(y+dWid*2)*2-8,(x+dwid)*4+3,(y+dWid*2)*2+1,bp(2));,RGB(63,63,63))
+            LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
+            LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
           Else
-            Circle((x+dwid/2)*4,(y+dWid)*2,10,bp(2))
+            Circle(x+5,y+5,10,bp(2))
           EndIf
+          EndSelect
           
           ; draw shape guides
           Select dWire
@@ -1640,22 +1653,21 @@ Repeat
           
           showstats()
           
-        EndIf
-        ;update tool strip toggles
-        If ListSize(lToggle())
-          ForEach lToggle()
-            toolToggle(lToggle()\b,lToggle()\c)
-          Next
-          ClearList(lToggle())
+          ;update tool strip toggles
+          If ListSize(lToggle())
+            ForEach lToggle()
+              toolToggle(lToggle()\b,lToggle()\c)
+            Next
+            ClearList(lToggle())
+          EndIf
+          
+          StopDrawing()  
+          
         EndIf
         
-        
-        StopDrawing()    
       EndIf
       
     EndIf
-    
-    
     
   Else
     Delay(1)
@@ -1768,8 +1780,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1621
-; FirstLine = 1604
+; CursorPosition = 1628
+; FirstLine = 1595
 ; Folding = -----
 ; EnableXP
 ; UseIcon = Art-icon.ico
