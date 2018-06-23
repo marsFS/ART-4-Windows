@@ -124,7 +124,7 @@ Global gCur.w=0 ; current gadget id
 
 Global maCount.a=10 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
-Global fox,foy               ; flashing ox,oy
+Global fox,foy                ; flashing ox,oy
 Global iBeebSCRN, imgToolStrip; image handles
 Global flashing.b=0           ; flashing colour toggle
 Global flashBak=8             ; flashing colour index background
@@ -150,8 +150,8 @@ Global Dim ct(15)             ; colour table look for redrawing main canvas
 Global Dim bpFlash(15)        ; flash palette 0-7 phase 1, 8-15 phase 2
 Global Dim mode.beebModes(6)  ; beeb mode data
 Global Dim MA.MouseArea(maCount) ; mouse area structure array
-Global Dim rawBBC.a(15)       ; raw bbc file format data
-Global Dim revBBC.a(85)       ; reverse lookup bbc file format data
+Global Dim rawBBC.a(15)          ; raw bbc file format data
+Global Dim revBBC.a(85)          ; reverse lookup bbc file format data
 
 Global NewList lUndo.undoArray()
 Global NewList lRedo.undoArray()
@@ -587,20 +587,26 @@ Procedure drawColSel(i,c)
 EndProcedure
 
 ; update colour select value
-Procedure updateColSel(c.b)
-    If StartDrawing(CanvasOutput(0))    
-      drawColSel(dCol,0)
-      dCol-c
+Procedure updateColSel(c.b,minC.b)
+  If StartDrawing(CanvasOutput(0))    
+    drawColSel(dCol,0)
+    dCol-c
+    If minC 
+      If dcol<8:dCol=15:EndIf
+      If dcol>15:dCol=8:EndIf
+    Else
       If dcol=255:dCol=15:EndIf
       If dcol=16:dCol=0:EndIf
-      drawColSel(dcol,7)
-      updatePalette()
-      StopDrawing()
     EndIf
-    If StartDrawing(CanvasOutput(1))
-      dBrushSize()
-      StopDrawing()
-    EndIf  
+    
+    drawColSel(dcol,7)
+    updatePalette()
+    StopDrawing()
+  EndIf
+  If StartDrawing(CanvasOutput(1))
+    dBrushSize()
+    StopDrawing()
+  EndIf  
 EndProcedure
 
 ; update flash colours
@@ -928,44 +934,44 @@ Procedure openSave(mode)
             
             ;check file size
             If FileSize(filename)=#RAWsize
-            ; create temp buffer and fill with file data
-            *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
-            If *MemoryID
-              
-              If ReadFile(0, filename)
-                ReadData(0,*MemoryID,#RAWsize)
-                CloseFile(0)
+              ; create temp buffer and fill with file data
+              *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
+              If *MemoryID
                 
-                x=0
-                y=255
-                
-                For i=0 To #RAWsize-1
-                  a=(PeekB(*MemoryID+i) & 170)>>1
-                  b=PeekB(*MemoryID+i) & 85
+                If ReadFile(0, filename)
+                  ReadData(0,*MemoryID,#RAWsize)
+                  CloseFile(0)
                   
-                  bSCRN(x+y*640)=revBBC(a)
-                  bSCRN(x+1+y*640)=revBBC(b)
+                  x=0
+                  y=255
                   
-                  y-1
-                  If ((y+1)%8)=0
-                    y+8
-                    x+2
-                    If x=160
-                      y-8
-                      x=0
+                  For i=0 To #RAWsize-1
+                    a=(PeekB(*MemoryID+i) & 170)>>1
+                    b=PeekB(*MemoryID+i) & 85
+                    
+                    bSCRN(x+y*640)=revBBC(a)
+                    bSCRN(x+1+y*640)=revBBC(b)
+                    
+                    y-1
+                    If ((y+1)%8)=0
+                      y+8
+                      x+2
+                      If x=160
+                        y-8
+                        x=0
+                      EndIf
                     EndIf
-                  EndIf
-                Next
-
-              Else
-                MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
+                  Next
+                  
+                Else
+                  MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
+                EndIf
+                FreeMemory(*MemoryID)
               EndIf
-              FreeMemory(*MemoryID)
+            Else
+              MessageRequester(" File Error","ERROR: File must be exactly "+Str(#RAWsize)+" bytes..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)  
             EndIf
-          Else
-          MessageRequester(" File Error","ERROR: File must be exactly "+Str(#RAWsize)+" bytes..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)  
-          EndIf
-          
+            
         EndSelect
         
         ;filename$+""" "+STR$(M{(0)}.mx%)+","+STR$(M{(0)}.my%)+"
@@ -977,49 +983,49 @@ Procedure openSave(mode)
             SaveImage(iBeebSCRN, filename, #PB_ImagePlugin_PNG);,10,4)
             
           Case 1 ; save bbc raw
-              ; create temp buffer and fill with screen data
-              *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
-              If *MemoryID
-                x=0
-                y=255
-                For i=0 To #RAWsize-1
-                  a=rawBBC(bSCRN(x+y*640))<<1
-                  b=rawBBC(bSCRN(x+1+y*640))
-                 ; MessageRequester("TEST",Str(a)+"  "+Str(b))
-                  PokeB(*MemoryID+i, (a | b)) 
-                  y-1
-                  If ((y+1)%8)=0
-                    y+8
-                    x+2
-                    If x=160
-                      y-8
-                      x=0
-                    EndIf
+                 ; create temp buffer and fill with screen data
+            *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
+            If *MemoryID
+              x=0
+              y=255
+              For i=0 To #RAWsize-1
+                a=rawBBC(bSCRN(x+y*640))<<1
+                b=rawBBC(bSCRN(x+1+y*640))
+                ; MessageRequester("TEST",Str(a)+"  "+Str(b))
+                PokeB(*MemoryID+i, (a | b)) 
+                y-1
+                If ((y+1)%8)=0
+                  y+8
+                  x+2
+                  If x=160
+                    y-8
+                    x=0
                   EndIf
-                Next
-                
-                ; create file and output temp buffer
-                filename=UCase(filename)
-                If CreateFile(0, filename)
-                  WriteData(0, *MemoryID, #RAWsize)
-                  CloseFile(0)
-                  
-                  ; create INF file
-                  If CreateFile(1, filename+".INF")
-                    WriteString(1, "$."+GetFilePart(filename)+" 003000 000000 005000")
-                    
-                    CloseFile(1)
-                  Else
-                    MessageRequester (" File Error","Cannot create INF file..."+#CRLF$+#CRLF$+filename+".INF",#PB_MessageRequester_Error)
-                  EndIf
-                  
-                Else
-                  MessageRequester (" File Error","Cannot create file..."+#CRLF$+#CRLF$+filename,#PB_MessageRequester_Error)
                 EndIf
-                FreeMemory(*MemoryID)
+              Next
+              
+              ; create file and output temp buffer
+              filename=UCase(filename)
+              If CreateFile(0, filename)
+                WriteData(0, *MemoryID, #RAWsize)
+                CloseFile(0)
+                
+                ; create INF file
+                If CreateFile(1, filename+".INF")
+                  WriteString(1, "$."+GetFilePart(filename)+" 003000 000000 005000")
+                  
+                  CloseFile(1)
+                Else
+                  MessageRequester (" File Error","Cannot create INF file..."+#CRLF$+#CRLF$+filename+".INF",#PB_MessageRequester_Error)
+                EndIf
+                
+              Else
+                MessageRequester (" File Error","Cannot create file..."+#CRLF$+#CRLF$+filename,#PB_MessageRequester_Error)
               EndIf
-
-        
+              FreeMemory(*MemoryID)
+            EndIf
+            
+            
         EndSelect
         
     EndSelect
@@ -1401,10 +1407,10 @@ Repeat
             If flashCycle=8:animDir=1:EndIf
             
           Case 1
-        
+            
             flashCycle+1
             If flashCycle>15:flashCycle=8:EndIf
-        
+            
         EndSelect
         
         ; update flashing colour pointer
@@ -1482,9 +1488,9 @@ Repeat
                 Case 2 ; colour select
                   i=7-((my-MA(1)\ly) / 22) + ((mx-MA(1)\lx) / 32)*8
                   If dCol<>i And i>-1 And i<16
-                    updateColSel(dCol-i)
+                    updateColSel(dCol-i,0)
                   EndIf
-
+                  
                 Case 3 ; pattern select
                   i=7-((my-MA(2)\ly) / 22)
                   j=((mx-MA(2)\lx) / 32)
@@ -1655,42 +1661,44 @@ Repeat
             ;              
             
           Case 2 ; drawing area
-            mx = GetGadgetAttribute(gCur, #PB_Canvas_MouseX)
-            my = GetGadgetAttribute(gCur, #PB_Canvas_MouseY)
-            
-            If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
+            If mact=1
+              mx = GetGadgetAttribute(gCur, #PB_Canvas_MouseX)
+              my = GetGadgetAttribute(gCur, #PB_Canvas_MouseY)
               
-              ox=mx-MA(0)\lx
-              oy=my-MA(0)\ly
-              
-              
-              ; determine tool being used
-              Select tCur
-                Case 4 ; brush tool
-                  Select dSel
-                    Case 20 ; standard brush
-                      drawBrush(px(mx),py(my),dWid,0)
-                    Case 21 ; circle brush
-                      drawCircle(mx,my,dWid*2)
-                    Case 23 ; airbrush
-                      drawBrush(px(mx),py(my),dWid,2)
-                    Case 24 ; standard X2 brush
-                      drawBrush(px(mx),py(my),dWid,1)
-                  EndSelect
-                Case 10 ; flood fill
-                  i=bSCRN(px(mx)+640*py(my));Point(mx,my)
-                  If i<>dFil
-                    dFil=i
-                    If StartDrawing(CanvasOutput(1))
-                      Box(MA(7)\lx,MA(7)\ly,MA(7)\rx-MA(7)\lx,MA(7)\ry-MA(7)\ly,bp(dFil))
-                      StopDrawing()
+              If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
+                
+                ox=mx-MA(0)\lx
+                oy=my-MA(0)\ly
+                
+                
+                ; determine tool being used
+                Select tCur
+                  Case 4 ; brush tool
+                    Select dSel
+                      Case 20 ; standard brush
+                        drawBrush(px(mx),py(my),dWid,0)
+                      Case 21 ; circle brush
+                        drawCircle(mx,my,dWid*2)
+                      Case 23 ; airbrush
+                        drawBrush(px(mx),py(my),dWid,2)
+                      Case 24 ; standard X2 brush
+                        drawBrush(px(mx),py(my),dWid,1)
+                    EndSelect
+                  Case 10 ; flood fill
+                    i=bSCRN(px(mx)+640*py(my));Point(mx,my)
+                    If i<>dFil
+                      dFil=i
+                      If StartDrawing(CanvasOutput(1))
+                        Box(MA(7)\lx,MA(7)\ly,MA(7)\rx-MA(7)\lx,MA(7)\ry-MA(7)\ly,bp(dFil))
+                        StopDrawing()
+                      EndIf
                     EndIf
-                  EndIf
-                Case 14 ; flash draw
-                  flashbrush(px(mx),py(my))
-              EndSelect
-              dWire=tCur
-              ; *** end drawing tool code
+                  Case 14 ; flash draw
+                    flashbrush(px(mx),py(my))
+                EndSelect
+                dWire=tCur
+                ; *** end drawing tool code
+              EndIf
             EndIf
             
             ;     ; left button release events
@@ -1810,12 +1818,13 @@ Repeat
     Next
     
     If dWire
-      Select tCur
+      DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
+      Select dWire
         Case 5 ; line tool
           LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
           
         Case 6,7 ; polygon tool
-          DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
+          
           Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
           DrawingMode(#PB_2DDrawing_Default)
         Case 8,9,12,13  ; boxes, gradient
@@ -1870,11 +1879,11 @@ Repeat
   ExamineKeyboard() ;Keyboard
   
   If KeyboardReleased(#PB_Key_A)
-    updateColSel(1)
+    updateColSel(1,1)
   EndIf
   
   If KeyboardReleased(#PB_Key_S)
-    updateColSel(-1)
+    updateColSel(-1,1)
   EndIf
   
   
@@ -1992,8 +2001,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 1865
-; FirstLine = 1833
+; CursorPosition = 2000
+; FirstLine = 1952
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
