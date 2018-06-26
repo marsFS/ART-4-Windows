@@ -78,6 +78,7 @@ Global dMpy=2   ; current mode vertical pixel size
 Global dLay=0   ; current drawing layer
 Global dAll=1   ; all layers visible flag
 Global dWire.a=0; draw wireframe 
+Global dGRD.a=1 ; draw transparent grid
 
 Global tCur.a=4 ; tool selected
 Global tTog.a=3 ; tool toggle colour
@@ -572,19 +573,24 @@ Procedure updateLayers()
   
   Box(MA(9)\lx,MA(9)\ly+20,MA(9)\rx-MA(9)\lx,MA(9)\ry-MA(9)\ly-20,bp(0))
   
-  For i=0 To ArraySize(dl())+1
+  For i=0 To ArraySize(dl())+2
     drawbox(MA(9)\lx+20,MA(9)\ly+20+i*32,MA(9)\lx+44,MA(9)\ly+44+i*32,bp(7))
     
-    If i>ArraySize(dl())
+    If i=ArraySize(dl())+1
       t="A"
       h=dAll
+    ElseIf i=ArraySize(dl())+2
+      t="G"
+      h=dGRD
     Else      
       h=dl(i)\VIS
       t=Str(i+1)
     EndIf
+    
     If i=dLay
       Box(MA(9)\lx,MA(9)\ly+20+i*32,16,24,bp(1))
     EndIf
+    
     If h
       Box(MA(9)\lx+23,MA(9)\ly+23+i*32,19,19,bp(2))
     EndIf
@@ -799,12 +805,14 @@ Procedure openSave(mode)
                   
                   For x=0 To 159
                     For i=0 To 7
-                      If *Line\Pixel=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r)
+                      If *Line\Pixel=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r) Or *Line\Pixel=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
                         dl(dlay)\SCRN[x+yMul]=i
                         Break
                       EndIf
-                      
                     Next
+                    If *Line\Pixel=RGBA(0,0,0,255)
+                      dl(dlay)\SCRN[x+yMul]=16
+                    EndIf
                     *line+16  
                   Next
                 Next
@@ -871,7 +879,11 @@ Procedure openSave(mode)
           Case 0,2 ; save current layer
             For x=0 To #SCRNsize
               If dl(dLay)\SCRN[x]
-                SCRNout(x)=dl(dLay)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black
+                If savePattern=2
+                  SCRNout(x)=dl(dLay)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black
+                Else
+                  SCRNout(x)=dl(dLay)\SCRN[x] ; colour 16 = true black
+                EndIf
               EndIf
             Next            
             
@@ -880,7 +892,11 @@ Procedure openSave(mode)
               ;If dl(i)\VIS
               For x=0 To #SCRNsize
                 If dl(i)\SCRN[x]
-                  SCRNout(x)=dl(i)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black
+                  If savePattern=3
+                    SCRNout(x)=dl(i)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black
+                  Else
+                    SCRNout(x)=dl(i)\SCRN[x] ; colour 16 = true black
+                  EndIf
                 EndIf
               Next            
               ;EndIf
@@ -902,16 +918,16 @@ Procedure openSave(mode)
               
               ; configure palette for RGB or BGR
               If PixelFormat = #PB_PixelFormat_32Bits_RGB
-                For i=1 To 16
+                For i=1 To 15
                   ct(i)=RGBA(rgbT(i)\r,rgbT(i)\g,rgbT(i)\b,255)
                 Next
-                ct(0)=RGBA(0,0,0,0);rgbT(i)\r,rgbT(i)\g,rgbT(i)\b,255)
               Else ; Else it's 32bits_BGR
-                For i=1 To 16
+                For i=1 To 15
                   ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
                 Next
-                ct(0)=RGBA(0,0,0,0)
               EndIf
+              ct(0)=RGBA(0,0,0,0) ; transparent black
+              ct(16)=RGBA(0,0,0,255) ; true black
               
               For y = 0 To 511 
                 *Line.Pixel = Buffer+Pitch*y
@@ -931,6 +947,8 @@ Procedure openSave(mode)
                   
                 Next
               Next
+              StopDrawing()
+              
               SaveImage(imgFinal, filename, #PB_ImagePlugin_PNG);,10,4)
             EndIf
             
@@ -1199,9 +1217,9 @@ If StartDrawing(CanvasOutput(0))
   updateLayers()
   
   ; enable for debugging mouse area squares
-  ;         For i=0 To maCount
-  ;           drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
-  ;         Next  
+;   For i=0 To maCount
+;     drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
+;   Next  
   
   StopDrawing()
 EndIf
@@ -1489,28 +1507,36 @@ Repeat
           Case 10 ; layers
             i=(my-MA(9)\ly-20) / 32
             If i<0:i=0:EndIf
-            If i>5:i=5:EndIf
+            If i>6:i=6:EndIf
             If mx-MA(9)\lx<23 ; select layer
               If i<5 And i<>dLay
                 dlay=i
               EndIf
             Else ; select visible layer
-              If i<5
-                If dl(i)\VIS
-                  dl(i)\VIS=0
-                Else
-                  dl(i)\VIS=1
-                EndIf
-              Else
-                If dAll
-                  dAll=0
-                Else
-                  dAll=1
-                EndIf
-                For i=0 To ArraySize(dl())
-                  dl(i)\VIS=dAll
-                Next
-              EndIf
+              Select i
+                Case 0 To 4
+                  If dl(i)\VIS
+                    dl(i)\VIS=0
+                  Else
+                    dl(i)\VIS=1
+                  EndIf
+                Case 5
+                  If dAll
+                    dAll=0
+                  Else
+                    dAll=1
+                  EndIf
+                  For i=0 To ArraySize(dl())
+                    dl(i)\VIS=dAll
+                  Next
+                Case 6
+                  If dGRD
+                    dGRD=0
+                  Else
+                    dGRD=1
+                  EndIf
+              EndSelect
+              
             EndIf
             ; update layers view
             If StartDrawing(CanvasOutput(0))
@@ -1560,21 +1586,33 @@ Repeat
         
         ; copy output buffer to final image
         If StartDrawing(ImageOutput(imgFinal))
-          Box(0,0,640,512,bp(0))          
+          If dGRD
+            For x=0 To 79
+              For y=0 To 63
+                c=255-(~x!y&1)*100
+                Box(x*8,y*8,8,8,RGB(c,c,c))
+              Next
+            Next
+          Else
+            Box(0,0,640,512,bp(0))
+          EndIf
+          
+          
           Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
           Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
           PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
           
           ; configure palette for RGB or BGR
           If PixelFormat = #PB_PixelFormat_32Bits_RGB
-            For i=0 To 16
+            For i=1 To 16
               ct(i)=bp(i)
             Next
           Else ; Else it's 32bits_BGR
-            For i=0 To 16
-              ct(i)=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r)
+            For i=1 To 16
+              ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
             Next
           EndIf
+          ct(0)=RGBA(0,0,0,0)
           
           For y = 0 To 511 
             *Line.Pixel = Buffer+Pitch*y
@@ -1582,16 +1620,18 @@ Repeat
             
             For x=0 To 159
               dc = ct(SCRNout(x+yMul))
-              
-              *Line\Pixel = dc ; Write the pixel directly to the memory !
-              *line+4
-              *Line\Pixel = dc ; Write the pixel directly to the memory !
-              *Line+4
-              *Line\Pixel = dc ; Write the pixel directly to the memory !
-              *Line+4
-              *Line\Pixel = dc ; Write the pixel directly to the memory !
-              *Line+4
-              
+              If dc
+                *Line\Pixel = dc ; Write the pixel directly to the memory !
+                *line+4
+                *Line\Pixel = dc ; Write the pixel directly to the memory !
+                *Line+4
+                *Line\Pixel = dc ; Write the pixel directly to the memory !
+                *Line+4
+                *Line\Pixel = dc ; Write the pixel directly to the memory !
+                *Line+4
+              Else
+                *Line+16
+              EndIf
             Next
           Next
           
@@ -1613,23 +1653,23 @@ Repeat
           
           ; draw brush size guide or small circle
           Select tCur
-              Case 4,5 ; brush and line draw
-          If dwid>3
-            
-            LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
-            LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
-            
-            LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
-            LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
-            
-            LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
-            LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
-            
-            LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
-            LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
-          Else
-            Circle(x+5,y+5,10,bp(2))
-          EndIf
+            Case 4,5 ; brush and line draw
+              If dwid>3
+                
+                LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
+                LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
+                
+                LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
+                LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
+                
+                LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
+                LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
+                
+                LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
+                LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
+              Else
+                Circle(x+5,y+5,10,bp(2))
+              EndIf
           EndSelect
           
           ; draw shape guides
@@ -1746,7 +1786,7 @@ DataSection
   Data.s "Stats"
   Data.w 72,524,100,52
   Data.s "Selected Pattern"
-  Data.w 750,446,44,44
+  Data.w 750,460,44,44
   Data.s "Tool Strip"
   Data.w 648,24,100,550
   Data.s "Fill Colour"
@@ -1754,7 +1794,7 @@ DataSection
   Data.s "Pattern Select2"
   Data.w 0,392,586,186
   Data.s "Layers"
-  Data.w 750,212,50,210
+  Data.w 750,200,50,238
   
   ; bbc raw file format interlaced pixel data
   rawFileData:
@@ -1782,8 +1822,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 912
-; FirstLine = 887
+; CursorPosition = 1591
+; FirstLine = 1567
 ; Folding = -----
 ; EnableXP
 ; UseIcon = Art-icon.ico
