@@ -902,13 +902,15 @@ Procedure openSave(mode)
               
               ; configure palette for RGB or BGR
               If PixelFormat = #PB_PixelFormat_32Bits_RGB
-                For i=0 To 16
+                For i=1 To 16
                   ct(i)=RGBA(rgbT(i)\r,rgbT(i)\g,rgbT(i)\b,255)
                 Next
+                ct(0)=RGBA(0,0,0,0);rgbT(i)\r,rgbT(i)\g,rgbT(i)\b,255)
               Else ; Else it's 32bits_BGR
-                For i=0 To 16
+                For i=1 To 16
                   ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
                 Next
+                ct(0)=RGBA(0,0,0,0)
               EndIf
               
               For y = 0 To 511 
@@ -1780,8 +1782,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1628
-; FirstLine = 1595
+; CursorPosition = 912
+; FirstLine = 887
 ; Folding = -----
 ; EnableXP
 ; UseIcon = Art-icon.ico
