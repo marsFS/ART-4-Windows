@@ -100,7 +100,7 @@ Global Dim rgbT.rgbTable(16)     ; rgb lookup table
 Global Dim ct(16)                ; colour table look for redrawing main canvas
 Global Dim rawBBC.a(15)          ; raw bbc file format data
 Global Dim revBBC.a(85)          ; reverse lookup bbc file format data
-Global Dim curPat.a(15,15)         ; current drawing pattern colour matrix
+Global Dim curPat.a(15,15)       ; current drawing pattern colour matrix
 Global Dim cusPat.a(17,63)       ; custom pattern array, 18 tiles of 8x8 colour data
 
 Global NewList lToggle.togglelist()
@@ -227,19 +227,19 @@ Procedure dBrushSPR(dx,dy,w,d,oP)
   ; draw pattern loop centered at pixel location dx,dy
   For lx=dx To dx+w
     For ly=dy To dy+w*2
-        ; range check, set pattern colour And plot
-        If lx>-1 And lx<dMdx And ly>-1 And ly<dMdy
-          dc=curPat((lx-dx) % 16,15-((ly-dy) % 16))
-          
-          ; check For transparency
-          If dc-dTrn>-1 
-            If op 
-              Box(lx*4,511-ly*2,4,2,bp(dc))
-            Else
-              dl(dLay)\SCRN[ly*640+lx]=dc
-            EndIf
+      ; range check, set pattern colour And plot
+      If lx>-1 And lx<dMdx And ly>-1 And ly<dMdy
+        dc=curPat((lx-dx) % 16,15-((ly-dy) % 16))
+        
+        ; check For transparency
+        If dc-dTrn>-1 
+          If op 
+            Box(lx*4,510-ly*2,4,2,bp(dc))
+          Else
+            dl(dLay)\SCRN[ly*640+lx]=dc
           EndIf
         EndIf
+      EndIf
     Next
   Next
   
@@ -285,7 +285,7 @@ Procedure updateBrush()
       Else
         dc=cusPat(pSel,(px % 8)+(py % 8)*8)
       EndIf
-    
+      
       
       curPat(lx,ly)=dc
       
@@ -298,7 +298,7 @@ Procedure updateBrush()
     
     ; track y pattern data
     py+1
- 
+    
     ; adjust y for skip
     ly+s
   Next  
@@ -327,11 +327,11 @@ Procedure updatePalette()
   
   dc=bp(1)
   For i=0 To 8          ; colour loop 0 = bottom - 7 = top
-    ; preset plot positions
+                        ; preset plot positions
     i1=MA(8)\ly+182-i*22
     i2=MA(8)\ly+190-i*22
     For p=0 To 17       ; pattern number loop left to right
-      ; preset plot positions
+                        ; preset plot positions
       p1=MA(8)\lx+4+p*32
       p2=MA(8)\lx+20+p*32
       If i<8            ; branch for custom patterns
@@ -401,7 +401,7 @@ Procedure Hline2(x1,x2,y1)
     For lx=x1 To x2
       ; range check, set pattern colour And plot
       If lx>-1 And lx<dMdx
-        dc=curPat(lx % 16,y1m) 
+        dc=curPat(lx % 16,y1M) 
         
         ; Check For transparency
         If dc-dTrn>-1 
@@ -410,7 +410,7 @@ Procedure Hline2(x1,x2,y1)
       EndIf
     Next
   EndIf
-
+  
 EndProcedure
 
 ; line drawing brush
@@ -603,7 +603,7 @@ Procedure updateColSel(c.b)
     Else
       updatePalette()
     EndIf
-
+    
     StopDrawing()
   EndIf
   
@@ -720,12 +720,12 @@ Procedure floodFill(sx,sy)
           While x<dMdx And dl(dLay)\SCRN[y*640+x]=mc
             If i
               dc=curPat(x % 16,15-(y % 16))
-;               pS=x % 4+(y % 4)*4
-;               If pat(pSel,pS)
-;                 dc=pCol
-;               Else
-;                 dc=dCol
-;               EndIf
+              ;               pS=x % 4+(y % 4)*4
+              ;               If pat(pSel,pS)
+              ;                 dc=pCol
+              ;               Else
+              ;                 dc=dCol
+              ;               EndIf
               
             EndIf
             
@@ -1201,9 +1201,9 @@ Next
 ; read custom pattern data
 Restore customPatternData
 For i=0 To 6
-For x=0 To 63
-  Read.a cusPat(i,x)
-Next
+  For x=0 To 63
+    Read.a cusPat(i,x)
+  Next
 Next
 
 ; define beeb 2 palette - includes colour 16 which is used for solid black, gets converted to transparent black on image save
@@ -1266,7 +1266,7 @@ If StartDrawing(ImageOutput(imgGRD))
   Next
   StopDrawing()
 EndIf
-          
+
 
 If StartDrawing(CanvasOutput(0))
   ; clear canvas to black
@@ -1330,9 +1330,9 @@ If StartDrawing(CanvasOutput(0))
   updateLayers()
   
   ; enable for debugging mouse area squares
-;   For i=0 To maCount
-;     drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
-;   Next  
+  ;   For i=0 To maCount
+  ;     drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
+  ;   Next  
   
   StopDrawing()
 EndIf
@@ -1536,6 +1536,10 @@ Repeat
             
             ; determine tool being used
             Select tCur
+              Case 4
+                If dsel=18
+                  dBrushSPR(px(mx),py(my),dWid,0,0)
+                EndIf                
               Case 5 ; line tool completion
                 dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
                 
@@ -1558,9 +1562,7 @@ Repeat
               Case 10 ; flood fill
                 floodfill(mx-MA(0)\lx,my-MA(0)\ly)
             EndSelect     
-            If dsel=18
-              dBrushSPR(px(mx),py(my),dWid,0,0)
-            EndIf
+            
             
             
           Case 7 ; tool select
@@ -1775,6 +1777,13 @@ Repeat
               Else
                 Circle(x+5,y+5,10,bp(2))
               EndIf
+              
+              ; draw sprite
+              If tcur=4 And dSel=18
+                DrawingMode(#PB_2DDrawing_Default)
+                dBrushSPR(px(mx),py(my),dWid,0,1)
+                DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
+              EndIf
           EndSelect
           
           ; draw shape guides
@@ -1788,11 +1797,6 @@ Repeat
               Box(sx,sy,mx-MA(0)\lx-sx,my-MA(0)\ly-sy,bp(7))
               
           EndSelect
-          
-          ; draw sprite
-          If dSel=18
-              dBrushSPR(px(mx),py(my),dWid,0,1)
-          EndIf
           
           StopDrawing()
         EndIf
@@ -1825,25 +1829,25 @@ Repeat
     Delay(1)
   EndIf
   
-;   ExamineKeyboard()
-;   
-;   ; select colour
-;   If KeyboardReleased(#PB_Key_R)
-;     updateColSel(-1)
-;   EndIf  
-;   
-;   If KeyboardReleased(#PB_Key_F)
-;     updateColSel(1)
-;   EndIf  
-;   
-;   ; select pattern colour (background)
-;   If KeyboardReleased(#PB_Key_I)
-;     updatepCol(1)
-;   EndIf
-;   
-;   If KeyboardReleased(#PB_Key_J)
-;     updatepCol(-1)
-;   EndIf   
+  ;   ExamineKeyboard()
+  ;   
+  ;   ; select colour
+  ;   If KeyboardReleased(#PB_Key_R)
+  ;     updateColSel(-1)
+  ;   EndIf  
+  ;   
+  ;   If KeyboardReleased(#PB_Key_F)
+  ;     updateColSel(1)
+  ;   EndIf  
+  ;   
+  ;   ; select pattern colour (background)
+  ;   If KeyboardReleased(#PB_Key_I)
+  ;     updatepCol(1)
+  ;   EndIf
+  ;   
+  ;   If KeyboardReleased(#PB_Key_J)
+  ;     updatepCol(-1)
+  ;   EndIf   
   
   
 Until Event = #PB_Event_CloseWindow
@@ -1944,7 +1948,7 @@ DataSection
   Data.a 4,0,4,0,4,0,4,0
   Data.a 4,0,4,0,4,0,4,0
   Data.a 4,0,4,0,4,0,4,0
-
+  
   Data.a 3,3,3,3,1,1,1,1
   Data.a 1,1,1,1,3,3,3,3
   Data.a 3,3,3,3,1,1,1,1
@@ -1953,7 +1957,7 @@ DataSection
   Data.a 1,1,1,1,3,3,3,3
   Data.a 3,3,3,3,1,1,1,1
   Data.a 1,1,1,1,3,3,3,3
-
+  
   Data.a 0,3,3,3,0,3,3,0
   Data.a 3,0,0,0,3,0,0,3
   Data.a 3,0,6,0,3,0,6,3
@@ -1962,114 +1966,114 @@ DataSection
   Data.a 0,0,0,0,0,0,0,0
   Data.a 0,0,0,0,0,0,0,0
   Data.a 0,0,0,0,0,0,0,0
-
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-; 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-;   Data.a 
-
+  
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  
   
   
 EndDataSection
 
 
-; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1853
-; FirstLine = 1918
+; IDE Options = PureBasic 5.61 (Windows - x86)
+; CursorPosition = 403
+; FirstLine = 493
 ; Folding = ------
 ; EnableXP
 ; UseIcon = Art-icon.ico
