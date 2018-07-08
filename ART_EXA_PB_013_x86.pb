@@ -21,6 +21,30 @@ UsePNGImageDecoder()
 #SCRNsize=163839 ; screen buffer array size
 #RAWsize=20480
 
+; tool strip constants
+#toolSave=0
+#toolLoad=1
+#toolQSAll=2
+#toolQSCur=3
+#toolUndo=4
+#toolRedo=5
+#toolDraw=6
+#toolLine=7
+#toolCirOut=8
+#toolCirFil=9
+#toolBoxOut=10
+#toolBoxFil=11
+#toolGradHor=12
+#toolGradVer=13
+#toolFill=14
+#toolCLS=15
+#toolBrushBox=16
+#toolBrushRound=17
+#toolBrushSPR=18
+#toolBrushRND=19
+#toolBrush2x=20
+#toolTransparent=21
+
 ; structures
 Structure MouseArea
   lx.w
@@ -69,7 +93,7 @@ Global pSel.a=8 ; pattern selected
 Global dCol.a=1 ; drawing colour
 Global dTrn.a=1 ; drawing transparency toggle
 Global dWid.a=8 ; drawing width
-Global dSel.a=16; drawing tool selected
+Global dSel.a=#toolBrushBox; drawing brush selected
 Global dFil.i=0 ; fill colour
 Global dMdx=160 ; current mode horizontal pixels
 Global dMdy=256 ; current mode vertical pixels
@@ -80,7 +104,7 @@ Global dAll=1   ; all layers visible flag
 Global dWire.a=0; draw wireframe 
 Global dGRD.a=1 ; draw transparent grid
 
-Global tCur.a=4 ; tool selected
+Global tCur.a=#toolDraw ; tool selected
 Global tTog.a=3 ; tool toggle colour
 Global tQSv.a=0 ; quick save toggle
 Global tSel.a=0 ; new tool select 
@@ -250,12 +274,9 @@ Procedure updateBrush()
   Protected px,py,lx,ly,dc,ps,s
   
   ; set skip counter  
-  Select dSel
-    Case 20 ; standard X2 brush
-      s=1
-    Default
-      s=0
-  EndSelect
+  If dSel=#toolBrush2x
+    s=1
+  EndIf  
   
   ; reset current pattern to 0
   For ly=0 To 15
@@ -380,7 +401,7 @@ Procedure Vline2(x1,y1,y2)
     For ly=y1 To y2
       ; range check, set pattern colour And plot
       If ly>-1 And ly<dMdy
-        dc=curPat(x1M,ly % 16)        
+        dc=curPat(x1M,15-(ly % 16))        
         
         ; Check For transparency
         If dc-dTrn>-1
@@ -397,7 +418,7 @@ Procedure Hline2(x1,x2,y1)
   
   ; validate y is in range before starting
   If y1>-1 And y1<dMdy
-    y1M=y1 % 16
+    y1M=15-(y1 % 16)
     For lx=x1 To x2
       ; range check, set pattern colour And plot
       If lx>-1 And lx<dMdx
@@ -477,9 +498,9 @@ Procedure dCircOut(x1,y1,r)
   r=Abs(r)
   For t=0 To 359
     Select dSel
-      Case 19 ; airbrush
+      Case #toolBrushRND ; airbrush
         dBrush(px(Int(x1+r*Cos(Radian(t)))),py(Int(y1-r*Sin(Radian(t)))),dWid,2)
-      Case 20 ; standard X2 brush
+      Case #toolBrush2x ; standard X2 brush
         dBrush(px(Int(x1+r*Cos(Radian(t)))),py(Int(y1-r*Sin(Radian(t)))),dWid,1)
       Default
         dCircle(x1+r*Cos(Radian(t)),y1-r*Sin(Radian(t)),dWid*2)
@@ -695,7 +716,7 @@ Procedure floodFill(sx,sy)
     mc=dFil
     
     
-    ; first iteration fills With mask colour (15) To replace fill colour
+    ; first iteration fills With mask colour (15) to replace fill colour
     ; second iteration replaces mask colour with current pattern
     For i=0 To 1
       ; store start x,y on stack
@@ -708,11 +729,11 @@ Procedure floodFill(sx,sy)
         x=lFS()\x : y=lFS()\y
         DeleteElement(lFS())
         
-        If dl(dLay)\SCRN[y*640+x]=mc ;Point(x*dMpx,y*dMpy)=mc
+        If dl(dLay)\SCRN[y*640+x]=mc 
           uf=1 : df=1
           
           ; scan left
-          While x>0 And dl(dLay)\SCRN[y*640+x-1]=mc ;Point((x-1)*4,y*2)=mc
+          While x>0 And dl(dLay)\SCRN[y*640+x-1]=mc
             x-1
           Wend
           
@@ -720,16 +741,9 @@ Procedure floodFill(sx,sy)
           While x<dMdx And dl(dLay)\SCRN[y*640+x]=mc
             If i
               dc=curPat(x % 16,15-(y % 16))
-              ;               pS=x % 4+(y % 4)*4
-              ;               If pat(pSel,pS)
-              ;                 dc=pCol
-              ;               Else
-              ;                 dc=dCol
-              ;               EndIf
-              
             EndIf
             
-            dl(dLay)\SCRN[y*640+x]=dc ;Box(x*4,y*2,4,2,bp(dc))
+            dl(dLay)\SCRN[y*640+x]=dc
             
             ; detect colour changes above and add To List
             If y<(dMdy-1)
@@ -800,7 +814,7 @@ EndProcedure
 ; open save handler
 Procedure openSave(mode)
   
-  Protected lastFN.s, filename.s, action.s, F.s, ff.s, N.w, iTMP, a.b,b.a
+  Protected filename.s, QSfolder.s, action.s, F.s, ff.s, N.w, iTMP, a.b,b.a
   
   Select mode
     Case 0 ; get filename to load
@@ -809,7 +823,12 @@ Procedure openSave(mode)
       loadPattern=SelectedFilePattern()
       
     Case 1 ; save dialog
+           ; multiple save options:
+           ; PNG - Current Layer, 
+      
+      
       ff = "PNG file - Save Current Layer (*.PNG)|*.PNG|PNG file - Save All Layers (*.PNG)|*.PNG|BBC file - Save Current Layer (*.*)|*.*|BBC file - Save All Layers (*.*)|*.*"
+      
       If tQSv=0
         Repeat
           ok=#PB_MessageRequester_Yes
@@ -841,21 +860,11 @@ Procedure openSave(mode)
         Until ok=#PB_MessageRequester_Yes
       Else
         ; Quick save file finder
-        lastFN=GetCurrentDirectory()+"ART_QS_"
+        sNow=Date()
+        QSfolder=GetCurrentDirectory()+"\ART_QS_"+FormatDate("%yyyy%mm%dd",sNow)+"_"+FormatDate("%hh%ii%ss",sNow)
+        CreateDirectory(QSfolder)
+        F=QSfolder+"\ART_QS_"
         
-        N=0
-        F=""
-        Repeat
-          F=lastFN+Right("0000"+StrU(N),5)+".PNG"
-          If FileSize(F)<0
-            filename=F
-          Else
-            N+1
-          EndIf
-        Until filename<>"" Or N>99999
-        If N>99999 
-          MessageRequester(" File Error","ERROR: Cannot quicksave! File number limit reached, archive some files!!!",#PB_MessageRequester_Error)
-        EndIf
       EndIf
       
   EndSelect
@@ -930,8 +939,8 @@ Procedure openSave(mode)
                     dl(dlay)\SCRN[x+y*640]=revBBC(a)
                     dl(dlay)\SCRN[x+1+y*640]=revBBC(b)
                     
-                    ; step through raw data in mode 2 pixel order
-                    ; currently starts at lower right corner and steps left char by char, each char is eight bytes high
+                    ; step through mode 2 pixel order
+                    ; starts at lower right corner and steps left char by char, each char is eight bytes high
                     ; after 80 chars wide (640 bytes) left side is reached, we now return to right side and continue at next char row up
                     y-1
                     If ((y+1)%8)=0
@@ -968,7 +977,7 @@ Procedure openSave(mode)
             For x=0 To #SCRNsize
               If dl(dLay)\SCRN[x]
                 If savePattern=2
-                  SCRNout(x)=dl(dLay)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black
+                  SCRNout(x)=dl(dLay)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black for raw images
                 Else
                   SCRNout(x)=dl(dLay)\SCRN[x] ; colour 16 = true black
                 EndIf
@@ -981,7 +990,7 @@ Procedure openSave(mode)
               For x=0 To #SCRNsize
                 If dl(i)\SCRN[x]
                   If savePattern=3
-                    SCRNout(x)=dl(i)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black
+                    SCRNout(x)=dl(i)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black for raw images
                   Else
                     SCRNout(x)=dl(i)\SCRN[x] ; colour 16 = true black
                   EndIf
@@ -990,8 +999,6 @@ Procedure openSave(mode)
               ;EndIf
             Next
         EndSelect
-        
-        
         
         Select savePattern
           Case 0,1 ; save png file
@@ -1109,7 +1116,7 @@ Procedure saveUndo()
   
   ; update button toggle if needed
   If ListSize(dl(dLay)\lUndo())=1
-    addToggle(2,7)
+    addToggle(#toolUndo,7)
   EndIf
   
 EndProcedure
@@ -1124,7 +1131,7 @@ Procedure saveRedo()
   
   ; update button toggle if needed
   If ListSize(dl(dLay)\lRedo())=1
-    addToggle(3,7)
+    addToggle(#toolRedo,7)
   EndIf
 EndProcedure
 
@@ -1143,7 +1150,7 @@ Procedure Undo()
     
     ; update button toggle if needed
     If ListSize(dl(dLay)\lUndo())=0
-      addToggle(2,8)
+      addToggle(#toolUndo,8)
     EndIf
   EndIf
 EndProcedure
@@ -1164,7 +1171,7 @@ Procedure Redo()
     
     ; update button toggle if needed
     If ListSize(dl(dLay)\lRedo())=0
-      addToggle(3,8)
+      addToggle(#toolRedo,8)
     EndIf
     
   EndIf
@@ -1200,7 +1207,7 @@ Next
 
 ; read custom pattern data
 Restore customPatternData
-For i=0 To 6
+For i=0 To 14
   For x=0 To 63
     Read.a cusPat(i,x)
   Next
@@ -1284,14 +1291,15 @@ If StartDrawing(CanvasOutput(0))
   ; draw tools strip and toggle defaults
   DrawImage(ImageID(imgToolStrip),MA(6)\lx,MA(6)\ly)
   DrawImage(ImageID(imgToolStrip2),0,524)
-  toolToggle(2,8) ; undo
-  toolToggle(3,8) ; redo
+  toolToggle(#toolUndo,8) ; undo
+  toolToggle(#toolRedo,8) ; redo
   toolToggle(tCur,tTog) ; standard
-  toolToggle(14,2)      ; transparency
+  toolToggle(#toolTransparent,2)      ; transparency
   toolToggle(dSel,6)    ; draw style  
   
   ; initialise drawing area with layer 0
-  DrawImage(ImageID(imgFinal),MA(0)\lx,MA(0)\ly)
+  ;DrawImage(ImageID(imgFinal),MA(0)\lx,MA(0)\ly)
+  DrawImage(ImageID(imgGRD),MA(0)\lx,MA(0)\ly)
   
   ; brush size control
   Circle(MA(3)\lx+33,MA(3)\ly+118,16,bp(6))
@@ -1422,7 +1430,7 @@ Repeat
                    ; clear redo when new drawing starts
               If ListSize(dl(dLay)\lRedo())
                 ClearList(dl(dLay)\lRedo())
-                addToggle(3,8)
+                addToggle(#toolRedo,8)
               EndIf
               saveUndo()
               sx=mx-MA(0)\lx
@@ -1440,31 +1448,31 @@ Repeat
             
             ; determine tool being used
             Select tCur
-              Case 4 ; brush tool
+              Case #toolDraw ; brush tool
                 Select dSel
-                  Case 16 ; standard brush
+                  Case #toolBrushBox ; standard brush
                     dbrush(px(mx),py(my),dWid,0)
-                  Case 17 ; circle brush
+                  Case #toolBrushRound ; circle brush
                     dCircle(mx,my,dWid*2)
-                  Case 19 ; airbrush
+                  Case #toolBrushRND ; airbrush
                     dbrush(px(mx),py(my),dWid,2)
-                  Case 20 ; standard X2 brush
+                  Case #toolBrush2x ; standard X2 brush
                     dbrush(px(mx),py(my),dWid,1)
                 EndSelect
-              Case 5,6,7,8,9,12,13 ; save ox,oy
+              Case #toolLine,#toolCirOut,#toolCirFil,#toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer
                 ox=mx-MA(0)\lx
                 oy=my-MA(0)\ly
                 
-              Case 10 ; flood fill
+              Case #toolFill ; flood fill
                 If range(0)
                   i=dl(dLay)\SCRN[px(mx)+640*py(my)];Point(mx,my) get pixel colour under cursor
-                  If i<>dFil                        ; continue if fill colour is not the same as last fill
+                  ;If i<>dFil                        ; continue if fill colour is not the same as last fill
                     dFil=i
                     If StartDrawing(CanvasOutput(0)) ; update fill colour box in tool box
                       Box(MA(7)\lx+4,MA(7)\ly+4,MA(7)\rx-MA(7)\lx-7,MA(7)\ry-MA(7)\ly-7,bp(dFil))
                       StopDrawing()
                     EndIf
-                  EndIf
+                  ;EndIf
                 EndIf
             EndSelect
             dWire=tCur
@@ -1536,62 +1544,71 @@ Repeat
             
             ; determine tool being used
             Select tCur
-              Case 4
-                If dsel=18
+              Case #tooldraw
+                If dsel=#toolBrushSPR
                   dBrushSPR(px(mx),py(my),dWid,0,0)
                 EndIf                
-              Case 5 ; line tool completion
+              Case #toolLine ; line tool completion
                 dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
                 
-              Case 6,7 ; polygon completion
-                If tCur=6 
-                  dCircOut(sx,sy,Abs(sx-ox))
-                Else
-                  dCircle(sx,sy,Abs(sx-ox))
+              Case #toolCirOut ; polygon completion
+                dCircOut(sx,sy,Abs(sx-ox))
+                
+              Case #toolCirFil ; polygon completion
+                dCircle(sx,sy,Abs(sx-ox))
+                
+              Case #toolBoxOut,#toolBoxFil  ; boxes
+                dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
+                
+              Case #toolGradHor,#toolGradVer  ; gradient
+                If sx<>ox And sy<>oy 
+                  dBoxG(sx,sy,ox,oy,tCur-#toolGradHor)
                 EndIf
                 
-              Case 8,9,12,13  ; boxes, gradient
-                
-                If tCur>9
-                  If sx<>ox And sy<>oy 
-                    dBoxG(sx,sy,ox,oy,tCur-12)
-                  EndIf
-                Else
-                  dBox(sx,sy,ox,oy,tCur-8)
-                EndIf
-              Case 10 ; flood fill
+              Case #toolFill ; flood fill
                 floodfill(mx-MA(0)\lx,my-MA(0)\ly)
             EndSelect     
-            
-            
             
           Case 7 ; tool select
             
             ; get button of tool clicked And action
             tSel=(mx-MA(6)\lx) / 50+((my-MA(6)\ly) / 50)*2
             
-            If tSel>-1 And tSel<28
+            If tSel>-1 And tSel<22
               Select tSel
-                Case 0 ; save
+                Case #toolSave ; save
                   opensave(1)
-                Case 1 ; load
+                Case #toolLoad ; load
                   saveUndo()                  
                   opensave(0)
                   tLIF=1
-                Case 2 ; undo
+                Case #toolQSAll ; quick save all
+                  tQSA=1
+                  tQSC=0
+                  addToggle(tSel,tQSA*2)
+                  addToggle(#toolQSCur,0)
+
+                Case #toolQSCur ; quick save current
+                  tQSC=1
+                  tQSCA=0
+                  addToggle(tSel,tQSC*2)
+                  addToggle(#toolQSAll,0)
+
+                Case #toolUndo ; undo
                   undo()
-                Case 3 ; redo
-                  redo()
-                Case 15; CLS
+                Case #toolRedo ; redo
+                  redo()                  
+                  
+                Case #toolCLS; CLS
                   saveundo()
                   For x=0 To #SCRNsize
                     dl(dLay)\SCRN[x]=0
                   Next                  
-                Case 14; toggle transparency
+                Case 21; toggle transparency
                   dTrn=(dTrn+1) % 2
                   addToggle(tSel,dTrn*2)
                   
-                Case 16,17,18,19,20 ; brush style: 16 Square, 17 Circle, 18 Slash, 19 Spray, 20 x2 Brush
+                Case #toolBrushBox,#toolBrushRound,#toolBrushSPR,#toolBrushRND,#toolBrush2x
                   If tSel<>dSel
                     addToggle(dSel,0)
                     dSel=tSel
@@ -1603,11 +1620,7 @@ Repeat
                     EndIf
                   EndIf
                   
-                Case 21 ; quick save toggle
-                  tQSv=(tQSv+1) % 2
-                  addToggle(tSel,tQSv*2)
-                  
-                Default ; all other tools
+                Default ; all other tools - should not be needed now
                   If tSel<>tCur
                     addToggle(tCur,0)
                     tCur=tSel
@@ -1657,14 +1670,14 @@ Repeat
             EndIf
             ; update undo and redo
             If ListSize(dl(dLay)\lRedo())=0
-              addToggle(3,8)
+              addToggle(#toolRedo,8)
             Else
-              addToggle(3,7)
+              addToggle(#toolRedo,7)
             EndIf
             If ListSize(dl(dLay)\lUndo())=0
-              addToggle(2,8)
+              addToggle(#toolUndo,8)
             Else
-              addToggle(2,7)
+              addToggle(#toolUndo,7)
             EndIf
             
         EndSelect
@@ -1750,18 +1763,17 @@ Repeat
             LineXY(MA(0)\lx-4,my-4,MA(0)\rx,my-4,RGB(63,63,63))
           EndIf
           
-          ; drawsize guide
-          x=(mx-MA(0)\lx) / dMpx-dWid / 2
-          y=((my-MA(0)\ly) / dMpy)-dWid
-          x2=(x+dWid)*4
-          y2=(y+dWid*2)*2
-          x*4
-          y*2
-          
           ; draw brush size guide or small circle
           Select tCur
-            Case 4,5 ; brush and line draw
+            Case #toolDraw,#toolLine ; brush and line draw
               If dwid>3
+                ; drawsize guide
+                x=(mx-MA(0)\lx) / dMpx-dWid / 2
+                y=((my-MA(0)\ly) / dMpy)-dWid
+                x2=(x+dWid)*4
+                y2=(y+dWid*2)*2
+                x*4
+                y*2    
                 
                 LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
                 LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
@@ -1775,11 +1787,13 @@ Repeat
                 LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
                 LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
               Else
+                x=(mx-MA(0)\lx) / dMpx-dWid / 2
+                y=((my-MA(0)\ly) / dMpy)-dWid                
                 Circle(x+5,y+5,10,bp(2))
               EndIf
               
               ; draw sprite
-              If tcur=4 And dSel=18
+              If tcur=#toolDraw And dSel=#toolBrushSPR
                 DrawingMode(#PB_2DDrawing_Default)
                 dBrushSPR(px(mx),py(my),dWid,0,1)
                 DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
@@ -1788,12 +1802,12 @@ Repeat
           
           ; draw shape guides
           Select dWire
-            Case 5 ; line tool
+            Case #toolLine   ; line tool
               LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
               
-            Case 6,7 ; polygon tool
+            Case #toolCirOut,#toolCirFil ; polygon tool
               Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
-            Case 8,9,12,13  ; boxes, gradient
+            Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
               Box(sx,sy,mx-MA(0)\lx-sx,my-MA(0)\ly-sy,bp(7))
               
           EndSelect
@@ -1829,25 +1843,25 @@ Repeat
     Delay(1)
   EndIf
   
-  ;   ExamineKeyboard()
-  ;   
-  ;   ; select colour
-  ;   If KeyboardReleased(#PB_Key_R)
-  ;     updateColSel(-1)
-  ;   EndIf  
-  ;   
-  ;   If KeyboardReleased(#PB_Key_F)
-  ;     updateColSel(1)
-  ;   EndIf  
-  ;   
-  ;   ; select pattern colour (background)
-  ;   If KeyboardReleased(#PB_Key_I)
-  ;     updatepCol(1)
-  ;   EndIf
-  ;   
-  ;   If KeyboardReleased(#PB_Key_J)
-  ;     updatepCol(-1)
-  ;   EndIf   
+    ExamineKeyboard()
+    
+    ; select colour
+    If KeyboardReleased(#PB_Key_R)
+      updateColSel(-1)
+    EndIf  
+    
+    If KeyboardReleased(#PB_Key_F)
+      updateColSel(1)
+    EndIf  
+    
+    ; select pattern colour (background)
+    If KeyboardReleased(#PB_Key_I)
+      updatepCol(1)
+    EndIf
+    
+    If KeyboardReleased(#PB_Key_J)
+      updatepCol(-1)
+    EndIf   
   
   
 Until Event = #PB_Event_CloseWindow
@@ -1938,7 +1952,13 @@ DataSection
   Data.a 3,3,3,3,3,3,3,3,1,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,3,3,3,3,3,3,3,3,1,1,1,1,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,3,1,1
   Data.a 0,2,2,2,2,2,0,0,2,0,0,0,0,0,2,0,2,0,6,0,6,0,2,0,2,0,0,0,0,0,2,0,2,0,0,1,0,0,2,0,0,2,0,0,0,2,0,0,0,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0
   Data.a 6,0,0,0,0,0,0,6,0,6,0,0,0,0,6,0,0,0,6,0,0,6,0,0,0,0,0,6,6,0,0,0,0,0,6,0,0,6,0,0,0,6,0,0,0,0,6,0,6,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0
+  Data.a 1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0
+  Data.a 2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0
+  Data.a 3,3,3,3,3,3,3,3,0,0,0,0,0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0,0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0,0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0,0,0,0,0
+  Data.a 4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0
   Data.a 5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0,5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0,5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0,5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0
+  Data.a 6,6,6,6,6,6,6,6,0,0,0,0,0,0,0,0,6,6,6,6,6,6,6,6,0,0,0,0,0,0,0,0,6,6,6,6,6,6,6,6,0,0,0,0,0,0,0,0,6,6,6,6,6,6,6,6,0,0,0,0,0,0,0,0
+  Data.a 7,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0
   
   Data.a 4,0,4,0,4,0,4,0
   Data.a 4,0,4,0,4,0,4,0
@@ -1966,6 +1986,10 @@ DataSection
   Data.a 0,0,0,0,0,0,0,0
   Data.a 0,0,0,0,0,0,0,0
   Data.a 0,0,0,0,0,0,0,0
+  
+  Data.a 0,1,2,3,4,5,6,7,0,0,0,0,0,0,0,0,1,2,3,4,5,6,7,0,0,0,0,0,0,0,0,0,2,3,4,5,6,7,0,1,0,0,0,0,0,0,0,0,3,4,5,6,7,0,1,2,0,0,0,0,0,0,0,0
+  
+  Data.a 0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1
   
   ;   Data.a 
   ;   Data.a 
@@ -2072,8 +2096,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 403
-; FirstLine = 493
+; CursorPosition = 1863
+; FirstLine = 1830
 ; Folding = ------
 ; EnableXP
 ; UseIcon = Art-icon.ico
