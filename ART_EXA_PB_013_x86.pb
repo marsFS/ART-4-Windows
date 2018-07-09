@@ -811,6 +811,22 @@ Procedure addToggle(b,c)
   ltoggle()\c=c
 EndProcedure
 
+; copy screen data to output buffer
+; l = layer to copy, t = save transparency if <> 0
+Procedure LayerToOutput(l,t)
+  Protected x
+  For x=0 To #SCRNsize
+    If dl(l)\SCRN[x]
+      If t
+        SCRNout(x)=dl(l)\SCRN[x] ; colour 16 = true black for PNG format
+      Else
+        SCRNout(x)=dl(l)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black for raw images
+      EndIf
+    EndIf
+  Next    
+EndProcedure
+
+
 ; open save handler
 Procedure openSave(mode)
   
@@ -973,30 +989,20 @@ Procedure openSave(mode)
         
         ; copy relevant layer details to output buffer
         Select savePattern
-          Case 0,2 ; save current layer
-            For x=0 To #SCRNsize
-              If dl(dLay)\SCRN[x]
-                If savePattern=2
-                  SCRNout(x)=dl(dLay)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black for raw images
-                Else
-                  SCRNout(x)=dl(dLay)\SCRN[x] ; colour 16 = true black
-                EndIf
-              EndIf
-            Next            
+          Case 0 ; PNG - current layer
+            LayerToOutput(dLay,1)
             
-          Case 1,3 ; save all layers -  need to confirm if save all layers or save visible layers
+          Case 1  ; PNG - all layers
             For i=0 To ArraySize(dl())
-              ;If dl(i)\VIS
-              For x=0 To #SCRNsize
-                If dl(i)\SCRN[x]
-                  If savePattern=3
-                    SCRNout(x)=dl(i)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black for raw images
-                  Else
-                    SCRNout(x)=dl(i)\SCRN[x] ; colour 16 = true black
-                  EndIf
-                EndIf
-              Next            
-              ;EndIf
+              LayerToOutput(i,1)
+            Next
+            
+          Case 2 ; RAW - Current layer
+            LayerToOutput(dLay,0)
+            
+          Case 3 ; RAW - all layers
+            For i=0 To ArraySize(dl())
+              LayerToOutput(i,0)
             Next
         EndSelect
         
@@ -2096,8 +2102,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 1863
-; FirstLine = 1830
+; CursorPosition = 842
+; FirstLine = 994
 ; Folding = ------
 ; EnableXP
 ; UseIcon = Art-icon.ico
