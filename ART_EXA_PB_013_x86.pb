@@ -106,13 +106,16 @@ Global dGRD.a=1 ; draw transparent grid
 
 Global tCur.a=#toolDraw ; tool selected
 Global tTog.a=3 ; tool toggle colour
-Global tQSv.a=0 ; quick save toggle
+Global tQSA.a=0 ; quick save all toggle
+Global tQSC.a=0 ; quick save current toggle                  
 Global tSel.a=0 ; new tool select 
 Global tLIF.a=0 ; load image flag
 
 Global maCount.a=9 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
 Global imgToolStrip, imgToolStrip2, imgPAL, imgFinal, imgGRD; image handles
+Global savePattern=0          ; save file pattern selector
+Global loadPattern=0          ; load file pattern selector
 
 Global Dim dl.drawLayers(4) ; layers array
 Global Dim SCRNout.a(#SCRNsize) ; final output buffer
@@ -826,15 +829,215 @@ Procedure LayerToOutput(l,t)
   Next    
 EndProcedure
 
+; render image from SCRNout buffer and save PNG image
+Procedure savePNG(f.s)
+  Protected x,y,i,dc,yMul
+  
+  ; copy output buffer to final image
+  If StartDrawing(ImageOutput(imgFinal))
+    Box(0,0,640,512,bp(0))          
+    Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
+    Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
+    PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
+    
+    ; configure palette for RGB or BGR
+    If PixelFormat = #PB_PixelFormat_32Bits_RGB
+      For i=1 To 15
+        ct(i)=RGBA(rgbT(i)\r,rgbT(i)\g,rgbT(i)\b,255)
+      Next
+    Else ; Else it's 32bits_BGR
+      For i=1 To 15
+        ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
+      Next
+    EndIf
+    ct(0)=RGBA(0,0,0,0) ; transparent black
+    ct(16)=RGBA(0,0,0,255) ; true black
+    
+    For y = 0 To 511 
+      *Line.Pixel = Buffer+Pitch*y
+      yMul=(y/2)*640
+      
+      For x=0 To 159
+        dc = ct(SCRNout(x+yMul))
+        
+        *Line\Pixel = dc ; Write the pixel directly to the memory !
+        *line+4
+        *Line\Pixel = dc ; Write the pixel directly to the memory !
+        *Line+4
+        *Line\Pixel = dc ; Write the pixel directly to the memory !
+        *Line+4
+        *Line\Pixel = dc ; Write the pixel directly to the memory !
+        *Line+4
+        
+      Next
+    Next
+    StopDrawing()
+    
+    SaveImage(imgFinal, f, #PB_ImagePlugin_PNG);,10,4)
+  EndIf  
+EndProcedure
+
+; load png into specific layer
+Procedure loadPNG(f.s,l)
+  Protected iTMP,x,y,yMul
+  
+  iTMP=LoadImage(#PB_Any,f)
+  If iTMP
+    ; convert imported image to beeb format and dump into draw buffer
+    If StartDrawing(ImageOutput(iTMP))
+      Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
+      Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
+      PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format.           
+      For y = 0 To 511 
+        *Line.Pixel = Buffer+Pitch*y
+        yMul=(y/2)*640
+        
+        ; scan loaded png file image and write pixel data to image buffer for rgb colours that match beeb palette
+        ; attemtpts to preserve colour 0,0,0,0 as transparent black
+        For x=0 To 159
+          For i=0 To 7
+            If *Line\Pixel=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r) Or *Line\Pixel=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
+              dl(l)\SCRN[x+yMul]=i
+              Break
+            EndIf
+          Next
+          If *Line\Pixel=RGBA(0,0,0,255)
+            dl(l)\SCRN[x+yMul]=16
+          EndIf
+          *line+16  
+        Next
+      Next
+      
+      StopDrawing()
+      FreeImage(iTMP)            
+    EndIf          
+  Else
+    MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + f,#PB_MessageRequester_Error)
+  EndIf  
+EndProcedure
+
+; format raw data from SCRNout buffer and save as RAW beeb image
+Procedure saveRAW(f.s)
+  Protected x,y,i,a.a,b.a
+  
+  ; create temp buffer and fill with screen data
+  *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
+  If *MemoryID
+    x=0
+    y=255
+    For i=0 To #RAWsize-1
+      a=rawBBC(SCRNout(x+y*640))<<1
+      b=rawBBC(SCRNout(x+1+y*640))
+      ; MessageRequester("TEST",Str(a)+"  "+Str(b))
+      PokeB(*MemoryID+i, (a | b)) 
+      y-1
+      If ((y+1)%8)=0
+        y+8
+        x+2
+        If x=160
+          y-8
+          x=0
+        EndIf
+      EndIf
+    Next
+    
+    ; create file and output temp buffer
+    f=UCase(f)
+    If CreateFile(0, f)
+      WriteData(0, *MemoryID, #RAWsize)
+      CloseFile(0)
+      
+      ; create INF file
+      If CreateFile(1, f+".INF")
+        WriteString(1, "$."+GetFilePart(f)+" 003000 000000 005000")
+        
+        CloseFile(1)
+      Else
+        MessageRequester (" File Error","Cannot create INF file..."+#CRLF$+#CRLF$+f+".INF",#PB_MessageRequester_Error)
+      EndIf
+      
+    Else
+      MessageRequester (" File Error","Cannot create file..."+#CRLF$+#CRLF$+f,#PB_MessageRequester_Error)
+    EndIf
+    FreeMemory(*MemoryID)
+  EndIf  
+EndProcedure
+
+; load RAW file to specific layer
+Procedure loadRAW(f.s,l)
+  Protected x,y,i,a.a,b.a
+  ;check file size
+  If FileSize(f)=#RAWsize
+    ; create temp buffer and fill with file data
+    *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
+    If *MemoryID
+      
+      ; slurp in file data to buffer
+      If ReadFile(0, f)
+        ReadData(0,*MemoryID,#RAWsize)
+        CloseFile(0)
+        
+        x=0
+        y=255
+        
+        ; scan raw data in buffer and extract pixel data
+        For i=0 To #RAWsize-1
+          
+          ; 2 pixels (mode 2) per byte, pixel 1 mask: 10101010  pixel 2 mask: 01010101
+          a=(PeekB(*MemoryID+i) & 170)>>1
+          b=PeekB(*MemoryID+i) & 85
+          
+          ; convert raw data to pixel colour data via reverse lookup table
+          dl(l)\SCRN[x+y*640]=revBBC(a)
+          dl(l)\SCRN[x+1+y*640]=revBBC(b)
+          
+          ; step through mode 2 pixel order
+          ; starts at lower right corner and steps left char by char, each char is eight bytes high
+          ; after 80 chars wide (640 bytes) left side is reached, we now return to right side and continue at next char row up
+          y-1
+          If ((y+1)%8)=0
+            y+8
+            x+2
+            If x=160
+              y-8
+              x=0
+            EndIf
+          EndIf
+        Next
+        
+      Else
+        MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + f,#PB_MessageRequester_Error)
+      EndIf
+      FreeMemory(*MemoryID)
+    EndIf
+  Else
+    MessageRequester(" File Error","ERROR: File must be exactly "+Str(#RAWsize)+" bytes..." + #CRLF$ + #CRLF$ + f,#PB_MessageRequester_Error)  
+  EndIf  
+EndProcedure
 
 ; open save handler
 Procedure openSave(mode)
   
-  Protected filename.s, QSfolder.s, action.s, F.s, ff.s, N.w, iTMP, a.b,b.a
+  Protected filename.s, QSfolder.s, action.s, F.s, ff.s, N.w, iTMP, a.a,b.a
+  
+  ; load options:
+  ; PNG to current layer
+  ; RAW to current layer
+  ; PNG all layers (requires 5 images named *01 to *05)
+  ; RAW all layers (requires 5 images named *01 to *05)
+  
+  ; save options:
+  ; PNG from current layer
+  ; RAW from current layer
+  ; PNG merge all layers 
+  ; RAW merge all layers 
+  ; PNG save individual layers (saves 5 images in date stamped folder)
+  ; RAW save individual layers (saves 5 images in date stamped folder)
+    
   
   Select mode
     Case 0 ; get filename to load
-      ff = "PNG file - Load Current Layer (*.PNG)|*.PNG|BBC file - Load Current Layer (*.*)|*.*"
+      ff = "PNG file - Load Current Layer (*.PNG)|*.PNG|PNG file - Load All Layers (*.PNG)|*.PNG|BBC file - Load Current Layer (*.*)|*.*|BBC file - Load All Layers (*.*)|*.*"
       filename=OpenFileRequester(" Load Image",GetCurrentDirectory(),ff,loadPattern)
       loadPattern=SelectedFilePattern()
       
@@ -843,9 +1046,9 @@ Procedure openSave(mode)
            ; PNG - Current Layer, 
       
       
-      ff = "PNG file - Save Current Layer (*.PNG)|*.PNG|PNG file - Save All Layers (*.PNG)|*.PNG|BBC file - Save Current Layer (*.*)|*.*|BBC file - Save All Layers (*.*)|*.*"
+      ff = "PNG file - Save Current Layer (*.PNG)|*.PNG|PNG file - Save All Layers Merged (*.PNG)|*.PNG|PNG file - Save All Layers Separated (*.PNG)|*.PNG|BBC file - Save Current Layer (*.*)|*.*|BBC file - Save All Layers Merged (*.*)|*.*|BBC file - Save All Layers Separated (*.*)|*.*"
       
-      If tQSv=0
+      If tQSA=0 And tQSC=0
         Repeat
           ok=#PB_MessageRequester_Yes
           
@@ -854,12 +1057,12 @@ Procedure openSave(mode)
           savePattern=SelectedFilePattern()
           If filename
             Select savePattern
-              Case 0,1 ; png
+              Case 0,1,2 ; png
                 If Right(UCase(filename),4)<>".PNG"
                   filename=filename+".PNG"
                 EndIf
                 
-              Case 2,3 ; bbc raw
+              Case 3,4,5 ; bbc raw
                 If GetExtensionPart(UCase(filename))<>""
                   MessageRequester(" File Name Error","ERROR: Filename must not contain an extension.",#PB_MessageRequester_Error)
                   ok=#PB_MessageRequester_No
@@ -875,12 +1078,14 @@ Procedure openSave(mode)
           EndIf
         Until ok=#PB_MessageRequester_Yes
       Else
-        ; Quick save file finder
+        ; Quick save folder create and file config
         sNow=Date()
         QSfolder=GetCurrentDirectory()+"\ART_QS_"+FormatDate("%yyyy%mm%dd",sNow)+"_"+FormatDate("%hh%ii%ss",sNow)
-        CreateDirectory(QSfolder)
-        F=QSfolder+"\ART_QS_"
-        
+        If CreateDirectory(QSfolder)
+          filename=QSfolder+"\ART_QS_"
+        Else
+          MessageRequester(" Folder Error","ERROR: Could not create quick save folder:"+ #CRLF$ + #CRLF$ + QSfolder,#PB_MessageRequester_Error)
+        EndIf
       EndIf
       
   EndSelect
@@ -893,212 +1098,111 @@ Procedure openSave(mode)
       Case 0 ; load image and copy to drawing area
         action="opened"
         Select loadPattern
-          Case 0 ; load png file
+          Case 0 ; load png to current layer
+            loadPNG(filename,dLay)
             
-            iTMP=LoadImage(#PB_Any,filename)
-            If iTMP
-              ; convert imported image to beeb format and dump into draw buffer
-              If StartDrawing(ImageOutput(iTMP))
-                Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
-                Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
-                PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format.           
-                For y = 0 To 511 
-                  *Line.Pixel = Buffer+Pitch*y
-                  yMul=(y/2)*640
-                  
-                  ; scan loaded png file image and write pixel data to image buffer for rgb colours that match beeb palette
-                  ; attemtpts to preserve colour 0,0,0,0 as transparent black
-                  For x=0 To 159
-                    For i=0 To 7
-                      If *Line\Pixel=RGB(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r) Or *Line\Pixel=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
-                        dl(dlay)\SCRN[x+yMul]=i
-                        Break
-                      EndIf
-                    Next
-                    If *Line\Pixel=RGBA(0,0,0,255)
-                      dl(dlay)\SCRN[x+yMul]=16
-                    EndIf
-                    *line+16  
-                  Next
-                Next
-                
-                StopDrawing()
-                FreeImage(iTMP)            
-              EndIf          
-            Else
-              MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
-            EndIf
-          Case 1 ; load bbc raw format
+          Case 1 ; load png(s) to all layers
+            For i=0 To ArraySize(dl())
+              f=Left(filename,Len(filename)-7)+"_0"+Str(i+1)+".PNG"
+              loadPNG(f,i)
+            Next
             
-            ;check file size
-            If FileSize(filename)=#RAWsize
-              ; create temp buffer and fill with file data
-              *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
-              If *MemoryID
-                
-                ; slurp in file data to buffer
-                If ReadFile(0, filename)
-                  ReadData(0,*MemoryID,#RAWsize)
-                  CloseFile(0)
-                  
-                  x=0
-                  y=255
-                  
-                  ; scan raw data in buffer and extract pixel data
-                  For i=0 To #RAWsize-1
-                    
-                    ; 2 pixels (mode 2) per byte, pixel 1 mask: 10101010  pixel 2 mask: 01010101
-                    a=(PeekB(*MemoryID+i) & 170)>>1
-                    b=PeekB(*MemoryID+i) & 85
-                    
-                    ; convert raw data to pixel colour data via reverse lookup table
-                    dl(dlay)\SCRN[x+y*640]=revBBC(a)
-                    dl(dlay)\SCRN[x+1+y*640]=revBBC(b)
-                    
-                    ; step through mode 2 pixel order
-                    ; starts at lower right corner and steps left char by char, each char is eight bytes high
-                    ; after 80 chars wide (640 bytes) left side is reached, we now return to right side and continue at next char row up
-                    y-1
-                    If ((y+1)%8)=0
-                      y+8
-                      x+2
-                      If x=160
-                        y-8
-                        x=0
-                      EndIf
-                    EndIf
-                  Next
-                  
-                Else
-                  MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
-                EndIf
-                FreeMemory(*MemoryID)
-              EndIf
-            Else
-              MessageRequester(" File Error","ERROR: File must be exactly "+Str(#RAWsize)+" bytes..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)  
-            EndIf
+          Case 2 ; load bbc raw format
+            loadRAW(filename,dLay)
+            
+          Case 3 ; load raw(s) to all layers
+            For i=0 To ArraySize(dl())
+              f=Left(filename,Len(filename)-2)+"0"+Str(i+1)
+              loadRAW(f,i)
+            Next
             
         EndSelect
         
-        ;filename$+""" "+STR$(M{(0)}.mx%)+","+STR$(M{(0)}.my%)+"
       Case 1 ; save drawing image to file
-             ; erase output buffer
-        For x=0 To #SCRNsize
-          SCRNout(x)=0 ; clear output buffer
-        Next
-        
-        ; copy relevant layer details to output buffer
-        Select savePattern
-          Case 0 ; PNG - current layer
-            LayerToOutput(dLay,1)
-            
-          Case 1  ; PNG - all layers
-            For i=0 To ArraySize(dl())
-              LayerToOutput(i,1)
+             
+        If tQSA ; quick save all layers
+          For i=0 To ArraySize(dl())
+            ; erase output buffer
+            For x=0 To #SCRNsize
+              SCRNout(x)=0 ; clear output buffer
             Next
             
-          Case 2 ; RAW - Current layer
+            LayerToOutput(i,0)
+            
+            f=filename+"0"+Str(i+1)
+            savePNG(f+".PNG")
+            saveRAW(f)
+          Next
+          MessageRequester(" Quick Save - All Layers","INFO: All layers saved to the following folder: " + #CRLF$ + #CRLF$ + QSfolder,#PB_MessageRequester_Info)
+        ElseIf tQSC ; quick save current layer
+            ; erase output buffer
+            For x=0 To #SCRNsize
+              SCRNout(x)=0 ; clear output buffer
+            Next
+            
             LayerToOutput(dLay,0)
             
-          Case 3 ; RAW - all layers
-            For i=0 To ArraySize(dl())
-              LayerToOutput(i,0)
-            Next
-        EndSelect
-        
-        Select savePattern
-          Case 0,1 ; save png file
-            action$="saved"
-            
-            ; copy output buffer to final image
-            If StartDrawing(ImageOutput(imgFinal))
-              Box(0,0,640,512,bp(0))          
-              Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
-              Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
-              PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
+            filename+"0"+Str(dLay+1)
+            savePNG(filename+".PNG")
+            saveRAW(filename)
+            MessageRequester(" Quick Save - Current Layer","INFO: Current layer saved to the following folder: " + #CRLF$ + #CRLF$ + QSfolder,#PB_MessageRequester_Info)
+        Else
+          
+          ; erase output buffer
+          For x=0 To #SCRNsize
+            SCRNout(x)=0 ; clear output buffer
+          Next
+          
+          ; copy relevant layer details to output buffer and save
+          Select savePattern
+            Case 0 ; PNG - current layer
+              LayerToOutput(dLay,1)
+              savePNG(filename)
               
-              ; configure palette for RGB or BGR
-              If PixelFormat = #PB_PixelFormat_32Bits_RGB
-                For i=1 To 15
-                  ct(i)=RGBA(rgbT(i)\r,rgbT(i)\g,rgbT(i)\b,255)
-                Next
-              Else ; Else it's 32bits_BGR
-                For i=1 To 15
-                  ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
-                Next
-              EndIf
-              ct(0)=RGBA(0,0,0,0) ; transparent black
-              ct(16)=RGBA(0,0,0,255) ; true black
-              
-              For y = 0 To 511 
-                *Line.Pixel = Buffer+Pitch*y
-                yMul=(y/2)*640
-                
-                For x=0 To 159
-                  dc = ct(SCRNout(x+yMul))
-                  
-                  *Line\Pixel = dc ; Write the pixel directly to the memory !
-                  *line+4
-                  *Line\Pixel = dc ; Write the pixel directly to the memory !
-                  *Line+4
-                  *Line\Pixel = dc ; Write the pixel directly to the memory !
-                  *Line+4
-                  *Line\Pixel = dc ; Write the pixel directly to the memory !
-                  *Line+4
-                  
-                Next
+            Case 1  ; PNG - merge all layers
+              For i=0 To ArraySize(dl())
+                LayerToOutput(i,1)
               Next
-              StopDrawing()
+              savePNG(filename)
               
-              SaveImage(imgFinal, filename, #PB_ImagePlugin_PNG);,10,4)
-            EndIf
-            
-          Case 2,3 ; save bbc raw
-                   ; create temp buffer and fill with screen data
-            *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
-            If *MemoryID
-              x=0
-              y=255
-              For i=0 To #RAWsize-1
-                a=rawBBC(SCRNout(x+y*640))<<1
-                b=rawBBC(SCRNout(x+1+y*640))
-                ; MessageRequester("TEST",Str(a)+"  "+Str(b))
-                PokeB(*MemoryID+i, (a | b)) 
-                y-1
-                If ((y+1)%8)=0
-                  y+8
-                  x+2
-                  If x=160
-                    y-8
-                    x=0
-                  EndIf
-                EndIf
+            Case 2 ; PNG - save all layers individual
+              For i=0 To ArraySize(dl())
+                ; erase output buffer
+                For x=0 To #SCRNsize
+                  SCRNout(x)=0 ; clear output buffer
+                Next
+                
+                LayerToOutput(i,0)
+                
+                f=Left(filename,Len(filename)-4)+"_0"+Str(i+1)
+                savePNG(f+".PNG")
+                
+              Next              
+            Case 3 ; RAW - Current layer
+              LayerToOutput(dLay,0)
+              saveRAW(filename)
+              
+            Case 4 ; RAW - all layers
+              For i=0 To ArraySize(dl())
+                LayerToOutput(i,0)
               Next
+              saveRAW(filename)
               
-              ; create file and output temp buffer
-              filename=UCase(filename)
-              If CreateFile(0, filename)
-                WriteData(0, *MemoryID, #RAWsize)
-                CloseFile(0)
+            Case 5 ; RAW - save all layers individual
+              For i=0 To ArraySize(dl())
+                ; erase output buffer
+                For x=0 To #SCRNsize
+                  SCRNout(x)=0 ; clear output buffer
+                Next
                 
-                ; create INF file
-                If CreateFile(1, filename+".INF")
-                  WriteString(1, "$."+GetFilePart(filename)+" 003000 000000 005000")
-                  
-                  CloseFile(1)
-                Else
-                  MessageRequester (" File Error","Cannot create INF file..."+#CRLF$+#CRLF$+filename+".INF",#PB_MessageRequester_Error)
-                EndIf
+                LayerToOutput(i,0)
                 
-              Else
-                MessageRequester (" File Error","Cannot create file..."+#CRLF$+#CRLF$+filename,#PB_MessageRequester_Error)
-              EndIf
-              FreeMemory(*MemoryID)
-            EndIf
-            
-            
-        EndSelect
-        
+                f=filename+"_0"+Str(i+1)
+                saveRAW(f)
+              Next                
+          EndSelect
+        EndIf
+      
     EndSelect
   EndIf
   
@@ -1589,14 +1693,14 @@ Repeat
                   opensave(0)
                   tLIF=1
                 Case #toolQSAll ; quick save all
-                  tQSA=1
+                  tQSA=1-tQSA
                   tQSC=0
                   addToggle(tSel,tQSA*2)
                   addToggle(#toolQSCur,0)
 
                 Case #toolQSCur ; quick save current
-                  tQSC=1
-                  tQSCA=0
+                  tQSC=1-tQSC
+                  tQSA=0
                   addToggle(tSel,tQSC*2)
                   addToggle(#toolQSAll,0)
 
@@ -2101,9 +2205,9 @@ DataSection
 EndDataSection
 
 
-; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 842
-; FirstLine = 994
+; IDE Options = PureBasic 5.62 (Windows - x86)
+; CursorPosition = 1119
+; FirstLine = 1093
 ; Folding = ------
 ; EnableXP
 ; UseIcon = Art-icon.ico
