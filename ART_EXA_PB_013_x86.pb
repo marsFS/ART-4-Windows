@@ -821,7 +821,7 @@ Procedure LayerToOutput(l,t)
   For x=0 To #SCRNsize
     If dl(l)\SCRN[x]
       If t
-        SCRNout(x)=dl(l)\SCRN[x] ; colour 16 = true black for PNG format
+        SCRNout(x)=dl(l)\SCRN[x] ; colour 16 = preserve true black for PNG format
       Else
         SCRNout(x)=dl(l)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black for raw images
       EndIf
@@ -830,7 +830,7 @@ Procedure LayerToOutput(l,t)
 EndProcedure
 
 ; render image from SCRNout buffer and save PNG image
-Procedure savePNG(f.s)
+Procedure savePNG(f.s,iTrans)
   Protected x,y,i,dc,yMul
   
   ; copy output buffer to final image
@@ -850,7 +850,12 @@ Procedure savePNG(f.s)
         ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
       Next
     EndIf
-    ct(0)=RGBA(0,0,0,0) ; transparent black
+    If iTrans
+      ct(0)=RGBA(0,0,0,255) ; ignore transparency
+    Else
+      ct(0)=RGBA(0,0,0,0) ; transparent black
+    EndIf
+    
     ct(16)=RGBA(0,0,0,255) ; true black
     
     For y = 0 To 511 
@@ -1031,9 +1036,10 @@ Procedure openSave(mode)
   ; RAW from current layer
   ; PNG merge all layers 
   ; RAW merge all layers 
-  ; PNG save individual layers (saves 5 images in date stamped folder)
+  ; PNG save individual layers with transparency (saves 5 images in date stamped folder)
+  ; PNG save individual layers No transparency (saves 5 images in date stamped folder)
   ; RAW save individual layers (saves 5 images in date stamped folder)
-    
+
   
   Select mode
     Case 0 ; get filename to load
@@ -1046,7 +1052,7 @@ Procedure openSave(mode)
            ; PNG - Current Layer, 
       
       
-      ff = "PNG file - Save Current Layer (*.PNG)|*.PNG|PNG file - Save All Layers Merged (*.PNG)|*.PNG|PNG file - Save All Layers Separated (*.PNG)|*.PNG|BBC file - Save Current Layer (*.*)|*.*|BBC file - Save All Layers Merged (*.*)|*.*|BBC file - Save All Layers Separated (*.*)|*.*"
+      ff = "PNG file - Save Current Layer (*.PNG)|*.PNG|PNG file - Save All Layers Merged Preserve Transparency (*.PNG)|*.PNG|PNG file - Save All Layers Merged Discard Transparency (*.PNG)|*.PNG|PNG file - Save All Layers Separated Preserve Transparency (*.PNG)|*.PNG|PNG file - Save All Layers Separated Discard Transparency (*.PNG)|*.PNG|BBC file - Save Current Layer (*.*)|*.*|BBC file - Save All Layers Merged (*.*)|*.*|BBC file - Save All Layers Separated (*.*)|*.*"
       
       If tQSA=0 And tQSC=0
         Repeat
@@ -1057,12 +1063,12 @@ Procedure openSave(mode)
           savePattern=SelectedFilePattern()
           If filename
             Select savePattern
-              Case 0,1,2 ; png
+              Case 0,1,2,3,4 ; png
                 If Right(UCase(filename),4)<>".PNG"
                   filename=filename+".PNG"
                 EndIf
                 
-              Case 3,4,5 ; bbc raw
+              Case 5,6,7 ; bbc raw
                 If GetExtensionPart(UCase(filename))<>""
                   MessageRequester(" File Name Error","ERROR: Filename must not contain an extension.",#PB_MessageRequester_Error)
                   ok=#PB_MessageRequester_No
@@ -1130,7 +1136,7 @@ Procedure openSave(mode)
             LayerToOutput(i,0)
             
             f=filename+"0"+Str(i+1)
-            savePNG(f+".PNG")
+            savePNG(f+".PNG",0)
             saveRAW(f)
           Next
           MessageRequester(" Quick Save - All Layers","INFO: All layers saved to the following folder: " + #CRLF$ + #CRLF$ + QSfolder,#PB_MessageRequester_Info)
@@ -1143,7 +1149,7 @@ Procedure openSave(mode)
             LayerToOutput(dLay,0)
             
             filename+"0"+Str(dLay+1)
-            savePNG(filename+".PNG")
+            savePNG(filename+".PNG",0)
             saveRAW(filename)
             MessageRequester(" Quick Save - Current Layer","INFO: Current layer saved to the following folder: " + #CRLF$ + #CRLF$ + QSfolder,#PB_MessageRequester_Info)
         Else
@@ -1157,15 +1163,19 @@ Procedure openSave(mode)
           Select savePattern
             Case 0 ; PNG - current layer
               LayerToOutput(dLay,1)
-              savePNG(filename)
+              savePNG(filename,0)
               
-            Case 1  ; PNG - merge all layers
+            Case 1,2  ; PNG - merge all layers
               For i=0 To ArraySize(dl())
                 LayerToOutput(i,1)
               Next
-              savePNG(filename)
+              If savePattern=1
+                savePNG(filename,0) ; preserve transparency
+              Else
+                savePNG(filename,1) ; discard transparency
+              EndIf
               
-            Case 2 ; PNG - save all layers individual
+            Case 3,4 ; PNG - save all layers individual with or without Transparency
               For i=0 To ArraySize(dl())
                 ; erase output buffer
                 For x=0 To #SCRNsize
@@ -1175,20 +1185,24 @@ Procedure openSave(mode)
                 LayerToOutput(i,0)
                 
                 f=Left(filename,Len(filename)-4)+"_0"+Str(i+1)
-                savePNG(f+".PNG")
-                
-              Next              
-            Case 3 ; RAW - Current layer
+                If savePattern=3
+                  savePNG(f+".PNG",0) ; preserve transparency
+                Else
+                  savePNG(f+".PNG",1) ; discard transparency
+                EndIf
+              Next
+              
+            Case 5 ; RAW - Current layer
               LayerToOutput(dLay,0)
               saveRAW(filename)
               
-            Case 4 ; RAW - all layers
+            Case 6 ; RAW - all layers
               For i=0 To ArraySize(dl())
                 LayerToOutput(i,0)
               Next
               saveRAW(filename)
               
-            Case 5 ; RAW - save all layers individual
+            Case 7 ; RAW - save all layers individual
               For i=0 To ArraySize(dl())
                 ; erase output buffer
                 For x=0 To #SCRNsize
@@ -2206,8 +2220,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1119
-; FirstLine = 1093
+; CursorPosition = 1174
+; FirstLine = 1152
 ; Folding = ------
 ; EnableXP
 ; UseIcon = Art-icon.ico
