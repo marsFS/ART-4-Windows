@@ -86,6 +86,15 @@ Structure drawLayers
   List lRedo.undoArray()  ; redo buffer
 EndStructure
 
+Structure SpriteOBJ
+  sw.w ; sprite width
+  sh.w ; sprite height
+  sx.w ; grid x offset
+  sy.w ; grid y offset
+  gs.w ; grid size
+  sn.s ; sprite name
+EndStructure
+
 ; globals
 Global pCol.a=0 ; pattern colour selected
 Global pSel.a=8 ; pattern selected
@@ -103,6 +112,7 @@ Global dLay=0   ; current drawing layer
 Global dAll=1   ; all layers visible flag
 Global dWire.a=0; draw wireframe 
 Global dGRD.a=1 ; draw transparent grid
+Global dSPR.a=0 ; spr drawing mode flag
 
 Global tCur.a=#toolDraw ; tool selected
 Global tTog.a=3 ; tool toggle colour
@@ -110,8 +120,10 @@ Global tQSA.a=0 ; quick save all toggle
 Global tQSC.a=0 ; quick save current toggle                  
 Global tSel.a=0 ; new tool select 
 Global tLIF.a=0 ; load image flag
+Global tSpr.b=-2 ; toggle spr
 
-Global maCount.a=9 ; mouse area count 0-n
+
+Global maCount.a=10 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
 Global imgToolStrip, imgToolStrip2, imgPAL, imgFinal, imgGRD; image handles
 Global savePattern=0          ; save file pattern selector
@@ -134,6 +146,7 @@ Global NewList lToggle.togglelist()
 
 Global NewList lFS.fillStack()
 
+Global NewList SPR.spriteOBJ()
 
 ; Exit program and display a message
 Procedure Exit_ART(m.s)
@@ -158,21 +171,20 @@ Procedure showstats()
   x=30
   
   Box(MA(4)\lx+x,MA(4)\ly,44,32,bp(0))
-  Box(MA(4)\lx+x+80,MA(4)\ly,44,32,bp(0))
-  Box(MA(4)\lx+x+160,MA(4)\ly,44,32,bp(0))
-  Box(MA(4)\lx+x+240,MA(4)\ly,44,32,bp(0))
+  Box(MA(4)\lx+x+80,MA(4)\ly,44,48,bp(0))
+  Box(MA(4)\lx+x+160,MA(4)\ly,44,48,bp(0))
+  ;Box(MA(4)\lx+x+240,MA(4)\ly,44,32,bp(0))
   
   DrawText(MA(4)\lx+x,MA(4)\ly,Str(mx))
   DrawText(MA(4)\lx+x,MA(4)\ly+16,Str(my))
+  DrawText(MA(4)\lx+x,MA(4)\ly+32,Str(tCur))
   
   DrawText(MA(4)\lx+x+80,MA(4)\ly,Str(px(mx)))
   DrawText(MA(4)\lx+x+80,MA(4)\ly+16,Str(py(my)))
+  DrawText(MA(4)\lx+x+80,MA(4)\ly+32,Str(tSel))
   
   DrawText(MA(4)\lx+x+160,MA(4)\ly,Str(dWid))
   DrawText(MA(4)\lx+x+160,MA(4)\ly+16,Str(mact))
-  
-  DrawText(MA(4)\lx+x+240,MA(4)\ly,Str(tCur))
-  DrawText(MA(4)\lx+x+240,MA(4)\ly+16,Str(tSel))
   
 EndProcedure
 
@@ -814,6 +826,88 @@ Procedure addToggle(b,c)
   ltoggle()\c=c
 EndProcedure
 
+; draw grid with grid dimensions of BX, BY, assumes startdrawing is initiated
+Procedure drawGrid()
+  Protected sx,sy,x1,x2,y1,y2,lx,ly,gs,dc
+  
+  dc=bp(8)
+  
+  gs=SPR()\gs
+    
+  ; determine center of drawing frame base on box size
+  sx=SPR()\sx
+  sy=SPR()\sy
+  lx=SPR()\sw-1
+  ly=SPR()\sh-1
+  
+  ; draw first horizontal line and then loop for the remainder
+  x1=MA(0)\lx+sx+gs-1
+  y1=MA(0)\ly+sy
+  y2=MA(0)\ry-sy
+
+  LineXY(MA(0)\lx+sx,y1,MA(0)\lx+sx,y2,dc)
+  
+  For x=0 To lx
+    LineXY(x1+x*gs,y1,x1+x*gs,y2,dc)
+  Next
+  
+  ; draw first vertical line and then loop for the remainder
+  x1=MA(0)\lx+sx
+  x2=MA(0)\rx-sx
+  y1=MA(0)\ly+sy+gs-1
+  
+  LineXY(x1,MA(0)\ly+sy,x2,MA(0)\ly+sy,dc)
+  For y=0 To ly
+    LineXY(x1,y1+y*gs,x2,y1+y*gs,dc)
+  Next
+  
+  For x=0 To lx
+    For y=0 To ly
+      dc=cusPat(0,x+y*8)
+      Box(x1+1+x*gs,y1+1+y*gs,gs-1,gs-1,bp(dc))
+    Next
+  Next
+  
+EndProcedure
+
+Procedure updateSPR()
+  Protected x1,y1,gs
+  
+  ; determine smallest required box required to fit into drawing frame
+  x1=Int(640/SPR()\sw)
+  y1=Int(512/SPR()\sh)
+  If x1>y1
+    gs=y1
+  Else
+    gs=x1
+  EndIf
+  ; upper limit of grid size
+  If gs>20:gs=20:EndIf
+  
+  SPR()\gs=gs
+  
+  ; determine center of drawing frame base on box size
+  SPR()\sx=320-SPR()\sw*gs/2
+  SPR()\sy=256-SPR()\sh*gs/2
+
+EndProcedure
+
+; update current sprite
+Procedure modSPR(w,h)
+  SPR()\sw=w
+  SPR()\sh=h
+  
+  updateSPR()
+EndProcedure
+
+; add new sprite to sprite list
+Procedure newSPR(w,h)
+ AddElement(SPR())
+
+ modSPR(w,h)
+  
+EndProcedure 
+
 ; copy screen data to output buffer
 ; l = layer to copy, t = save transparency if <> 0
 Procedure LayerToOutput(l,t)
@@ -1383,6 +1477,8 @@ mact=-1
 
 tFont=LoadFont(#PB_Any,"Comic Sans MS",14,#PB_Font_Italic |#PB_Font_Bold)
 
+newSPR(8,8)
+
 ;
 ;-------- Draw controls --------
 ;
@@ -1444,12 +1540,14 @@ If StartDrawing(CanvasOutput(0))
   ; stats area
   DrawText(MA(4)\lx,MA(4)\ly,"mX:")
   DrawText(MA(4)\lx,MA(4)\ly+16,"mY:")
+  DrawText(MA(4)\lx,MA(4)\ly+32,"CT:")
   DrawText(MA(4)\lx+80,MA(4)\ly,"pX:")
   DrawText(MA(4)\lx+80,MA(4)\ly+16,"pY:")
+  DrawText(MA(4)\lx+80,MA(4)\ly+32,"TS:")
   DrawText(MA(4)\lx+160,MA(4)\ly,"dW:")
   DrawText(MA(4)\lx+160,MA(4)\ly+16,"mA:")
-  DrawText(MA(4)\lx+240,MA(4)\ly,"CT:")
-  DrawText(MA(4)\lx+240,MA(4)\ly+16,"TS:")
+  
+  
   
   DrawText(MA(5)\lx,MA(5)\ly-20,"Pat",bp(7))
   drawBox(MA(5)\lx,MA(5)\ly,MA(5)\rx,MA(5)\ry,bp(7))
@@ -1462,9 +1560,9 @@ If StartDrawing(CanvasOutput(0))
   updateLayers()
   
   ; enable for debugging mouse area squares
-  ;   For i=0 To maCount
-  ;     drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp(i))
-  ;   Next  
+;     For i=0 To maCount
+;       drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp((i % 7)+1))
+;     Next  
   
   StopDrawing()
 EndIf
@@ -1486,7 +1584,7 @@ Repeat
       ; check if mouse is in pattern area
       If EventType() = #PB_EventType_MouseMove
         x=GetGadgetAttribute(0, #PB_Canvas_Cursor)
-        If range(0) And mact<>9
+        If range(0) And mact<>9 And dSPR=0
           If x<>#PB_Cursor_Invisible
             SetGadgetAttribute(0, #PB_Canvas_Cursor , #PB_Cursor_Invisible)
           EndIf
@@ -1543,9 +1641,11 @@ Repeat
           ; set default action to none and check mouse area ranges to select current mouse area
           mact=0
           For i=0 To maCount
+            If i<>8
             If range(i)=1
               mact=i+1
               Break
+            EndIf
             EndIf
           Next
           
@@ -1666,32 +1766,42 @@ Repeat
         Select mact
           Case 1 ; drawing area
             
-            ; determine tool being used
-            Select tCur
-              Case #tooldraw
-                If dsel=#toolBrushSPR
-                  dBrushSPR(px(mx),py(my),dWid,0,0)
-                EndIf                
-              Case #toolLine ; line tool completion
-                dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
-                
-              Case #toolCirOut ; polygon completion
-                dCircOut(sx,sy,Abs(sx-ox))
-                
-              Case #toolCirFil ; polygon completion
-                dCircle(sx,sy,Abs(sx-ox))
-                
-              Case #toolBoxOut,#toolBoxFil  ; boxes
-                dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
-                
-              Case #toolGradHor,#toolGradVer  ; gradient
-                If sx<>ox And sy<>oy 
-                  dBoxG(sx,sy,ox,oy,tCur-#toolGradHor)
-                EndIf
-                
-              Case #toolFill ; flood fill
-                floodfill(mx-MA(0)\lx,my-MA(0)\ly)
-            EndSelect     
+            If dSPR
+              If SPR()\sh+tSpr>63 Or SPR()\sh+tSpr<2
+                tSpr=-tSpr
+              EndIf
+              modSPR(SPR()\sw+tSpr,SPR()\sh+tSpr)
+            Else
+              
+              
+              ; determine tool being used
+              Select tCur
+                Case #tooldraw
+                  If dsel=#toolBrushSPR
+                    dBrushSPR(px(mx),py(my),dWid,0,0)
+                  EndIf                
+                Case #toolLine ; line tool completion
+                  dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
+                  
+                Case #toolCirOut ; polygon completion
+                  dCircOut(sx,sy,Abs(sx-ox))
+                  
+                Case #toolCirFil ; polygon completion
+                  dCircle(sx,sy,Abs(sx-ox))
+                  
+                Case #toolBoxOut,#toolBoxFil  ; boxes
+                  dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
+                  
+                Case #toolGradHor,#toolGradVer  ; gradient
+                  If sx<>ox And sy<>oy 
+                    dBoxG(sx,sy,ox,oy,tCur-#toolGradHor)
+                  EndIf
+                  
+                Case #toolFill ; flood fill
+                  floodfill(mx-MA(0)\lx,my-MA(0)\ly)
+              EndSelect 
+            EndIf
+          
             
           Case 7 ; tool select
             
@@ -1804,6 +1914,9 @@ Repeat
               addToggle(#toolUndo,7)
             EndIf
             
+          Case 11 ; set spr drawing flag
+            dSPR=1-dSPR
+            
         EndSelect
         
         ; reset wire frame
@@ -1817,126 +1930,137 @@ Repeat
       ;-------- Update Screen
       If mact<>9
         
-        ; clear output buffer
-        For x=0 To #SCRNsize
-          SCRNout(x)=0 
-        Next
-        
-        ; copy visible screen buffer to output buffer
-        For i=0 To ArraySize(dl())
-          If dl(i)\VIS
-            For x=0 To #SCRNsize
-              If dl(i)\SCRN[x]
-                SCRNout(x)=dl(i)\SCRN[x]
-              EndIf
-            Next            
-          EndIf
-        Next
-        
-        ; copy output buffer to final image
-        If StartDrawing(ImageOutput(imgFinal))
-          If dGRD
-            DrawImage(ImageID(imgGRD),0,0)
-          Else
+        If dSPR ; sprite drawing mode
+          If StartDrawing(ImageOutput(imgFinal))
             Box(0,0,640,512,bp(0))
+            ;Box(100,100,100,100,bp(1))
+            drawGrid()
+            StopDrawing()
           EndIf
           
+        Else ; picture drawing mode
           
-          Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
-          Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
-          PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
-          
-          ; configure palette for RGB or BGR
-          If PixelFormat = #PB_PixelFormat_32Bits_RGB
-            For i=1 To 16
-              ct(i)=bp(i)
-            Next
-          Else ; Else it's 32bits_BGR
-            For i=1 To 16
-              ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
-            Next
-          EndIf
-          ct(0)=RGBA(0,0,0,0)
-          
-          For y = 0 To 511 
-            *Line.Pixel = Buffer+Pitch*y
-            yMul=(y/2)*640
-            
-            For x=0 To 159
-              dc = ct(SCRNout(x+yMul))
-              If dc
-                *Line\Pixel = dc ; Write the pixel directly to the memory !
-                *line+4
-                *Line\Pixel = dc ; Write the pixel directly to the memory !
-                *Line+4
-                *Line\Pixel = dc ; Write the pixel directly to the memory !
-                *Line+4
-                *Line\Pixel = dc ; Write the pixel directly to the memory !
-                *Line+4
-              Else
-                *Line+16
-              EndIf
-            Next
+          ; clear output buffer
+          For x=0 To #SCRNsize
+            SCRNout(x)=0 
           Next
           
-          DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
+          ; copy visible screen buffer to output buffer
+          For i=0 To ArraySize(dl())
+            If dl(i)\VIS
+              For x=0 To #SCRNsize
+                If dl(i)\SCRN[x]
+                  SCRNout(x)=dl(i)\SCRN[x]
+                EndIf
+              Next            
+            EndIf
+          Next
           
-          ; big cross hair
-          If range(0)
-            LineXY(mx-4,MA(0)\ly-4,mx-4,MA(0)\ry,RGB(63,63,63))
-            LineXY(MA(0)\lx-4,my-4,MA(0)\rx,my-4,RGB(63,63,63))
+          ; copy output buffer to final image
+          If StartDrawing(ImageOutput(imgFinal))
+            If dGRD
+              DrawImage(ImageID(imgGRD),0,0)
+            Else
+              Box(0,0,640,512,bp(0))
+            EndIf
+            
+            
+            Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
+            Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
+            PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
+            
+            ; configure palette for RGB or BGR
+            If PixelFormat = #PB_PixelFormat_32Bits_RGB
+              For i=1 To 16
+                ct(i)=bp(i)
+              Next
+            Else ; Else it's 32bits_BGR
+              For i=1 To 16
+                ct(i)=RGBA(rgbT(i)\b,rgbT(i)\g,rgbT(i)\r,255)
+              Next
+            EndIf
+            ct(0)=RGBA(0,0,0,0)
+            
+            For y = 0 To 511 
+              *Line.Pixel = Buffer+Pitch*y
+              yMul=(y/2)*640
+              
+              For x=0 To 159
+                dc = ct(SCRNout(x+yMul))
+                If dc
+                  *Line\Pixel = dc ; Write the pixel directly to the memory !
+                  *line+4
+                  *Line\Pixel = dc ; Write the pixel directly to the memory !
+                  *Line+4
+                  *Line\Pixel = dc ; Write the pixel directly to the memory !
+                  *Line+4
+                  *Line\Pixel = dc ; Write the pixel directly to the memory !
+                  *Line+4
+                Else
+                  *Line+16
+                EndIf
+              Next
+            Next
+            
+            DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
+            
+            ; big cross hair
+            If range(0)
+              LineXY(mx-4,MA(0)\ly-4,mx-4,MA(0)\ry,RGB(63,63,63))
+              LineXY(MA(0)\lx-4,my-4,MA(0)\rx,my-4,RGB(63,63,63))
+            EndIf
+            
+            ; draw brush size guide or small circle
+            Select tCur
+              Case #toolDraw,#toolLine ; brush and line draw
+                If dwid>3
+                  ; drawsize guide
+                  x=(mx-MA(0)\lx) / dMpx-dWid / 2
+                  y=((my-MA(0)\ly) / dMpy)-dWid
+                  x2=(x+dWid)*4
+                  y2=(y+dWid*2)*2
+                  x*4
+                  y*2    
+                  
+                  LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
+                  LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
+                  
+                  LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
+                  LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
+                  
+                  LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
+                  LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
+                  
+                  LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
+                  LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
+                Else
+                  x=(mx-MA(0)\lx) / dMpx-dWid / 2
+                  y=((my-MA(0)\ly) / dMpy)-dWid                
+                  Circle(x+5,y+5,10,bp(2))
+                EndIf
+                
+                ; draw sprite
+                If tcur=#toolDraw And dSel=#toolBrushSPR
+                  DrawingMode(#PB_2DDrawing_Default)
+                  dBrushSPR(px(mx),py(my),dWid,0,1)
+                  DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
+                EndIf
+            EndSelect
+            
+            ; draw shape guides
+            Select dWire
+              Case #toolLine   ; line tool
+                LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
+                
+              Case #toolCirOut,#toolCirFil ; polygon tool
+                Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
+              Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
+                Box(sx,sy,mx-MA(0)\lx-sx,my-MA(0)\ly-sy,bp(7))
+                
+            EndSelect
+            
+            StopDrawing()
           EndIf
-          
-          ; draw brush size guide or small circle
-          Select tCur
-            Case #toolDraw,#toolLine ; brush and line draw
-              If dwid>3
-                ; drawsize guide
-                x=(mx-MA(0)\lx) / dMpx-dWid / 2
-                y=((my-MA(0)\ly) / dMpy)-dWid
-                x2=(x+dWid)*4
-                y2=(y+dWid*2)*2
-                x*4
-                y*2    
-                
-                LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
-                LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
-                
-                LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
-                LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
-                
-                LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
-                LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
-                
-                LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
-                LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
-              Else
-                x=(mx-MA(0)\lx) / dMpx-dWid / 2
-                y=((my-MA(0)\ly) / dMpy)-dWid                
-                Circle(x+5,y+5,10,bp(2))
-              EndIf
-              
-              ; draw sprite
-              If tcur=#toolDraw And dSel=#toolBrushSPR
-                DrawingMode(#PB_2DDrawing_Default)
-                dBrushSPR(px(mx),py(my),dWid,0,1)
-                DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
-              EndIf
-          EndSelect
-          
-          ; draw shape guides
-          Select dWire
-            Case #toolLine   ; line tool
-              LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
-              
-            Case #toolCirOut,#toolCirFil ; polygon tool
-              Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
-            Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
-              Box(sx,sy,mx-MA(0)\lx-sx,my-MA(0)\ly-sy,bp(7))
-              
-          EndSelect
-          
-          StopDrawing()
         EndIf
         
         ; update drawing canvas
@@ -1967,25 +2091,25 @@ Repeat
     Delay(1)
   EndIf
   
-    ExamineKeyboard()
-    
-    ; select colour
-    If KeyboardReleased(#PB_Key_R)
-      updateColSel(-1)
-    EndIf  
-    
-    If KeyboardReleased(#PB_Key_F)
-      updateColSel(1)
-    EndIf  
-    
-    ; select pattern colour (background)
-    If KeyboardReleased(#PB_Key_I)
-      updatepCol(1)
-    EndIf
-    
-    If KeyboardReleased(#PB_Key_J)
-      updatepCol(-1)
-    EndIf   
+;     ExamineKeyboard()
+;     
+;     ; select colour
+;     If KeyboardReleased(#PB_Key_R)
+;       updateColSel(-1)
+;     EndIf  
+;     
+;     If KeyboardReleased(#PB_Key_F)
+;       updateColSel(1)
+;     EndIf  
+;     
+;     ; select pattern colour (background)
+;     If KeyboardReleased(#PB_Key_I)
+;       updatepCol(1)
+;     EndIf
+;     
+;     If KeyboardReleased(#PB_Key_J)
+;       updatepCol(-1)
+;     EndIf   
   
   
 Until Event = #PB_Event_CloseWindow
@@ -2005,11 +2129,11 @@ DataSection
   Data.s "Colour Select"
   Data.w 386,526,262,39
   Data.s "Pattern Select"
-  Data.w 0,524,72,75
+  Data.w 0,524,70,64
   Data.s "Brush Size"
   Data.w 750,60,204,140
   Data.s "Stats"
-  Data.w 72,524,100,52
+  Data.w 152,522,100,52
   Data.s "Selected Pattern"
   Data.w 750,460,44,44
   Data.s "Tool Strip"
@@ -2020,6 +2144,9 @@ DataSection
   Data.w 0,370,586,208
   Data.s "Layers"
   Data.w 750,200,50,238  
+  Data.s "Pattern Edit"
+  Data.w 74,524,66,64  
+  
   
   ; Patterns 0 - 17, format: 4x4 grid
   patternData:
@@ -2220,9 +2347,9 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1174
-; FirstLine = 1152
-; Folding = ------
+; CursorPosition = 866
+; FirstLine = 829
+; Folding = -------
 ; EnableXP
 ; UseIcon = Art-icon.ico
 ; Executable = ART_EXA_PB_013_x86.exe
