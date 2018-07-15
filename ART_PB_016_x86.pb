@@ -9,8 +9,8 @@
 ; ------------------------------------------------------------
 ;
 
-; TODO List
-; * attempt smaller screen footprint by making palette and tools pop in or pop up
+; TODO 16/07/2018
+;1) Ability To draw colour cycles along a straight line Or plot out a cycle.........As they tend To be Not very accurate when I use the mouse
 ; * implement all beeb modes - potentially other 8bit computer formats...
 ; * Partial complete - Flashing colour support
 ; * zoom at cursor
@@ -54,6 +54,36 @@ UsePNGImageDecoder()
 #maxUndo=20
 #SCRNsize=163839 ; screen buffer array size
 #RAWsize=20480
+
+; tool strip constants
+#toolSave=0
+#toolLoad=1
+#toolUndo=2
+#toolRedo=3
+#toolDraw=4
+#toolLine=5
+#toolCirOut=6
+#toolCirFil=7
+#toolBoxOut=8
+#toolBoxFil=9
+#toolFill=10
+#toolGradient=11
+#toolGradHor=12
+#toolGradVer=13
+#toolAniDraw=14
+#toolAnimate=15
+#toolAniPing=16
+#toolAniCycle=17
+#toolTransparent=18
+#toolCLS=19
+#toolBrushBox=20
+#toolBrushRound=21
+#toolBrushSlash=22
+#toolBrushRND=23
+#toolBrush2x=24
+#toolBrushUnused=25
+#toolAniExport=26
+#toolQS=27
 
 ; structures
 Structure MouseArea
@@ -108,23 +138,23 @@ Global pSel.a=8 ; pattern selected
 Global dCol.a=1 ; drawing colour
 Global dTrn.a=1 ; drawing transparency toggle
 Global dWid.a=8 ; drawing width
-Global dSel.a=20; drawing tool selected
-Global dWire.a=0; draw wireframe 
-Global dFil.i=0 ; fill colour
-Global dMdx=160 ; current mode horizontal pixels
-Global dMdy=256 ; current mode vertical pixels
-Global dMpx=#drwW/dMdx   ; current mode horizontal pixel size
-Global dMpy=#drwh/dMdy   ; current mode vertical pixel size
+Global dSel.a=#toolBrushBox; drawing tool selected
+Global dWire.a=0           ; draw wireframe 
+Global dFil.i=0            ; fill colour
+Global dMdx=160            ; current mode horizontal pixels
+Global dMdy=256            ; current mode vertical pixels
+Global dMpx=#drwW/dMdx     ; current mode horizontal pixel size
+Global dMpy=#drwh/dMdy     ; current mode vertical pixel size
 
-Global tCur.a=4 ; tool selected
-Global tTog.a=3 ; tool toggle colour
-Global tQSv.a=0 ; quick save toggle
-Global tSel.a=0 ; new tool select 
-Global gCur.w=0 ; current gadget id
+Global tCur.a=#toolDraw ; tool selected
+Global tTog.a=3         ; tool toggle colour
+Global tQSv.a=0         ; quick save toggle
+Global tSel.a=0         ; new tool select 
+Global gCur.w=0         ; current gadget id
 
 Global maCount.a=10 ; mouse area count 0-n
 Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
-Global fox,foy               ; flashing ox,oy
+Global fox,foy                ; flashing ox,oy
 Global iBeebSCRN, imgToolStrip; image handles
 Global flashing.b=0           ; flashing colour toggle
 Global flashBak=8             ; flashing colour index background
@@ -150,8 +180,8 @@ Global Dim ct(15)             ; colour table look for redrawing main canvas
 Global Dim bpFlash(15)        ; flash palette 0-7 phase 1, 8-15 phase 2
 Global Dim mode.beebModes(6)  ; beeb mode data
 Global Dim MA.MouseArea(maCount) ; mouse area structure array
-Global Dim rawBBC.a(15)       ; raw bbc file format data
-Global Dim revBBC.a(85)       ; reverse lookup bbc file format data
+Global Dim rawBBC.a(15)          ; raw bbc file format data
+Global Dim revBBC.a(85)          ; reverse lookup bbc file format data
 
 Global NewList lUndo.undoArray()
 Global NewList lRedo.undoArray()
@@ -479,9 +509,9 @@ Procedure dCircOut(x1,y1,r)
   r=Abs(r)
   For t=0 To 359
     Select dSel
-      Case 23 ; airbrush
+      Case #toolBrushRND ; airbrush
         drawBrush(px(Int(x1+r*Cos(Radian(t)))),py(Int(y1-r*Sin(Radian(t)))),dWid,2)
-      Case 24 ; standard X2 brush
+      Case #toolBrush2x ; standard X2 brush
         drawBrush(px(Int(x1+r*Cos(Radian(t)))),py(Int(y1-r*Sin(Radian(t)))),dWid,1)
       Default
         drawCircle(x1+r*Cos(Radian(t)),y1-r*Sin(Radian(t)),dWid*2)        
@@ -588,19 +618,19 @@ EndProcedure
 
 ; update colour select value
 Procedure updateColSel(c.b)
-    If StartDrawing(CanvasOutput(0))    
-      drawColSel(dCol,0)
-      dCol-c
-      If dcol=255:dCol=15:EndIf
-      If dcol=16:dCol=0:EndIf
-      drawColSel(dcol,7)
-      updatePalette()
-      StopDrawing()
-    EndIf
-    If StartDrawing(CanvasOutput(1))
-      dBrushSize()
-      StopDrawing()
-    EndIf  
+  If StartDrawing(CanvasOutput(0))    
+    drawColSel(dCol,0)
+    dCol-c
+    If dcol=255:dCol=15:EndIf
+    If dcol=16:dCol=0:EndIf
+    drawColSel(dcol,7)
+    updatePalette()
+    StopDrawing()
+  EndIf
+  If StartDrawing(CanvasOutput(1))
+    dBrushSize()
+    StopDrawing()
+  EndIf  
 EndProcedure
 
 ; update flash colours
@@ -887,8 +917,8 @@ Procedure saveTransparent(filename.s,anim.i)
   FreeImage(imgFinal)
   
 EndProcedure
-          
-  
+
+
 
 ; open save handler
 Procedure openSave(mode)
@@ -995,44 +1025,44 @@ Procedure openSave(mode)
             
             ;check file size
             If FileSize(filename)=#RAWsize
-            ; create temp buffer and fill with file data
-            *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
-            If *MemoryID
-              
-              If ReadFile(0, filename)
-                ReadData(0,*MemoryID,#RAWsize)
-                CloseFile(0)
+              ; create temp buffer and fill with file data
+              *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
+              If *MemoryID
                 
-                x=0
-                y=255
-                
-                For i=0 To #RAWsize-1
-                  a=(PeekB(*MemoryID+i) & 170)>>1
-                  b=PeekB(*MemoryID+i) & 85
+                If ReadFile(0, filename)
+                  ReadData(0,*MemoryID,#RAWsize)
+                  CloseFile(0)
                   
-                  bSCRN(x+y*640)=revBBC(a)
-                  bSCRN(x+1+y*640)=revBBC(b)
+                  x=0
+                  y=255
                   
-                  y-1
-                  If ((y+1)%8)=0
-                    y+8
-                    x+2
-                    If x=160
-                      y-8
-                      x=0
+                  For i=0 To #RAWsize-1
+                    a=(PeekB(*MemoryID+i) & 170)>>1
+                    b=PeekB(*MemoryID+i) & 85
+                    
+                    bSCRN(x+y*640)=revBBC(a)
+                    bSCRN(x+1+y*640)=revBBC(b)
+                    
+                    y-1
+                    If ((y+1)%8)=0
+                      y+8
+                      x+2
+                      If x=160
+                        y-8
+                        x=0
+                      EndIf
                     EndIf
-                  EndIf
-                Next
-
-              Else
-                MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
+                  Next
+                  
+                Else
+                  MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)
+                EndIf
+                FreeMemory(*MemoryID)
               EndIf
-              FreeMemory(*MemoryID)
+            Else
+              MessageRequester(" File Error","ERROR: File must be exactly "+Str(#RAWsize)+" bytes..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)  
             EndIf
-          Else
-          MessageRequester(" File Error","ERROR: File must be exactly "+Str(#RAWsize)+" bytes..." + #CRLF$ + #CRLF$ + filename,#PB_MessageRequester_Error)  
-          EndIf
-          
+            
         EndSelect
         
         ;filename$+""" "+STR$(M{(0)}.mx%)+","+STR$(M{(0)}.my%)+"
@@ -1044,49 +1074,49 @@ Procedure openSave(mode)
             SaveTransparent(filename,0)
             
           Case 1 ; save bbc raw
-              ; create temp buffer and fill with screen data
-              *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
-              If *MemoryID
-                x=0
-                y=255
-                For i=0 To #RAWsize-1
-                  a=rawBBC(bSCRN(x+y*640))<<1
-                  b=rawBBC(bSCRN(x+1+y*640))
-                 ; MessageRequester("TEST",Str(a)+"  "+Str(b))
-                  PokeB(*MemoryID+i, (a | b)) 
-                  y-1
-                  If ((y+1)%8)=0
-                    y+8
-                    x+2
-                    If x=160
-                      y-8
-                      x=0
-                    EndIf
+                 ; create temp buffer and fill with screen data
+            *MemoryID = AllocateMemory(#RAWsize)       ; allocate 20k memory block
+            If *MemoryID
+              x=0
+              y=255
+              For i=0 To #RAWsize-1
+                a=rawBBC(bSCRN(x+y*640))<<1
+                b=rawBBC(bSCRN(x+1+y*640))
+                ; MessageRequester("TEST",Str(a)+"  "+Str(b))
+                PokeB(*MemoryID+i, (a | b)) 
+                y-1
+                If ((y+1)%8)=0
+                  y+8
+                  x+2
+                  If x=160
+                    y-8
+                    x=0
                   EndIf
-                Next
-                
-                ; create file and output temp buffer
-                filename=UCase(filename)
-                If CreateFile(0, filename)
-                  WriteData(0, *MemoryID, #RAWsize)
-                  CloseFile(0)
-                  
-                  ; create INF file
-                  If CreateFile(1, filename+".INF")
-                    WriteString(1, "$."+GetFilePart(filename)+" 003000 000000 005000")
-                    
-                    CloseFile(1)
-                  Else
-                    MessageRequester (" File Error","Cannot create INF file..."+#CRLF$+#CRLF$+filename+".INF",#PB_MessageRequester_Error)
-                  EndIf
-                  
-                Else
-                  MessageRequester (" File Error","Cannot create file..."+#CRLF$+#CRLF$+filename,#PB_MessageRequester_Error)
                 EndIf
-                FreeMemory(*MemoryID)
+              Next
+              
+              ; create file and output temp buffer
+              filename=UCase(filename)
+              If CreateFile(0, filename)
+                WriteData(0, *MemoryID, #RAWsize)
+                CloseFile(0)
+                
+                ; create INF file
+                If CreateFile(1, filename+".INF")
+                  WriteString(1, "$."+GetFilePart(filename)+" 003000 000000 005000")
+                  
+                  CloseFile(1)
+                Else
+                  MessageRequester (" File Error","Cannot create INF file..."+#CRLF$+#CRLF$+filename+".INF",#PB_MessageRequester_Error)
+                EndIf
+                
+              Else
+                MessageRequester (" File Error","Cannot create file..."+#CRLF$+#CRLF$+filename,#PB_MessageRequester_Error)
               EndIf
-
-        
+              FreeMemory(*MemoryID)
+            EndIf
+            
+            
         EndSelect
         
     EndSelect
@@ -1147,7 +1177,7 @@ Procedure saveUndo()
   Next
   
   If ListSize(lUndo())=1
-    addToggle(2,7)
+    addToggle(#toolUndo,7)
   EndIf
   
 EndProcedure
@@ -1161,7 +1191,7 @@ Procedure saveRedo()
     lRedo()\buf[i]=bSCRN(i)
   Next  
   If ListSize(lRedo())=1
-    addToggle(3,7)
+    addToggle(#toolRedo,7)
   EndIf
 EndProcedure
 
@@ -1179,7 +1209,7 @@ Procedure Undo()
     ; discard undo array from list
     DeleteElement(lUndo())
     If ListSize(lUndo())=0
-      addToggle(2,8)
+      addToggle(#toolUndo,8)
     EndIf
   EndIf
 EndProcedure
@@ -1198,7 +1228,7 @@ Procedure Redo()
     DeleteElement(lRedo())
     
     If ListSize(lRedo())=0
-      addToggle(3,8)
+      addToggle(#toolRedo,8)
     EndIf
     
   EndIf
@@ -1333,6 +1363,9 @@ mact=-1
 
 AddWindowTimer(0,0,fSpeed)
 
+
+newSPR(32,32)
+
 ;
 ;-------- Draw controls --------
 ;
@@ -1373,12 +1406,12 @@ If StartDrawing(CanvasOutput(1))
   
   ; draw tools strip and toggle defaults
   DrawImage(ImageID(imgToolStrip),4,2)
-  toolToggle(2,8) ; undo
-  toolToggle(3,8) ; redo
-  toolToggle(tCur,tTog) ; standard
-  toolToggle(18,2)      ; transparency
-  toolToggle(dSel,6)    ; draw style  
-  addToggle(16,(1-animType)*5) ; animation type
+  toolToggle(#toolUndo,8) ; undo
+  toolToggle(#toolRedo,8) ; redo
+  toolToggle(tCur,tTog)   ; standard
+  toolToggle(#toolTransparent,2)      ; transparency
+  toolToggle(dSel,6)                  ; draw style  
+  addToggle(#toolAniPing,(1-animType)*5) ; animation type
   
   ; brush size control
   Circle(MA(3)\lx+33,MA(3)\ly+118,16,bp(6))
@@ -1468,10 +1501,10 @@ Repeat
             If flashCycle=8:animDir=1:EndIf
             
           Case 1
-        
+            
             flashCycle+1
             If flashCycle>15:flashCycle=8:EndIf
-        
+            
         EndSelect
         
         ; update flashing colour pointer
@@ -1510,7 +1543,7 @@ Repeat
                      ; clear redo when new drawing starts
                 If ListSize(lRedo())
                   ClearList(lRedo())
-                  addToggle(3,8)
+                  addToggle(#toolRedo,8)
                 EndIf
                 saveUndo()
                 sx=mx-MA(0)\lx
@@ -1551,7 +1584,7 @@ Repeat
                   If dCol<>i And i>-1 And i<16
                     updateColSel(dCol-i)
                   EndIf
-
+                  
                 Case 3 ; pattern select
                   i=7-((my-MA(2)\ly) / 22)
                   j=((mx-MA(2)\lx) / 32)
@@ -1637,53 +1670,53 @@ Repeat
                   
                   If tSel>-1 And tSel<28
                     Select tSel
-                      Case 0 ; save
+                      Case #toolSave ; save
                         opensave(1)
-                      Case 1 ; load
+                      Case #toolLine ; load
                         opensave(0)
-                      Case 2 ; undo
+                      Case #toolUndo ; undo
                         undo()
-                      Case 3 ; redo
+                      Case #toolRedo ; redo
                         redo()
-                      Case 19; CLS
+                      Case #toolCLS ; CLS
                         saveundo()
                         For i=0 To #SCRNsize
                           bSCRN(i)=0
                         Next
                         
-                      Case 18; toggle transparency
+                      Case #toolTransparent; toggle transparency
                         dTrn=(dTrn+1) % 2
                         addToggle(tSel,dTrn*2)
                         
-                      Case 15 ; animation toggle
+                      Case #toolAnimate ; animation toggle
                         flashAnim=(flashAnim+1) % 2
                         addToggle(tSel,flashAnim*5)
                         
-                      Case 16,17 ; animation type
-                        animType=tSel-16
-                        addToggle(16,(1-animType)*5)
-                        addToggle(17,animType*5)
+                      Case #toolAniPing,#toolAniCycle ; animation type
+                        animType=tSel-#toolAniPing
+                        addToggle(#toolAniPing,(1-animType)*5)
+                        addToggle(#toolAniCycle,animType*5)
                         If flashCycle=8:animDir=1:EndIf
                         If flashCycle=15:animDir=-1:EndIf
                         
-                      Case 20,21,22,23,24 ; brush style
+                      Case #toolBrushBox,#toolBrushRound,#toolBrushSlash,#toolBrushRND,#toolBrush2x ; brush style
                         If tSel<>dSel
                           addToggle(dSel,0)
                           dSel=tSel
                           addToggle(dSel,6)
                         EndIf
                         
-                      Case 26 ; export animation frames
+                      Case #toolAniExport ; export animation frames
                         If exportAnim()=1
                           flashAnim=1
                           animExport=0
                           animType=1
-                          addToggle(16,(1-animType)*5)
-                          addToggle(17,animType*5)
+                          addToggle(#toolAniPing,(1-animType)*5)
+                          addToggle(#toolAniCycle,animType*5)
                           flashCycle=15
                         EndIf  
                         
-                      Case 27 ; quick save toggle
+                      Case #toolQS ; quick save toggle
                         tQSv=(tQSv+1) % 2
                         addToggle(tSel,tQSv*2)
                         
@@ -1733,18 +1766,18 @@ Repeat
               
               ; determine tool being used
               Select tCur
-                Case 4 ; brush tool
+                Case #toolDraw ; brush tool
                   Select dSel
-                    Case 20 ; standard brush
+                    Case #toolBrushBox ; standard brush
                       drawBrush(px(mx),py(my),dWid,0)
-                    Case 21 ; circle brush
+                    Case #toolBrushRound ; circle brush
                       drawCircle(mx,my,dWid*2)
-                    Case 23 ; airbrush
+                    Case #toolBrushRND ; airbrush
                       drawBrush(px(mx),py(my),dWid,2)
-                    Case 24 ; standard X2 brush
+                    Case #toolBrush2x ; standard X2 brush
                       drawBrush(px(mx),py(my),dWid,1)
                   EndSelect
-                Case 10 ; flood fill
+                Case #toolFill ; flood fill
                   i=bSCRN(px(mx)+640*py(my));Point(mx,my)
                   If i<>dFil
                     dFil=i
@@ -1753,7 +1786,7 @@ Repeat
                       StopDrawing()
                     EndIf
                   EndIf
-                Case 14 ; flash draw
+                Case #toolAniDraw ; flash draw
                   flashbrush(px(mx),py(my))
               EndSelect
               dWire=tCur
@@ -1768,26 +1801,24 @@ Repeat
                 Case 1 ; drawing area
                        ; determine tool being used
                   Select tCur
-                    Case 5 ; line tool completion
+                    Case #toolLine ; line tool completion
                       dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
                       
-                    Case 6,7 ; polygon completion
-                      If tCur=6 
-                        dCircOut(sx,sy,Abs(sx-ox))
-                      Else
-                        drawCircle(sx,sy,Abs(sx-ox))
+                    Case #toolCirOut ; polygon completion
+                      dCircOut(sx,sy,Abs(sx-ox))
+                      
+                    Case #toolCirFil
+                      drawCircle(sx,sy,Abs(sx-ox))
+                      
+                    Case #toolGradHor,#toolGradVer  ; boxes, gradient
+                      If sx<>ox And sy<>oy 
+                        dBoxG(sx,sy,ox,oy,tCur-#toolGradHor)
                       EndIf
                       
-                    Case 8,9,12,13  ; boxes, gradient
-                      If tCur>9
-                        If sx<>ox And sy<>oy 
-                          dBoxG(sx,sy,ox,oy,tCur-12)
-                        EndIf
-                      Else
-                        dBox(sx,sy,ox,oy,tCur-8)
-                      EndIf
+                    Case #toolBoxOut,#toolBoxFil ; boxes, gradient
+                      dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
                       
-                    Case 10 ; flood fill
+                    Case #toolFill ; flood fill
                       floodfill(mx,my)
                       
                   EndSelect 
@@ -1878,14 +1909,14 @@ Repeat
     
     If dWire
       Select tCur
-        Case 5 ; line tool
+        Case #toolLine ; line tool
           LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
           
-        Case 6,7 ; polygon tool
+        Case #toolCirOut,#toolCirFil ; polygon tool
           DrawingMode(#PB_2DDrawing_XOr | #PB_2DDrawing_Outlined )
           Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
           DrawingMode(#PB_2DDrawing_Default)
-        Case 8,9,12,13  ; boxes, gradient
+        Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
           drawBox(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
           
       EndSelect
@@ -1929,7 +1960,7 @@ Repeat
     If animExport=8
       animExport=-1
       flashAnim=0
-      addToggle(15,0)
+      addToggle(#toolAnimate,0)
       MessageRequester(" Export Complete","Animation export complete, check output folder for images.",#PB_MessageRequester_Info)
     EndIf
   EndIf      
@@ -2059,8 +2090,7 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 849
-; FirstLine = 826
+; CursorPosition = 23
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe

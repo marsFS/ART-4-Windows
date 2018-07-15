@@ -8,6 +8,26 @@
 ; ------------------------------------------------------------
 ;
 
+; TODO 16/07/2018
+;1) Ability To draw colour cycles along a straight line Or plot out a cycle.........As they tend To be Not very accurate when I use the mouse
+
+;2) Directional Gradient Fills
+
+;3) Ellipses
+
+;4) Ability To lock the cursort horizontall Or vertically ( so you can draw straight lines With ease )
+
+;5) Spray brush - would be nice To be able To alter the flow And maybe more paint centred in the middle / less around the edges
+
+;6) Cut n paste would be very interesting.......
+
+;7) Direction Gradient Fills
+
+;8) Zoom tool? Could be very useful this one......
+
+;9) Also If there was a way of making the brush crosshair thicker And be able To turn it off And on.....I do use it a lot And sometimes would like To turn it off
+
+
 ; png file support
 UsePNGImageEncoder()
 UsePNGImageDecoder()
@@ -113,7 +133,6 @@ Global dAll=1   ; all layers visible flag
 Global dWire.a=0; draw wireframe 
 Global dGRD.a=1 ; draw transparent grid
 Global dSPR.a=0 ; spr drawing mode flag
-Global dSED.a=0 ; editing spr
 
 Global tCur.a=#toolDraw ; tool selected
 Global tTog.a=3 ; tool toggle colour
@@ -829,7 +848,7 @@ EndProcedure
 
 ; draw grid with grid dimensions of BX, BY, assumes startdrawing is initiated
 Procedure drawGrid()
-  Protected sx,sy,lx,ly,gs,dc
+  Protected sx,sy,x1,x2,y1,y2,lx,ly,gs,dc
   
   dc=bp(8)
   
@@ -838,24 +857,34 @@ Procedure drawGrid()
   ; determine center of drawing frame base on box size
   sx=SPR()\sx
   sy=SPR()\sy
-  lx=SPR()\sw
-  ly=SPR()\sh
+  lx=SPR()\sw-1
+  ly=SPR()\sh-1
   
-  ; horizontal grid
+  ; draw first horizontal line and then loop for the remainder
+  x1=MA(0)\lx+sx+gs-1
+  y1=MA(0)\ly+sy
+  y2=MA(0)\ry-sy
+
+  LineXY(MA(0)\lx+sx,y1,MA(0)\lx+sx,y2,dc)
+  
   For x=0 To lx
-    LineXY(sx+x*gs,sy,sx+x*gs,sy+ly*gs,dc)
+    LineXY(x1+x*gs,y1,x1+x*gs,y2,dc)
   Next
   
-  ; vertical grid
+  ; draw first vertical line and then loop for the remainder
+  x1=MA(0)\lx+sx
+  x2=MA(0)\rx-sx
+  y1=MA(0)\ly+sy+gs-1
+  
+  LineXY(x1,MA(0)\ly+sy,x2,MA(0)\ly+sy,dc)
   For y=0 To ly
-    LineXY(sx,sy+y*gs,sx+lx*gs,sy+y*gs,dc)
+    LineXY(x1,y1+y*gs,x2,y1+y*gs,dc)
   Next
   
-  ; spr data
-  For x=0 To lx-1
-    For y=0 To ly-1
-      dc=cusPat(dSED,x+y*8)
-      Box(sx+1+x*gs,sy+1+y*gs,gs-1,gs-1,bp(dc))
+  For x=0 To lx
+    For y=0 To ly
+      dc=cusPat(0,x+y*8)
+      Box(x1+1+x*gs,y1+1+y*gs,gs-1,gs-1,bp(dc))
     Next
   Next
   
@@ -898,22 +927,6 @@ Procedure newSPR(w,h)
  modSPR(w,h)
   
 EndProcedure 
-
-; draw on spr window
-Procedure sprBrush(mx,my)
-  Protected lx,ly
-  
-  lx=(mx-MA(0)\lx-SPR()\sx)
-  ly=(my-MA(0)\ly-SPR()\sy)
-  
-  If lx>-1 And lx< SPR()\gs* SPR()\sw And ly>-1 And ly<SPR()\gs* SPR()\sh 
-    lx / SPR()\gs
-    ly / SPR()\gs
-  If lx>-1 And lx<SPR()\sw And ly>-1 And ly<SPR()\sh
-    cusPat(dSED,lx+ly*SPR()\sw)=dCol
-  EndIf
-  EndIf
-EndProcedure
 
 ; copy screen data to output buffer
 ; l = layer to copy, t = save transparency if <> 0
@@ -1432,7 +1445,7 @@ Next
 
 ; read custom pattern data
 Restore customPatternData
-For i=0 To 17
+For i=0 To 14
   For x=0 To 63
     Read.a cusPat(i,x)
   Next
@@ -1655,82 +1668,60 @@ Repeat
             EndIf
             EndIf
           Next
-          If dSPR=0            
-            Select mact
-                
-              Case 1 ; main drawing canvas - save undo
-                     ; clear redo when new drawing starts
-                If ListSize(dl(dLay)\lRedo())
-                  ClearList(dl(dLay)\lRedo())
-                  addToggle(#toolRedo,8)
-                EndIf
-                saveUndo()
-                sx=mx-MA(0)\lx
-                sy=my-MA(0)\ly
-                ox=sx
-                oy=sy
-              Case 9 ; ignore pattern area if not selected via mouse over hotspot
-                mact=-1
-            EndSelect
-          EndIf
-        
+          
+          Select mact
+            Case 1 ; main drawing canvas - save undo
+                   ; clear redo when new drawing starts
+              If ListSize(dl(dLay)\lRedo())
+                ClearList(dl(dLay)\lRedo())
+                addToggle(#toolRedo,8)
+              EndIf
+              saveUndo()
+              sx=mx-MA(0)\lx
+              sy=my-MA(0)\ly
+              ox=sx
+              oy=sy
+            Case 9 ; ignore pattern area if not selected via mouse over hotspot
+              mact=-1
+          EndSelect
         EndIf
         
         ; do any drawing actions for mouse move
         Select mact
           Case 1 ; main drawing canvas
-            If dSPR
-              sprBrush(mx,my)
-              Select tCur
-                Case #toolDraw ; brush tool
-                  Select dSel
-                    Case #toolBrushBox ; standard brush
-                                       ;dbrush(px(mx),py(my),dWid,0)
-                      ;sprBrush(mx,my)
-                    Case #toolBrushRound ; circle brush
-                      ;dCircle(mx,my,dWid*2)
-                    Case #toolBrushRND ; airbrush
-                      ;dbrush(px(mx),py(my),dWid,2)
-                    Case #toolBrush2x ; standard X2 brush
-                      ;dbrush(px(mx),py(my),dWid,1)
-                  EndSelect
-              EndSelect
-              
-            Else
-              
-              ; determine tool being used
-              Select tCur
-                Case #toolDraw ; brush tool
-                  Select dSel
-                    Case #toolBrushBox ; standard brush
-                      dbrush(px(mx),py(my),dWid,0)
-                    Case #toolBrushRound ; circle brush
-                      dCircle(mx,my,dWid*2)
-                    Case #toolBrushRND ; airbrush
-                      dbrush(px(mx),py(my),dWid,2)
-                    Case #toolBrush2x ; standard X2 brush
-                      dbrush(px(mx),py(my),dWid,1)
-                  EndSelect
-                Case #toolLine,#toolCirOut,#toolCirFil,#toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer
-                  ox=mx-MA(0)\lx
-                  oy=my-MA(0)\ly
-                  
-                Case #toolFill ; flood fill
-                  If range(0)
-                    i=dl(dLay)\SCRN[px(mx)+640*py(my)];Point(mx,my) get pixel colour under cursor
-                                                      ;If i<>dFil                        ; continue if fill colour is not the same as last fill
+            
+            ; determine tool being used
+            Select tCur
+              Case #toolDraw ; brush tool
+                Select dSel
+                  Case #toolBrushBox ; standard brush
+                    dbrush(px(mx),py(my),dWid,0)
+                  Case #toolBrushRound ; circle brush
+                    dCircle(mx,my,dWid*2)
+                  Case #toolBrushRND ; airbrush
+                    dbrush(px(mx),py(my),dWid,2)
+                  Case #toolBrush2x ; standard X2 brush
+                    dbrush(px(mx),py(my),dWid,1)
+                EndSelect
+              Case #toolLine,#toolCirOut,#toolCirFil,#toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer
+                ox=mx-MA(0)\lx
+                oy=my-MA(0)\ly
+                
+              Case #toolFill ; flood fill
+                If range(0)
+                  i=dl(dLay)\SCRN[px(mx)+640*py(my)];Point(mx,my) get pixel colour under cursor
+                  ;If i<>dFil                        ; continue if fill colour is not the same as last fill
                     dFil=i
                     If StartDrawing(CanvasOutput(0)) ; update fill colour box in tool box
                       Box(MA(7)\lx+4,MA(7)\ly+4,MA(7)\rx-MA(7)\lx-7,MA(7)\ry-MA(7)\ly-7,bp(dFil))
                       StopDrawing()
                     EndIf
-                    ;EndIf
-                  EndIf
-              EndSelect
-              dWire=tCur
-              ; *** end drawing tool code
-            EndIf
-          
+                  ;EndIf
+                EndIf
+            EndSelect
+            dWire=tCur
+            ; *** end drawing tool code
+            
           Case 2 ; colour select
             i=(mx-MA(1)\lx) / 32
             If dCol<>i And i>-1 And i<8
@@ -1796,30 +1787,10 @@ Repeat
           Case 1 ; drawing area
             
             If dSPR
-              x=mx-MA(0)\lx
-              y=my-MA(0)\ly
-              If x>199 And x<221 And y>239 And y<277
-                ;left
-                dSED-1
-                If dSED>17 
-                  dSED=17
-                EndIf
-                
+              If SPR()\sh+tSpr>63 Or SPR()\sh+tSpr<2
+                tSpr=-tSpr
               EndIf
-              
-              If x>419 And x<441 And y>239 And y<277
-                ;right
-                dSED+1
-                If dSED>17 
-                  dSED=0
-                EndIf
-              EndIf
-              
-              
-              ;If SPR()\sh+tSpr>63 Or SPR()\sh+tSpr<2
-              ;  tSpr=-tSpr
-              ;EndIf
-              ;modSPR(SPR()\sw+tSpr,SPR()\sh+tSpr)
+              modSPR(SPR()\sw+tSpr,SPR()\sh+tSpr)
             Else
               
               
@@ -1984,15 +1955,6 @@ Repeat
             Box(0,0,640,512,bp(0))
             ;Box(100,100,100,100,bp(1))
             drawGrid()
-            drawbox(200,240,220,276,bp(7))
-            drawbox(420,240,440,276,bp(7))
-            LineXY(218,242,202,258,bp(8))
-            LineXY(218,274,202,258,bp(8))
-            LineXY(422,242,438,258,bp(8))
-            LineXY(422,274,438,258,bp(8))
-            
-            DrawText(300,400,"SPR: "+Str(dSED))
-            
             StopDrawing()
           EndIf
           
@@ -2300,43 +2262,112 @@ DataSection
   
   Data.a 0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1
   
-  
-  
-    Data.a 1,1,1,1,1,1,1,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,1,1,1,1,1,1,1
-  
-    Data.a 0,0,0,0,0,0,0,0
-    Data.a 0,2,2,2,2,2,2,0
-    Data.a 0,2,0,0,0,0,2,0
-    Data.a 0,2,0,0,0,0,2,0
-    Data.a 0,2,0,0,0,0,2,0
-    Data.a 0,2,0,0,0,0,2,0
-    Data.a 0,2,2,2,2,2,2,0
-    Data.a 0,0,0,0,0,0,0,0
-  
-    Data.a 0,0,0,0,0,0,0,0
-    Data.a 0,0,0,0,0,0,0,0
-    Data.a 0,0,3,3,3,3,0,0
-    Data.a 0,0,3,0,0,3,0,0
-    Data.a 0,0,3,0,0,3,0,0
-    Data.a 0,0,3,3,3,3,0,0
-    Data.a 0,0,0,0,0,0,0,0
-    Data.a 0,0,0,0,0,0,0,0
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ; 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
+  ;   Data.a 
   
   
   
 EndDataSection
 
 
-; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 1682
-; FirstLine = 1661
+; IDE Options = PureBasic 5.62 (Windows - x86)
+; CursorPosition = 17
 ; Folding = -------
 ; EnableXP
 ; UseIcon = Art-icon.ico
