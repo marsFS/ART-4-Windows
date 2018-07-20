@@ -1529,7 +1529,7 @@ imgFinal=CreateImage(#PB_Any,640,512,32)
 imgGRD=CreateImage(#PB_Any,640,512,32)
 
 ; init screen gadget and initial state
-CanvasGadget(0,0,0,#scrW,#scrH)
+CanvasGadget(0,0,0,#scrW,#scrH,#PB_Canvas_Keyboard)
 SetGadgetAttribute(0, #PB_Canvas_Cursor , #PB_Cursor_Cross)
 mact=-1
 
@@ -1636,7 +1636,9 @@ Repeat
   
   If event
     
+    ; ensure event is triggered from ART
     If Event = #PB_Event_Gadget And EventGadget() = 0 
+      
       ; read mouse
       mx = GetGadgetAttribute(0, #PB_Canvas_MouseX)
       my = GetGadgetAttribute(0, #PB_Canvas_MouseY)
@@ -2069,10 +2071,10 @@ Repeat
       EndIf 
       
       
-      If mact<>9
+      If mact<>9 ; skip screen update if palette is visible
         
         Select dDSP
-            ;-------- Update Paining Screen
+            ;-------- Update Painting Screen
           Case 0 ; picture drawing mode
             
             ; clear output buffer
@@ -2253,6 +2255,36 @@ Repeat
               DrawText(20,20,"ART for EXA (c) FourthStone")
               DrawText(20,40,"What's needed here is a fancy title, dimensions 636 x 100 (hint hint) ;-)")
               
+              ; help panel
+              drawbox(500,128,636,264,bp(8))
+              DrawText(508,120,"Hot Keys",bp(7))
+              For i=0 To 5
+                If i<4
+                  x=0
+                Else
+                  x=20
+                EndIf
+                DrawText(522+x,140+i*20,":",bp(2))
+              Next
+              
+              DrawText(508,140,"R",bp(7))
+              DrawText(532,140,"Colour Up",bp(7))
+              
+              DrawText(508,160,"F",bp(7))
+              DrawText(532,160,"Colour Down",bp(7))
+              
+              DrawText(508,180,"I",bp(7))
+              DrawText(532,180,"Pattern Up",bp(7))
+              
+              DrawText(508,200,"J",bp(7))
+              DrawText(532,200,"Pattern Up",bp(7))
+              
+              DrawText(508,220,"Shift",bp(7))
+              DrawText(552,220,"Horz Line",bp(7))
+              
+              DrawText(508,240,"Ctrl",bp(7))
+              DrawText(552,240,"Vert Line",bp(7))
+              
               ; cross hair options
               drawbox(MO(0)\lx-8,MO(0)\ly-12,MO(0)\lx+100,MO(0)\ly+124,bp(8))
               DrawText(MO(0)\lx,MO(0)\ly-20,"Cross Hair",bp(7))
@@ -2297,12 +2329,12 @@ Repeat
           
         EndIf
         
-      EndIf
+      EndIf ; skip screen update if palette is visible
       
-    EndIf
+    EndIf ; ensure event is triggered from ART
     
   Else
-    Delay(1)
+    Delay(1) ; do nothing if event is not ours
   EndIf
   
     ExamineKeyboard()
@@ -2455,75 +2487,21 @@ DataSection
   Data.a 5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0,5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0,5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0,5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0
   Data.a 6,6,6,6,6,6,6,6,0,0,0,0,0,0,0,0,6,6,6,6,6,6,6,6,0,0,0,0,0,0,0,0,6,6,6,6,6,6,6,6,0,0,0,0,0,0,0,0,6,6,6,6,6,6,6,6,0,0,0,0,0,0,0,0
   Data.a 7,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0,7,7,7,7,7,7,7,7,0,0,0,0,0,0,0,0
-  
-  Data.a 4,0,4,0,4,0,4,0
-  Data.a 4,0,4,0,4,0,4,0
-  Data.a 4,0,4,0,4,0,4,0
-  Data.a 4,0,4,0,4,0,4,0
-  Data.a 4,0,4,0,4,0,4,0
-  Data.a 4,0,4,0,4,0,4,0
-  Data.a 4,0,4,0,4,0,4,0
-  Data.a 4,0,4,0,4,0,4,0
-  
-  Data.a 3,3,3,3,1,1,1,1
-  Data.a 1,1,1,1,3,3,3,3
-  Data.a 3,3,3,3,1,1,1,1
-  Data.a 1,1,1,1,3,3,3,3
-  Data.a 3,3,3,3,1,1,1,1
-  Data.a 1,1,1,1,3,3,3,3
-  Data.a 3,3,3,3,1,1,1,1
-  Data.a 1,1,1,1,3,3,3,3
-  
-  Data.a 0,3,3,3,0,3,3,0
-  Data.a 3,0,0,0,3,0,0,3
-  Data.a 3,0,6,0,3,0,6,3
-  Data.a 3,0,0,0,3,0,0,3
-  Data.a 0,3,3,3,0,3,3,0
-  Data.a 0,0,0,0,0,0,0,0
-  Data.a 0,0,0,0,0,0,0,0
-  Data.a 0,0,0,0,0,0,0,0
-  
+  Data.a 4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0,4,0
+  Data.a 3,3,3,3,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,1,1,1,1,1,1,1,1,3,3,3,3
+  Data.a 0,3,3,3,0,3,3,0,3,0,0,0,3,0,0,3,3,0,6,0,3,0,6,3,3,0,0,0,3,0,0,3,0,3,3,3,0,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   Data.a 0,1,2,3,4,5,6,7,0,0,0,0,0,0,0,0,1,2,3,4,5,6,7,0,0,0,0,0,0,0,0,0,2,3,4,5,6,7,0,1,0,0,0,0,0,0,0,0,3,4,5,6,7,0,1,2,0,0,0,0,0,0,0,0
-  
   Data.a 0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,1
-  
-  
-  
-    Data.a 1,1,1,1,1,1,1,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,0,0,0,0,0,0,1
-    Data.a 1,1,1,1,1,1,1,1
-  
-    Data.a 0,0,0,0,0,0,0,0
-    Data.a 0,2,2,2,2,2,2,0
-    Data.a 0,2,0,0,0,0,2,0
-    Data.a 0,2,0,0,0,0,2,0
-    Data.a 0,2,0,0,0,0,2,0
-    Data.a 0,2,0,0,0,0,2,0
-    Data.a 0,2,2,2,2,2,2,0
-    Data.a 0,0,0,0,0,0,0,0
-  
-    Data.a 0,0,0,0,0,0,0,0
-    Data.a 0,0,0,0,0,0,0,0
-    Data.a 0,0,3,3,3,3,0,0
-    Data.a 0,0,3,0,0,3,0,0
-    Data.a 0,0,3,0,0,3,0,0
-    Data.a 0,0,3,3,3,3,0,0
-    Data.a 0,0,0,0,0,0,0,0
-    Data.a 0,0,0,0,0,0,0,0
-  
-  
+  Data.a 1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1
+  Data.a 0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,0,0,2,0,0,0,0,2,0,0,2,0,0,0,0,2,0,0,2,0,0,0,0,2,0,0,2,0,0,0,0,2,0,0,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0
+  Data.a 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,0,0,0,0,3,0,0,3,0,0,0,0,3,0,0,3,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   
 EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 2238
-; FirstLine = 2212
+; CursorPosition = 2488
+; FirstLine = 2452
 ; Folding = -------
 ; EnableXP
 ; UseIcon = Art-icon.ico

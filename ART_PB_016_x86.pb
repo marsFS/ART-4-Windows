@@ -1364,7 +1364,7 @@ mact=-1
 AddWindowTimer(0,0,fSpeed)
 
 
-newSPR(32,32)
+;newSPR(32,32)
 
 ;
 ;-------- Draw controls --------
@@ -2090,7 +2090,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 23
+; CursorPosition = 1366
+; FirstLine = 1362
 ; Folding = ------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
