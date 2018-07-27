@@ -153,7 +153,9 @@ Global tCur.a=#toolDraw ; tool selected
 Global tTog.a=3 ; tool toggle colour
 Global tQSA.a=0 ; quick save all toggle
 Global tQSC.a=0 ; quick save current toggle                  
-Global tSel.a=0 ; new tool select 
+Global tSel.a=0 ; new tool select
+Global tHi=-1  ; tool highlight
+Global tOld=-1 ; old tool highlight
 Global tLIF.a=0 ; load image flag
 
 Global oCrossHair.a=0 ; cross hair option flag
@@ -1882,6 +1884,40 @@ Repeat
             EndIf
             
           Case 7 ; tool area
+            ; draw highlight box to indicate current menu option
+            x=(mx-MA(6)\lx) / 50
+            y=(my-MA(6)\ly) / 50
+            If x<0: x=0: EndIf
+            If x>1: x=1: EndIf
+            If y<0: y=0: EndIf
+            If y>10: y=10: EndIf
+            
+            tHi=x+y*2
+            
+            If tOld<>tHi
+              If StartDrawing(CanvasOutput(0))
+                DrawingMode(#PB_2DDrawing_XOr+#PB_2DDrawing_Outlined)
+                
+                x=MA(6)\lx+(tHi % 2)*50+4
+                y=MA(6)\ly+(tHi/2)*50+4
+                
+                Box(x,y,42,42,bp(1))
+                
+                If tOld>-1
+                  x=MA(6)\lx+(tOld % 2)*50+4
+                  y=MA(6)\ly+(tOld/2)*50+4
+                  
+                  Box(x,y,42,42,bp(1))
+                  
+                EndIf
+                
+                tOld=tHi               
+                
+                StopDrawing()
+              EndIf           
+            EndIf
+          
+            ; draw overlay menu
             If imgOverlay\img=0
               getBackground(700,200,50,200,imgOverlay)
             EndIf
@@ -1989,13 +2025,37 @@ Repeat
             
           Case 7 ; tool select
             
+            ; replace overlay menu
             If imgOverlay\img
               putBackground(imgOverlay)
             EndIf
             
+            ; remove old highlight
+            If tOld<>-1
+              If StartDrawing(CanvasOutput(0))
+                DrawingMode(#PB_2DDrawing_XOr+#PB_2DDrawing_Outlined)
+                
+                x=MA(6)\lx+(tOld % 2)*50+4
+                y=MA(6)\ly+(tOld/2)*50+4
+                  
+                Box(x,y,42,42,bp(1))
+                
+                tOld=-1
+                
+                StopDrawing()
+              EndIf           
+            EndIf      
+            
             
             ; get button of tool clicked And action
-            tSel=(mx-MA(6)\lx) / 50+((my-MA(6)\ly) / 50)*2
+            x=(mx-MA(6)\lx) / 50
+            y=(my-MA(6)\ly) / 50
+            If x<0: x=0: EndIf
+            If x>1: x=1: EndIf
+            If y<0: y=0: EndIf
+            If y>10: y=10: EndIf
+            
+            tSel=x+y*2
             
             If tSel>-1 And tSel<22
               Select tSel
@@ -2556,8 +2616,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1890
-; FirstLine = 1856
+; CursorPosition = 1919
+; FirstLine = 1882
 ; Folding = --------
 ; EnableXP
 ; UseIcon = Art-icon.ico
