@@ -70,14 +70,38 @@ UsePNGImageDecoder()
 #toolBrush2x=20
 #toolTransparent=21
 
+; mouse area list index constants
+#MA_Drawing=0
+#MA_ColSel=1
+#MA_PatternShow=2
+#MA_BrushSize=3
+#MA_Stats=4
+#MA_SelectedPat=5
+#MA_ToolStrip=6
+#MA_FillCol=7
+#MA_PatSel=8
+#MA_Layers=9
+#MA_SpriteShow=10
+#MA_OptionShow=11
+
+#MA_OptThin=12
+#MA_OptThick=13
+#MA_OptPixel=14
+#MA_OptOff1=15
+#MA_OptGuide=16
+
+
 ; structures
 Structure MouseArea
-  lx.w
-  ly.w
-  rx.w
-  ry.w
-  name.s
-  img.a
+  lx.w      ; left edge x (top left)
+  ly.w      ; left edge y (top left)
+  rx.w      ; right edge x
+  ry.w      ; right edge y
+  w.w       ; width rx-lx-1
+  h.w       ; height ry-ly-1
+  active.w  ; is mouse area active, used for dynamic menus
+  name.s    ; identifier
+  img.a     
 EndStructure
 
 Structure fillStack
@@ -161,7 +185,7 @@ Global tLIF.a=0 ; load image flag
 Global oCrossHair.a=0 ; cross hair option flag
 Global oMouseGuide.a=1 ; mouse guide option flag
 
-Global mx,my,ox,oy,sx,sy,mact ; mouse x,y,action
+Global mx,my,dx,dy,px,py,ox,oy,sx,sy,mact ; mouse x,y,action
 Global imgToolStrip, imgToolStrip2, imgFinal, imgGRD; image handles
 Global savePattern=0          ; save file pattern selector
 Global loadPattern=0          ; load file pattern selector
@@ -172,7 +196,7 @@ Global Dim SCRNout.a(#SCRNsize) ; final output buffer
 
 Global Dim pat.a(17,15) ; drawing patterns
 Global Dim bp(16)       ; beeb palette
-Global Dim MA.MouseArea(#maApp) ; mouse area structure array for main app
+;Global Dim MA.MouseArea(#maApp) ; mouse area structure array for main app
 Global Dim MO.MouseArea(#maOpt) ; mouse area structure array for options page
 
 Global Dim rgbT.rgbTable(16)     ; rgb lookup table
@@ -182,11 +206,15 @@ Global Dim revBBC.a(85)          ; reverse lookup bbc file format data
 Global Dim curPat.a(15,15)       ; current drawing pattern colour matrix
 Global Dim cusPat.a(17,63)       ; custom pattern array, 18 tiles of 8x8 colour data
 
+; lists
+Global NewList MA.MouseArea()
+
 Global NewList lToggle.togglelist()
 
 Global NewList lFS.fillStack()
 
 Global NewList SPR.spriteOBJ()
+
 
 ; Exit program and display a message
 Procedure Exit_ART(m.s)
@@ -197,37 +225,68 @@ Procedure Exit_ART(m.s)
   End
 EndProcedure
 
-; set pixel coords For relative To draw window
-Procedure px(x)
-  ProcedureReturn (x-MA(0)\lx) / dMpx
+; select mouse area by name
+Procedure findMA(n.s)
+  If n<>MA()\name
+    ResetList(MA())
+    
+    ; find MA with name matching
+    While NextElement(MA())
+      If MA()\name = n
+        Break
+      EndIf
+    Wend 
+  EndIf
 EndProcedure
-Procedure py(y)
-  ProcedureReturn 255-((y-MA(0)\ly) / dMpy)
+
+; select mouse area by index
+Procedure selectMA(i.i)
+  If i<>ListIndex(MA())
+    SelectElement(MA(),i)
+  EndIf
+EndProcedure
+
+
+; set pixel coords For relative To draw window
+Procedure setP(x,y)
+  selectMA(#MA_Drawing)
+  px=(x-MA()\lx) / dMpx
+  py=255-((y-MA()\ly) / dMpy)
+  ;py=(y-MA()\ly) / dMpy
+EndProcedure
+
+Procedure px1(x)
+  ProcedureReturn (x-MA()\lx) / dMpx
+EndProcedure
+Procedure py1(y)
+  ProcedureReturn 255-((y-MA()\ly) / dMpy)
 EndProcedure
 
 ; display program stats
 Procedure showstats()
-  Protected x,y
+  Protected x
   x=30
+  setP(mx,my)
   
-  Box(MA(4)\lx+x,MA(4)\ly,44,48,bp(0))
-  Box(MA(4)\lx+x+76,MA(4)\ly,44,48,bp(0))
-  ;Box(MA(4)\lx+x+160,MA(4)\ly,44,48,bp(0))
-  ;Box(MA(4)\lx+x+240,MA(4)\ly,44,32,bp(0))
+  selectMA(#MA_Stats)
   
-  DrawText(MA(4)\lx+x,MA(4)\ly,Str(mx))
-  DrawText(MA(4)\lx+x,MA(4)\ly+16,Str(my))
-  DrawText(MA(4)\lx+x,MA(4)\ly+32,Str(mact))
-  ;DrawText(MA(4)\lx+x,MA(4)\ly+32,Str(tCur))
+  Box(MA()\lx+x,MA()\ly,44,48,bp(0))
+  Box(MA()\lx+x+76,MA()\ly,44,48,bp(0))
+  ;Box(MA()\lx+x+160,MA()\ly,44,48,bp(0))
+  ;Box(MA()\lx+x+240,MA()\ly,44,32,bp(0))
   
-  DrawText(MA(4)\lx+x+76,MA(4)\ly,Str(px(mx)))
-  DrawText(MA(4)\lx+x+76,MA(4)\ly+16,Str(py(my)))
-  DrawText(MA(4)\lx+x+76,MA(4)\ly+32,Str(dWid))
-  ;DrawText(MA(4)\lx+x+80,MA(4)\ly+32,Str(tSel))
+  DrawText(MA()\lx+x,MA()\ly,Str(mx))
+  DrawText(MA()\lx+x,MA()\ly+16,Str(my))
+  DrawText(MA()\lx+x,MA()\ly+32,Str(mact))
+  ;DrawText(MA()\lx+x,MA()\ly+32,Str(tCur))
   
-  
-  ;DrawText(MA(4)\lx+x+160,MA(4)\ly,Str(dWid))
-  ;DrawText(MA(4)\lx+x+160,MA(4)\ly+16,Str(mact))
+  DrawText(MA()\lx+x+76,MA()\ly,Str(px))
+  DrawText(MA()\lx+x+76,MA()\ly+16,Str(py))
+  DrawText(MA()\lx+x+76,MA()\ly+32,Str(dWid))
+  ;DrawText(MA()\lx+x+80,MA()\ly+32,Str(tSel))
+    
+  ;DrawText(MA()\lx+x+160,MA()\ly,Str(dWid))
+  ;DrawText(MA()\lx+x+160,MA()\ly+16,Str(mact))
   
 EndProcedure
 
@@ -243,7 +302,9 @@ EndProcedure
 ; check if mouse is in range of mouse area object, return '1' if in range
 Procedure rangeApp(i)
   Protected r.a=0
-  If mx>=MA(i)\lx And mx<=MA(i)\rx And my>=MA(i)\ly And my<=MA(i)\ry
+  
+  selectMA(i)
+  If mx>=MA()\lx And mx<=MA()\rx And my>=MA()\ly And my<=MA()\ry
     r=1
   EndIf
   ProcedureReturn r
@@ -336,7 +397,7 @@ Procedure dBrushSPR(dx,dy,w,d,oP)
   
 EndProcedure
 
-; Draw box with current brush
+; update current pattern template
 Procedure updateBrush()
   Protected px,py,lx,ly,dc,ps,s
   
@@ -393,6 +454,7 @@ Procedure updateBrush()
   
   
   ;draw pattern loop
+  selectMA(#MA_SelectedPat)
   For lx=0 To 8
     For ly=0 To 17
       px=lx % 16
@@ -402,26 +464,26 @@ Procedure updateBrush()
       Else
         dc=curPat(px,py)
       EndIf
-      Box(MA(5)\lx+lx*4+4,MA(5)\ly+ly*2+4,4,2,bp(dc))
+      Box(MA()\lx+lx*4+4,MA()\ly+ly*2+4,4,2,bp(dc))
     Next
   Next
   
-  ;dBrushSize()
 EndProcedure
 
 ; update palette, assumes startdrawing is already active
 Procedure updatePalette()
   Protected i,p,x,dc,p1,p2,i1,i2,xd,yd
   
+  selectMA(#MA_PatSel)
   dc=bp(1)
   For i=0 To 8          ; colour loop 0 = bottom - 7 = top
                         ; preset plot positions
-    i1=MA(8)\ly+182-i*22
-    i2=MA(8)\ly+190-i*22
+    i1=MA()\ly+182-i*22
+    i2=MA()\ly+190-i*22
     For p=0 To 17       ; pattern number loop left to right
                         ; preset plot positions
-      p1=MA(8)\lx+4+p*32
-      p2=MA(8)\lx+20+p*32
+      p1=MA()\lx+4+p*32
+      p2=MA()\lx+20+p*32
       If i<8            ; branch for custom patterns
         For x=0 To 15   ; pattern element loop, draws four pixels per element
           xd=(x % 4)*4
@@ -450,10 +512,11 @@ Procedure updatePalette()
     Next      
   Next
   
+  ; highlight selected pattern and update selected brush size pattern
+  Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(7))
+  
   updateBrush()
   
-  ; highlight selected pattern and update selected brush size pattern
-  Box(MA(8)\lx+pSel*32+4,MA(8)\ry-11-pCol*22+4,32,2,bp(7))
   
 EndProcedure
 
@@ -508,8 +571,15 @@ Procedure dLine(x1,y1,x2,y2)
   Protected e2,err,dWh
   
   ; get pixel coords For line
-  x1=px(x1) : y1=py(y1)
-  x2=px(x2) : y2=py(y2)
+;   setP(x1,y1)
+;   x1=px : y1=py
+;   
+;   setP(x2,y2)
+;   x2=px : y2=py
+  
+  
+  x1=px1(x1) : y1=py1(y1)
+  x2=px1(x2) : y2=py1(y2)
   
   ; determine which vector To use For err
   dx=Abs(x2-x1)
@@ -545,15 +615,21 @@ EndProcedure
 
 ; circle drawing brush
 Procedure dCircle(x1,y1,r)
-  Protected r2,dy,x
+  Protected r2,dy,x,px1,px2,py1,py2
   
   r=Abs(r)
   r2=r*r
   
   For x=r To 0 Step -2
     dy=Sqr(r2-x*x)
-    Vline2(px(x1-x),py(Int(y1-dy)),py(Int(y1+dy)))
-    Vline2(px(x1+x),py(Int(y1-dy)),py(Int(y1+dy)))
+    setP(x1-x,Int(y1-dy))
+    px1=px : py1=py
+  
+    setP(x1+x,Int(y1+dy))
+    px2=px : py2=py  
+
+    Vline2(px1,py1,py2)
+    Vline2(px2,py1,py2)
   Next
   
 EndProcedure  
@@ -566,9 +642,11 @@ Procedure dCircOut(x1,y1,r)
   For t=0 To 359
     Select dSel
       Case #toolBrushRND ; airbrush
-        dBrush(px(Int(x1+r*Cos(Radian(t)))),py(Int(y1-r*Sin(Radian(t)))),dWid,2)
+        setP(Int(x1+r*Cos(Radian(t))),Int(y1-r*Sin(Radian(t))))        
+        dBrush(px,py,dWid,2)
       Case #toolBrush2x ; standard X2 brush
-        dBrush(px(Int(x1+r*Cos(Radian(t)))),py(Int(y1-r*Sin(Radian(t)))),dWid,1)
+        setP(Int(x1+r*Cos(Radian(t))),Int(y1-r*Sin(Radian(t))))
+        dBrush(px,py,dWid,1)
       Default
         dCircle(x1+r*Cos(Radian(t)),y1-r*Sin(Radian(t)),dWid*2)
     EndSelect
@@ -578,8 +656,11 @@ EndProcedure
 
 ; box draw
 Procedure dBox(x1,y1,x2,y2,f)
-  x1=px(x1) : y1=py(y1)
-  x2=px(x2) : y2=py(y2)
+  setP(x1,y1)
+  x1=px : y1=py
+  
+  setP(x2,y2)
+  x2=px : y2=py  
   
   Protected lx
   
@@ -605,8 +686,11 @@ EndProcedure
 
 ; box draw gradient, dWid=0 horizontal, dWid=1 vertical
 Procedure dBoxG(x1,y1,x2,y2,d)
-  x1=px(x1) : y1=py(y1)
-  x2=px(x2) : y2=py(y2)
+  setP(x1,y1)
+  x1=px : y1=py
+  
+  setP(x2,y2)
+  x2=px : y2=py
   
   Protected lx,ly,dc,gR.f,gRd.f,gAdd.f,dv
   
@@ -671,9 +755,10 @@ EndProcedure
 
 ; draw highlight box for colour selector
 Procedure drawColSel(oldDC,newDC)
-  drawBox(MA(1)\lx+2+oldDC*32,MA(1)\ly+3,MA(1)\lx+33+oldDC*32,MA(1)\ly+34,bp(0))
+  selectMA(#MA_ColSel)
+  drawBox(MA()\lx+2+oldDC*32,MA()\ly+3,MA()\lx+33+oldDC*32,MA()\ly+34,bp(0))
   dCol=newDC
-  drawBox(MA(1)\lx+2+dCol*32,MA(1)\ly+3,MA(1)\lx+33+dCol*32,MA(1)\ly+34,bp(7))
+  drawBox(MA()\lx+2+dCol*32,MA()\ly+3,MA()\lx+33+dCol*32,MA()\ly+34,bp(7))
 EndProcedure
 
 ; update colour select value
@@ -685,7 +770,7 @@ Procedure updateColSel(c.b)
     dCol-c
     If dcol=255:dCol=7:EndIf
     If dcol=8:dCol=0:EndIf
-    If mact<>9  
+    If mact<>#MA_PatSel  
       drawColSel(oldC,dCol)
       updateBrush()
     Else
@@ -699,13 +784,15 @@ EndProcedure
 
 ; redraw colour select
 Procedure resetColSel()
-  Box(MA(1)\lx,MA(1)\ly,MA(1)\rx-MA(1)\lx,MA(1)\ry-MA(1)\ly,bp(0))
+  selectMA(#MA_ColSel)
+  
+  Box(MA()\lx,MA()\ly,MA()\rx-MA()\lx,MA()\ry-MA()\ly,bp(0))
   For i=1 To 7
-    Box(MA(1)\lx+4+i*32,MA(1)\ly+5,28,28,bp(i))
+    Box(MA()\lx+4+i*32,MA()\ly+5,28,28,bp(i))
   Next  
   
-  drawBox(MA(1)\lx,MA(1)\ly,MA(1)\rx,MA(1)\ry,bp(7))
-  drawBox(MA(1)\lx+1,MA(1)\ly+1,MA(1)\rx-1,MA(1)\ry-1,bp(8))
+  drawBox(MA()\lx,MA()\ly,MA()\rx,MA()\ry,bp(7))
+  drawBox(MA()\lx+1,MA()\ly+1,MA()\rx-1,MA()\ry-1,bp(8))
   
   drawColSel(dCol,dCol)
 EndProcedure
@@ -720,11 +807,10 @@ Procedure updatepCol(c.b)
     If pCol=8:pCol=0:EndIf
     If pCol=255:pCol=7:EndIf
     
-    If mact=9
-      ;Box(MA(8)\lx+pSel*32+4,MA(8)\ly+174-oldP*22+4,32,2,bp(0))
-      Box(MA(8)\lx+pSel*32+4,MA(8)\ry-11-oldP*22+4,32,2,bp(0))
-      ;Box(MA(8)\lx+pSel*32+4,MA(8)\ly+174-pCol*22+4,32,2,bp(7))
-      Box(MA(8)\lx+pSel*32+4,MA(8)\ry-11-pCol*22+4,32,2,bp(7))
+    If mact=#MA_PatSel
+      selectMA(#MA_PatSel)
+      Box(MA()\lx+pSel*32+4,MA()\ry-11-oldP*22+4,32,2,bp(0))
+      Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(7))
     EndIf
     
     updateBrush()
@@ -736,10 +822,12 @@ EndProcedure
 Procedure updateLayers()
   Protected t.s, h.a
   
-  Box(MA(9)\lx,MA(9)\ly+20,MA(9)\rx-MA(9)\lx,MA(9)\ry-MA(9)\ly-20,bp(0))
+  selectMA(#MA_Layers)
+  
+  Box(MA()\lx,MA()\ly+20,MA()\rx-MA()\lx,MA()\ry-MA()\ly-20,bp(0))
   
   For i=0 To ArraySize(dl())+2
-    drawbox(MA(9)\lx+20,MA(9)\ly+20+i*32,MA(9)\lx+44,MA(9)\ly+44+i*32,bp(7))
+    drawbox(MA()\lx+20,MA()\ly+20+i*32,MA()\lx+44,MA()\ly+44+i*32,bp(7))
     
     If i=ArraySize(dl())+1
       t="A"
@@ -753,15 +841,15 @@ Procedure updateLayers()
     EndIf
     
     If i=dLay
-      Box(MA(9)\lx,MA(9)\ly+20+i*32,16,24,bp(1))
+      Box(MA()\lx,MA()\ly+20+i*32,16,24,bp(1))
     EndIf
     
     If h
-      Box(MA(9)\lx+23,MA(9)\ly+23+i*32,19,19,bp(2))
+      Box(MA()\lx+23,MA()\ly+23+i*32,19,19,bp(2))
     EndIf
     
     DrawingMode(#PB_2DDrawing_Transparent)
-    DrawText(MA(9)\lx+4,MA(9)\ly+24+i*32,t,bp(7))
+    DrawText(MA()\lx+4,MA()\ly+24+i*32,t,bp(7))
     DrawingMode(#PB_2DDrawing_Default)
   Next
   
@@ -769,11 +857,9 @@ EndProcedure
 
 ; flood fill With current pattern
 Procedure floodFill(sx,sy)
+  setP(sx,sy)
   
-  sx=px(sx)
-  sy=py(sy)
-  
-  If (sx)>-1 And (sx)<dMdx And (sy)>-1 And (sy)<dMdy
+  If (px)>-1 And (px)<dMdx And (py)>-1 And (py)<dMdy
     
     Protected uf,df,c,x,y,mc,dc,i,fp
     
@@ -788,7 +874,7 @@ Procedure floodFill(sx,sy)
     For i=0 To 1
       ; store start x,y on stack
       AddElement(lFS())
-      lFS()\x=sx : lFS()\y=sy
+      lFS()\x=px : lFS()\y=py
       
       ; loop until no fill elements in fill stack (list)
       Repeat
@@ -854,8 +940,10 @@ Procedure toolToggle(i,c)
   
   ; default or erase button colour is 7
   If c=0: c=7: EndIf
-  x=MA(6)\lx+(i % 2)*50+4
-  y=MA(6)\ly+(i/2)*50+4
+  
+  selectMA(#MA_ToolStrip)
+  x=MA()\lx+(i % 2)*50+4
+  y=MA()\ly+(i/2)*50+4
   
   ; scan icon and update non black areas to new colour
   If x>-1 And (x+41)<#scrW And y>-1 And (y+41)<#scrH
@@ -954,8 +1042,9 @@ EndProcedure
 Procedure sprBrush(mx,my)
   Protected lx,ly
   
-  lx=(mx-MA(0)\lx-SPR()\sx)
-  ly=(my-MA(0)\ly-SPR()\sy)
+  selectMA(#MA_Drawing)
+  lx=(mx-MA()\lx-SPR()\sx)
+  ly=(my-MA()\ly-SPR()\sy)
   
   If lx>-1 And lx< SPR()\gs* SPR()\sw And ly>-1 And ly<SPR()\gs* SPR()\sh 
     lx / SPR()\gs
@@ -1541,15 +1630,22 @@ Next
 
 ; mouse area / tool location list - main application
 Restore mouseData
-For i=0 To #maApp
-  Read.s MA(i)\name
-  Read.w MA(i)\lx
-  Read.w MA(i)\ly
-  Read.w x
-  Read.w y
-  MA(i)\rx=MA(i)\lx+x-1
-  MA(i)\ry=MA(i)\ly+y-1
-Next
+
+Repeat
+  Read.s tName.s
+  If tName<>"DATAEND"
+    AddElement(MA())
+    MA()\name=tName
+    Read.w MA()\lx
+    Read.w MA()\ly
+    Read.w MA()\w
+    Read.w MA()\h
+    Read.w MA()\active
+    MA()\rx=MA()\lx+MA()\w-1
+    MA()\ry=MA()\ly+MA()\h-1
+  EndIf
+Until tName="DATAEND" 
+
 
 ; mouse area / tool location list - Options page
 Restore optionsData
@@ -1608,17 +1704,20 @@ If StartDrawing(CanvasOutput(0))
   ; clear canvas to black
   Box(0,0,#scrW,#scrH,bp(0))
   
-  ; main canvas double border
-  drawBox(MA(0)\lx-4,MA(0)\ly-4,MA(0)\rx+4,MA(0)\ry+4,bp(7))
-  drawBox(MA(0)\lx-3,MA(0)\ly-3,MA(0)\rx+3,MA(0)\ry+3,bp(7))
+  ; main canvas double border and grid pattern
+  selectMA(#MA_Drawing)
+  drawBox(MA()\lx-4,MA()\ly-4,MA()\rx+4,MA()\ry+4,bp(7))
+  drawBox(MA()\lx-3,MA()\ly-3,MA()\rx+3,MA()\ry+3,bp(7))
+  DrawImage(ImageID(imgGRD),MA()\lx,MA()\ly)
   
   ; pattern select border
+  selectMA(#MA_ToolStrip)
   DrawingFont(FontID(tFont))
-  DrawText(MA(6)\lx+4,0,"EXA ART",bp(1))
+  DrawText(MA()\lx+4,0,"EXA ART",bp(1))
   DrawingFont(#PB_Default)
   
   ; draw tools strip and toggle defaults
-  DrawImage(ImageID(imgToolStrip),MA(6)\lx,MA(6)\ly)
+  DrawImage(ImageID(imgToolStrip),MA()\lx,MA()\ly)
   DrawImage(ImageID(imgToolStrip2),0,524)
   toolToggle(#toolUndo,8) ; undo
   toolToggle(#toolRedo,8) ; redo
@@ -1626,20 +1725,17 @@ If StartDrawing(CanvasOutput(0))
   toolToggle(#toolTransparent,2)      ; transparency
   toolToggle(dSel,6)    ; draw style  
   
-  ; initialise drawing area with layer 0
-  ;DrawImage(ImageID(imgFinal),MA(0)\lx,MA(0)\ly)
-  DrawImage(ImageID(imgGRD),MA(0)\lx,MA(0)\ly)
-  
   ; brush size control
-  Circle(MA(3)\lx+33,MA(3)\ly+118,16,bp(6))
-  Circle(MA(3)\lx+33,MA(3)\ly+84,12,bp(6))
-  Circle(MA(3)\lx+33,MA(3)\ly+55,10,bp(6))
-  Circle(MA(3)\lx+33,MA(3)\ly+33,7,bp(6))
-  Circle(MA(3)\lx+33,MA(3)\ly+13,5,bp(6))
-  Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(7))
+  selectMA(#MA_BrushSize)
+  Circle(MA()\lx+33,MA()\ly+118,16,bp(6))
+  Circle(MA()\lx+33,MA()\ly+84,12,bp(6))
+  Circle(MA()\lx+33,MA()\ly+55,10,bp(6))
+  Circle(MA()\lx+33,MA()\ly+33,7,bp(6))
+  Circle(MA()\lx+33,MA()\ly+13,5,bp(6))
+  Circle(MA()\lx+6,MA()\ly+dWid*4+6,4,bp(7))
   
-  DrawText(MA(3)\lx+4,MA(3)\ly-36,"Brush",bp(7))
-  DrawText(MA(3)\lx+8,MA(3)\ly-20,"Size",bp(7))
+  DrawText(MA()\lx+4,MA()\ly-36,"Brush",bp(7))
+  DrawText(MA()\lx+8,MA()\ly-20,"Size",bp(7))
   
   updateBrush()
   
@@ -1647,33 +1743,35 @@ If StartDrawing(CanvasOutput(0))
   resetColSel()
   
   ; stats area
-  DrawText(MA(4)\lx,MA(4)\ly,"mX:")
-  DrawText(MA(4)\lx,MA(4)\ly+16,"mY:")
-  DrawText(MA(4)\lx,MA(4)\ly+32,"mA:")
-  ;DrawText(MA(4)\lx,MA(4)\ly+32,"CT:")
-  DrawText(MA(4)\lx+76,MA(4)\ly,"pX:")
-  DrawText(MA(4)\lx+76,MA(4)\ly+16,"pY:")
-  DrawText(MA(4)\lx+76,MA(4)\ly+32,"dW:")
-  ;DrawText(MA(4)\lx+80,MA(4)\ly+32,"TS:")
-  ;DrawText(MA(4)\lx+160,MA(4)\ly,"dW:")
-  ;DrawText(MA(4)\lx+160,MA(4)\ly+16,"mA:")
+  selectMA(#MA_Stats)
+  DrawText(MA()\lx,MA()\ly,"mX:")
+  DrawText(MA()\lx,MA()\ly+16,"mY:")
+  DrawText(MA()\lx,MA()\ly+32,"mA:")
+  ;DrawText(MA()\lx,MA()\ly+32,"CT:")
+  DrawText(MA()\lx+76,MA()\ly,"pX:")
+  DrawText(MA()\lx+76,MA()\ly+16,"pY:")
+  DrawText(MA()\lx+76,MA()\ly+32,"dW:")
+  ;DrawText(MA()\lx+80,MA()\ly+32,"TS:")
+  ;DrawText(MA()\lx+160,MA()\ly,"dW:")
+  ;DrawText(MA()\lx+160,MA()\ly+16,"mA:")
   
   
+  selectMA(#MA_SelectedPat)
+  DrawText(MA()\lx,MA()\ly-20,"Pat",bp(7))
+  drawBox(MA()\lx,MA()\ly,MA()\rx,MA()\ry,bp(7))
   
-  DrawText(MA(5)\lx,MA(5)\ly-20,"Pat",bp(7))
-  drawBox(MA(5)\lx,MA(5)\ly,MA(5)\rx,MA(5)\ry,bp(7))
-  
-  DrawText(MA(7)\lx,MA(7)\ly-20,"Fill",bp(7))
-  drawBox(MA(7)\lx,MA(7)\ly,MA(7)\rx,MA(7)\ry,bp(7))
-  
-  DrawText(MA(9)\lx+4,MA(9)\ly,"Layer",bp(7))
+  selectMA(#MA_FillCol)
+  DrawText(MA()\lx,MA()\ly-20,"Fill",bp(7))
+  drawBox(MA()\lx,MA()\ly,MA()\rx,MA()\ry,bp(7))
   
   updateLayers()
+  DrawText(MA()\lx+4,MA()\ly,"Layer",bp(7))
   
   ; enable for debugging mouse area squares
-;   For i=0 To #maApp
-;     drawBox(MA(i)\lx,MA(i)\ly,MA(i)\rx,MA(i)\ry,bp((i % 7)+1))
-;   Next  
+;   ResetList(MA())
+;   While NextElement(MA())
+;     drawBox(MA()\lx,MA()\ly,MA()\rx,MA()\ry,bp((ListIndex(MA()) % 7)+1))
+;   Wend
   
   StopDrawing()
 EndIf
@@ -1694,9 +1792,14 @@ Repeat
       mx = GetGadgetAttribute(0, #PB_Canvas_MouseX)
       my = GetGadgetAttribute(0, #PB_Canvas_MouseY)
       
+      ; get relative drawing coords of mouse
+      selectMA(#MA_Drawing)
+      dx = mx - MA()\lx
+      dy = my - MA()\ly
+      
       ; handle menu hide if mouse up or out of range
-      If mact=9 
-        If EventType()=#PB_EventType_LeftButtonUp Or (rangeApp(8)=0 And (GetGadgetAttribute(0, #PB_Canvas_Buttons)=0))
+      If mact=#MA_PatSel 
+        If EventType()=#PB_EventType_LeftButtonUp Or (rangeApp(#MA_PatSel)=0 And (GetGadgetAttribute(0, #PB_Canvas_Buttons)=0))
           mact=-1
           If imgOverlay\img
             putBackground(imgOverlay)
@@ -1713,7 +1816,7 @@ Repeat
         
         ; change cursor if needed
         x=GetGadgetAttribute(0, #PB_Canvas_Cursor)
-        If rangeApp(0) And mact<>9 And dDSP=0
+        If rangeApp(#MA_Drawing) And mact<>#MA_PatSel And dDSP=0
           If x<>#PB_Cursor_Invisible
             SetGadgetAttribute(0, #PB_Canvas_Cursor , #PB_Cursor_Invisible)
           EndIf
@@ -1723,15 +1826,14 @@ Repeat
           EndIf
         EndIf
         
-        ; check if mouse is in pattern area and draw pattern manu overlay
+        ; check if mouse is in pattern area and draw pattern menu overlay
         If mact=-1
-          If rangeApp(2)=1
-            mact=9
-            getBackground(MA(8)\lx,MA(8)\ly,MA(8)\rx-MA(8)\lx,MA(8)\ry-MA(8)\ly,imgOverlay)
+          If rangeApp(#MA_PatternShow)
+            mact=#MA_PatSel
+            selectMA(#MA_PatSel)
+            getBackground(MA()\lx,MA()\ly,MA()\w,MA()\h,imgOverlay)
             
             If StartDrawing(CanvasOutput(0))
-              ;Box(MA(8)\lx,MA(8)\ly,MA(8)\rx-MA(8)\lx-1,MA(8)\ry-MA(8)\ly-1,bp(0))
-              ;drawBox(MA(8)\lx+1,MA(8)\ly+1,MA(8)\rx-3,MA(8)\ry-3,bp(7))
               updatePalette()
               StopDrawing()
             EndIf
@@ -1746,32 +1848,35 @@ Repeat
         If mact=-1 And tLIF=0
           
           ; set default action to none and check mouse area ranges to select current mouse area
-          mact=0
-          For i=0 To #maApp
-            If i<>8 ; skip pattern area as handled elsewhere
-              If rangeApp(i)=1
-                mact=i+1
-                Break
-              EndIf
+          mact=99
+          i=0
+          ResetList(MA())
+          
+          ; range find MA
+          While NextElement(MA())
+            If MA()\active And mx>=MA()\lx And mx<=MA()\rx And my>=MA()\ly And my<=MA()\ry
+              mact=i
+              Break
             EndIf
-          Next
+            i+1
+          Wend
           
           ; if drawing on main painting canvas then save an undo before drawing begins
           If dDSP=0            
             Select mact
                 
-              Case 1 ; main drawing canvas - save undo
+              Case #MA_Drawing ; main drawing canvas - save undo
                      ; clear redo when new drawing starts
                 If ListSize(dl(dLay)\lRedo())
                   ClearList(dl(dLay)\lRedo())
                   addToggle(#toolRedo,8)
                 EndIf
                 saveUndo()
-                sx=mx-MA(0)\lx
-                sy=my-MA(0)\ly
+                sx=dx
+                sy=dy
                 ox=sx
                 oy=sy
-              Case 9 ; ignore pattern area if not selected via mouse over hotspot
+              Case #MA_PatSel ; ignore pattern area if not selected via mouse over hotspot
                 mact=-1
             EndSelect
           EndIf
@@ -1780,34 +1885,40 @@ Repeat
         
         ; do any drawing actions for mouse move
         Select mact
-          Case 1 ; main drawing canvas
+          Case #MA_Drawing ; main drawing canvas
             Select dDSP
               Case 0 ; standard painting mode
+                
+                setP(mx,my)
                 
                 ; determine tool being used
                 Select tCur
                   Case #toolDraw ; brush tool
                     Select dSel
                       Case #toolBrushBox ; standard brush
-                        dbrush(px(mx),py(my),dWid,0)
+                        ;dbrush(px,py,dWid,0)
+                        
+                        selectMA(#MA_Drawing)
+                        dLine(mx,my,ox+MA()\lx,oy+MA()\ly)
                       Case #toolBrushRound ; circle brush
                         dCircle(mx,my,dWid*2)
                       Case #toolBrushRND ; airbrush
-                        dbrush(px(mx),py(my),dWid,2)
+                        dbrush(px,py,dWid,2)
                       Case #toolBrush2x ; standard X2 brush
-                        dbrush(px(mx),py(my),dWid,1)
+                        dbrush(px,py,dWid,1)
                     EndSelect
                   Case #toolLine,#toolCirOut,#toolCirFil,#toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer
-                    ox=mx-MA(0)\lx
-                    oy=my-MA(0)\ly
+                
+
                     
                   Case #toolFill ; flood fill
-                    If rangeApp(0)
-                      i=dl(dLay)\SCRN[px(mx)+640*py(my)];Point(mx,my) get pixel colour under cursor
+                    If rangeApp(#MA_Drawing)
+                      i=dl(dLay)\SCRN[px+640*py];Point(mx,my) get pixel colour under cursor
                                                         ;If i<>dFil                        ; continue if fill colour is not the same as last fill
                       dFil=i
                       If StartDrawing(CanvasOutput(0)) ; update fill colour box in tool box
-                        Box(MA(7)\lx+4,MA(7)\ly+4,MA(7)\rx-MA(7)\lx-7,MA(7)\ry-MA(7)\ly-7,bp(dFil))
+                        selectMA(#MA_FillCol)
+                        Box(MA()\lx+4,MA()\ly+4,MA()\rx-MA()\lx-7,MA()\ry-MA()\ly-7,bp(dFil))
                         StopDrawing()
                       EndIf
                       ;EndIf
@@ -1815,6 +1926,8 @@ Repeat
                 EndSelect
                 
                 dWire=tCur
+                ox=dx
+                oy=dy
                 ; *** end drawing tool code
                 
               Case 1 ; sprite drawing mode
@@ -1835,11 +1948,8 @@ Repeat
                 EndSelect
                 
               Case 2 ; options screen
-                x=mx-MA(0)\lx
-                y=my-MA(0)\ly
-                
                 For i=0 To #maOpt
-                  If rangeOpt(i,x,y)
+                  If rangeOpt(i,dx,dy)
                     Select i
                       Case 0,1,2,3
                         oCrossHair=i
@@ -1857,8 +1967,9 @@ Repeat
                 Next                
             EndSelect
           
-          Case 2 ; colour select
-            i=(mx-MA(1)\lx) / 32
+          Case #MA_ColSel ; colour select
+            selectMA(#MA_ColSel)
+            i=(mx-MA()\lx) / 32
             If dCol<>i And i>-1 And i<8
               If StartDrawing(CanvasOutput(0))    
                 drawColSel(dCol,i)
@@ -1867,15 +1978,15 @@ Repeat
               EndIf
             EndIf
             
-          Case 4 ; brush size
-            s=(my-MA(3)\ly-4) / 4
+          Case #MA_BrushSize ; brush size
+            SelectMA(#MA_BrushSize)
+            s=(my-MA()\ly-4) / 4
             If s<>dWid And s>-1 And s<33
               
               ; update brush size indicator
               If StartDrawing(CanvasOutput(0))
                 For i=0 To 1
-                  Circle(MA(3)\lx+6,MA(3)\ly+dWid*4+6,4,bp(i*7))
-                  ;Circle(MA(3)\lx+60,MA(3)\ly+dWid*4+6,4,bp(i*7))
+                  Circle(MA()\lx+6,MA()\ly+dWid*4+6,4,bp(i*7))
                   dWid=s
                 Next
                 ;dBrushSize()
@@ -1883,10 +1994,11 @@ Repeat
               EndIf
             EndIf
             
-          Case 7 ; tool area
+          Case #MA_ToolStrip ; tool area
             ; draw highlight box to indicate current menu option
-            x=(mx-MA(6)\lx) / 50
-            y=(my-MA(6)\ly) / 50
+            selectMA(#MA_ToolStrip)
+            x=(mx-MA()\lx) / 50
+            y=(my-MA()\ly) / 50
             If x<0: x=0: EndIf
             If x>1: x=1: EndIf
             If y<0: y=0: EndIf
@@ -1898,14 +2010,14 @@ Repeat
               If StartDrawing(CanvasOutput(0))
                 DrawingMode(#PB_2DDrawing_XOr+#PB_2DDrawing_Outlined)
                 
-                x=MA(6)\lx+(tHi % 2)*50+4
-                y=MA(6)\ly+(tHi/2)*50+4
+                x=MA()\lx+(tHi % 2)*50+4
+                y=MA()\ly+(tHi/2)*50+4
                 
                 Box(x,y,42,42,bp(1))
                 
                 If tOld>-1
-                  x=MA(6)\lx+(tOld % 2)*50+4
-                  y=MA(6)\ly+(tOld/2)*50+4
+                  x=MA()\lx+(tOld % 2)*50+4
+                  y=MA()\ly+(tOld/2)*50+4
                   
                   Box(x,y,42,42,bp(1))
                   
@@ -1922,28 +2034,27 @@ Repeat
               getBackground(700,200,50,200,imgOverlay)
             EndIf
                       
-          Case 9 ; pattern select2 - old palette select is mact=3
-            i=8-((my-MA(8)\ly-4) / 22)
-            j=((mx-MA(8)\lx-4) / 32)
+          Case #MA_PatSel ; pattern select2
+            selectMA(#MA_PatSel)
+            i=8-((my-MA()\ly-4) / 22)
+            j=((mx-MA()\lx-4) / 32)
             If i<0: i=0: EndIf
             If i>8: i=8: EndIf
             If j<0: j=0: EndIf
             If j>17: j=17: EndIf
             If pCol<>i Or pSel<>j
               If StartDrawing(CanvasOutput(0))              
-                Box(MA(8)\lx+pSel*32+4,MA(8)\ry-11-pCol*22+4,32,2,bp(0))
+                ; highlight selected pattern and update selected brush size pattern
+                Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(0))
                 pCol=i
                 pSel=j
+                Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(7))
                 
                 updateBrush()
-                ; highlight selected pattern and update selected brush size pattern
-                Box(MA(8)\lx+pSel*32+4,MA(8)\ry-11-pCol*22+4,32,2,bp(7))
                 
                 StopDrawing()
               EndIf
             EndIf
-            
-
             
         EndSelect
       EndIf
@@ -1961,7 +2072,7 @@ Repeat
         
         ; do any mouse up actions such as tools and pattern select
         Select mact
-          Case 1 ; drawing area
+          Case #MA_Drawing ; drawing area
             
             Select dDSP
               Case 0 ; standard painting mode
@@ -1970,15 +2081,17 @@ Repeat
                 Select tCur
                   Case #tooldraw
                     If dsel=#toolBrushSPR
-                      dBrushSPR(px(mx),py(my),dWid,0,0)
+                      setP(mx,my)
+                      dBrushSPR(px,py,dWid,0,0)
                     EndIf                
                   Case #toolLine ; line tool completion
+                    selectMA(#MA_Drawing)
                     If dShift ; horizontal
-                      dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,sy+MA(0)\ly)
+                      dLine(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,sy+MA()\ly)
                     ElseIf dCtrl ; vertical
-                      dLine(sx+MA(0)\lx,sy+MA(0)\ly,sx+MA(0)\lx,oy+MA(0)\ly)
+                      dLine(sx+MA()\lx,sy+MA()\ly,sx+MA()\lx,oy+MA()\ly)
                     Else ; any direction
-                      dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
+                      dLine(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,oy+MA()\ly)
                     EndIf
                     
                   Case #toolCirOut ; polygon completion
@@ -1996,14 +2109,13 @@ Repeat
                     EndIf
                     
                   Case #toolFill ; flood fill
-                    floodfill(mx-MA(0)\lx,my-MA(0)\ly)
-                EndSelect 
+                    selectMA(#MA_Drawing)
+                    floodfill(mx-MA()\lx,my-MA()\ly)
+                EndSelect
                 
               Case 1 ; sprite editor mode
                 
-                x=mx-MA(0)\lx
-                y=my-MA(0)\ly
-                If x>199 And x<221 And y>239 And y<277
+                If dx>199 And dx<221 And dy>239 And dy<277
                   ;left
                   dSED-1
                   If dSED>17 
@@ -2012,7 +2124,7 @@ Repeat
                   
                 EndIf
                 
-                If x>419 And x<441 And y>239 And y<277
+                If dx>419 And dx<441 And dy>239 And dy<277
                   ;right
                   dSED+1
                   If dSED>17 
@@ -2023,20 +2135,23 @@ Repeat
                 
             EndSelect
             
-          Case 7 ; tool select
+          Case #MA_ToolStrip ; tool select
             
             ; replace overlay menu
             If imgOverlay\img
               putBackground(imgOverlay)
             EndIf
             
+            selectMA(#MA_ToolStrip)
+            
             ; remove old highlight
             If tOld<>-1
               If StartDrawing(CanvasOutput(0))
                 DrawingMode(#PB_2DDrawing_XOr+#PB_2DDrawing_Outlined)
                 
-                x=MA(6)\lx+(tOld % 2)*50+4
-                y=MA(6)\ly+(tOld/2)*50+4
+                
+                x=MA()\lx+(tOld % 2)*50+4
+                y=MA()\ly+(tOld/2)*50+4
                   
                 Box(x,y,42,42,bp(1))
                 
@@ -2048,8 +2163,8 @@ Repeat
             
             
             ; get button of tool clicked And action
-            x=(mx-MA(6)\lx) / 50
-            y=(my-MA(6)\ly) / 50
+            x=(mx-MA()\lx) / 50
+            y=(my-MA()\ly) / 50
             If x<0: x=0: EndIf
             If x>1: x=1: EndIf
             If y<0: y=0: EndIf
@@ -2112,11 +2227,12 @@ Repeat
               EndSelect
             EndIf
             
-          Case 10 ; layers
-            i=(my-MA(9)\ly-20) / 32
+          Case #MA_Layers ; layers
+            selectMA(#MA_Layers)
+            i=(my-MA()\ly-20) / 32
             If i<0:i=0:EndIf
             If i>6:i=6:EndIf
-            If mx-MA(9)\lx<23 ; select layer
+            If mx-MA()\lx<23 ; select layer
               If i<5 And i<>dLay
                 dlay=i
               EndIf
@@ -2163,13 +2279,13 @@ Repeat
               addToggle(#toolUndo,7)
             EndIf
             
-          Case 11 ; set spr drawing flag
+          Case #MA_SpriteShow ; set spr drawing flag
             If dDSP<>1
               dDSP=1
             Else
               dDSP=0
             EndIf
-          Case 12 ; set options flag
+          Case #MA_OptionShow ; set options flag
             If dDSP<>2
               dDSP=2
             Else
@@ -2187,7 +2303,7 @@ Repeat
       EndIf 
       
       
-      If mact<>9 ; skip screen update if palette is visible
+      If mact<>#MA_PatSel ; skip screen update if palette is visible
         
         Select dDSP
             ;-------- Update Painting Screen
@@ -2258,24 +2374,25 @@ Repeat
               DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
               
               ; draw cross hair
-              If rangeApp(0)
+              If rangeApp(#MA_Drawing)
+                selectMA(#MA_Drawing)
                 Select oCrossHair
                   Case 0 ; thin
-                    LineXY(mx-4,MA(0)\ly-4,mx-4,MA(0)\ry,RGB(63,63,63))
-                    LineXY(MA(0)\lx-4,my-4,MA(0)\rx,my-4,RGB(63,63,63))
+                    LineXY(mx-4,MA()\ly-4,mx-4,MA()\ry,RGB(63,63,63))
+                    LineXY(MA()\lx-4,my-4,MA()\rx,my-4,RGB(63,63,63))
                   Case 1 ; thick
                     For x=-1 To 1
-                      LineXY(mx-4+x,MA(0)\ly-4,mx-4+x,MA(0)\ry,RGB(63,63,63))
-                      LineXY(MA(0)\lx-4,my-4+x,MA(0)\rx,my-4+x,RGB(63,63,63))
+                      LineXY(mx-4+x,MA()\ly-4,mx-4+x,MA()\ry,RGB(63,63,63))
+                      LineXY(MA()\lx-4,my-4+x,MA()\rx,my-4+x,RGB(63,63,63))
                     Next
                   Case 2 ; pixel
                     x=((mx-4) / 4)*4
                     y=((my-4) / 2)*2
                     
                     For i=0 To 3
-                      LineXY(x+i,MA(0)\ly-4,x+i,MA(0)\ry,RGB(63,63,63))
+                      LineXY(x+i,MA()\ly-4,x+i,MA()\ry,RGB(63,63,63))
                       If i<2
-                        LineXY(MA(0)\lx-4,y+i,MA(0)\rx,y+i,RGB(63,63,63))
+                        LineXY(MA()\lx-4,y+i,MA()\rx,y+i,RGB(63,63,63))
                       EndIf
                     Next
                 EndSelect
@@ -2287,8 +2404,8 @@ Repeat
                   Case #toolDraw,#toolLine ; brush and line draw
                     If dwid>3
                       ; drawsize guide
-                      x=(mx-MA(0)\lx) / dMpx-dWid / 2
-                      y=((my-MA(0)\ly) / dMpy)-dWid
+                      x=dx / dMpx-dWid / 2
+                      y=dy / dMpy-dWid
                       x2=(x+dWid)*4
                       y2=(y+dWid*2)*2
                       x*4
@@ -2306,15 +2423,14 @@ Repeat
                       LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
                       LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
                     Else
-                      x=mx-MA(0)\lx
-                      y=my-MA(0)\ly
-                      Circle(x,y,10,bp(2))
+                      Circle(dx,dy,10,bp(2))
                     EndIf
                     
                     ; draw sprite
                     If tcur=#toolDraw And dSel=#toolBrushSPR
+                      setP(mx,my)
                       DrawingMode(#PB_2DDrawing_Default)
-                      dBrushSPR(px(mx),py(my),dWid,0,1)
+                      dBrushSPR(px,py,dWid,0,1)
                       DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)
                     EndIf
                 EndSelect
@@ -2324,21 +2440,21 @@ Repeat
               Select dWire
                 Case #toolLine   ; line tool
                   If dShift      ; horizontal
-                    LineXY(sx,sy,mx-MA(0)\lx,sy,bp(7))                    
+                    LineXY(sx,sy,dx,sy,bp(7))                    
                   ElseIf dCtrl ; vertical
-                    LineXY(sx,sy,sx,my-MA(0)\ly,bp(7))
+                    LineXY(sx,sy,sx,dy,bp(7))
                   Else ; any direction
-                    LineXY(sx,sy,mx-MA(0)\lx,my-MA(0)\ly,bp(7))
+                    LineXY(sx,sy,dx,dy,bp(7))
                   EndIf
                   
                   
                 Case #toolCirOut,#toolCirFil ; polygon tool
-                  Circle(sx,sy,Abs(sx-(mx-MA(0)\lx)),bp(7))
+                  Circle(sx,sy,Abs(sx-dx),bp(7))
                 Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
                   If dShift
-                    Box(sx,sy,mx-MA(0)\lx-sx,mx-MA(0)\lx-sx,bp(7))
+                    Box(sx,sy,dx-sx,dx-sx,bp(7))
                   Else
-                    Box(sx,sy,mx-MA(0)\lx-sx,my-MA(0)\ly-sy,bp(7))
+                    Box(sx,sy,dx-sx,dy-sy,bp(7))
                   EndIf
               EndSelect
               
@@ -2429,7 +2545,8 @@ Repeat
         If StartDrawing(CanvasOutput(0))
           
           ; update drawing area and stats
-          DrawImage(ImageID(imgFinal),MA(0)\lx,MA(0)\ly)
+          selectMA(#MA_Drawing)
+          DrawImage(ImageID(imgFinal),MA()\lx,MA()\ly)
           
           showstats()
           
@@ -2498,33 +2615,52 @@ End
 
 DataSection
   
-  ; mouse area Data
+  ; mouse area Data (left x,y) (w,h)
   ; ensure to update maCount index to match number of mouse areas
   mouseData:
-  Data.s "Drawing Area"
-  Data.w 4,4,640,512
-  Data.s "Colour Select"
-  Data.w 386,526,262,39
-  Data.s "Pattern Select"
-  Data.w 0,524,70,64
-  Data.s "Brush Size"
-  Data.w 750,60,204,140
-  Data.s "Stats"
-  Data.w 232,522,152,52
-  Data.s "Selected Pattern"
-  Data.w 750,460,44,44
-  Data.s "Tool Strip"
-  Data.w 648,24,100,550
-  Data.s "Fill Colour"
-  Data.w 750,526,44,44
-  Data.s "Pattern Select2"
-  Data.w 0,370,586,208
-  Data.s "Layers"
-  Data.w 750,200,50,238  
-  Data.s "Pattern Edit"
-  Data.w 74,524,66,64  
-  Data.s "Options Edit"
-  Data.w 144,524,66,64  
+  Data.s "MA_Drawing"
+  Data.w 4,4,640,512,1
+  Data.s "MA_ColSel"
+  Data.w 386,526,262,39,1
+  Data.s "MA_PatternShow"
+  Data.w 0,524,70,64,1
+  Data.s "MA_BrushSize"
+  Data.w 750,60,204,140,1
+  Data.s "MA_Stats"
+  Data.w 232,522,152,52,0
+  Data.s "MA_SelectedPat"
+  Data.w 750,460,44,44,0
+  Data.s "MA_ToolStrip"
+  Data.w 648,24,100,550,1
+  Data.s "MA_FillCol"
+  Data.w 750,526,44,44,0
+  Data.s "MA_PatSel"
+  Data.w 0,370,586,208,0
+  Data.s "MA_Layers"
+  Data.w 750,200,50,238,1 
+  Data.s "MA_SpriteShow"
+  Data.w 74,524,66,64,1
+  Data.s "MA_OptionShow"
+  Data.w 144,524,66,64,1
+  
+  ; options screen
+  Data.s "MA_OptThin"
+  Data.w 20,140,20,20,0
+  Data.s "MA_OptThick"
+  Data.w 20,164,20,20,0
+  Data.s "MA_OptPixel"
+  Data.w 20,188,20,20,0
+  Data.s "MA_OptOff"
+  Data.w 20,212,20,20,0
+  Data.s "MA_OptGuide"
+  Data.w 20,236,20,20,0
+  
+  ; sprite screen
+  ;...
+  
+  
+  ; this entry flags the end of the mouse area data
+  Data.s "DATAEND"
   
   ; options view mouse area data
   optionsData:
@@ -2616,8 +2752,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1919
-; FirstLine = 1882
+; CursorPosition = 1901
+; FirstLine = 1875
 ; Folding = --------
 ; EnableXP
 ; UseIcon = Art-icon.ico
