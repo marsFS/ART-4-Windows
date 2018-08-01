@@ -735,6 +735,89 @@ Procedure flashBrush(dx,dy)
   
 EndProcedure
 
+; line drawing with flashing colours - single pixel
+Procedure dLineFlash(x1,y1,x2,y2)
+  
+  Protected dx,dy,sx,sy
+  Protected e2,err
+  
+  ; get pixel coords For line
+  x1=px(x1) : y1=py(y1)
+  x2=px(x2) : y2=py(y2)
+  
+  ; determine which vector To use For err
+  dx=Abs(x2-x1)
+  dy=Abs(y2-y1)
+  If x1<x2 : sx=1 : Else : sx=-1 : EndIf
+  If y1<y2 : sy=1 : Else : sy=-1 : EndIf
+  err=dx-dy
+  
+  ; draw line loop
+  Repeat
+    If x1>-1 And x1<dMdx And y1>-1 And y1<dMdy
+      bSCRN(y1*640+x1)=flashCol
+    EndIf      
+    flashCol+1
+    If flashCol>15
+      flashCol=8
+    EndIf    
+    If x1=x2 And y1=y2 : Break: EndIf
+    e2=2 * err
+    If e2>-dy
+      err-dy
+      x1+sx
+    EndIf
+    If e2<dx
+      err+dx
+      y1+sy
+    EndIf
+    If x1<-dWid Or x1>dMdx+dWid : Break : EndIf
+    If y1<-dWid Or y1>dMdy+dWid : Break : EndIf
+    
+  Until 0
+EndProcedure
+
+; circle drawing with flashing colours - single pixel
+Procedure dCircOutFlash(x1,y1,r)
+  Protected t,x2,y2,ox,oy
+  
+  r=Abs(r)
+  For t=0 To 359
+    x2=px(x1+r*Cos(Radian(t)))
+    y2=py(y1-r*Sin(Radian(t)))
+    
+    If x2<>ox Or y2<>oy
+      
+      If x2>-1 And x2<dMdx And y2>-1 And y2<dMdy
+        bSCRN(y2*640+x2)=flashCol
+      EndIf
+      
+      flashCol+1
+      If flashCol>15
+        flashCol=8
+      EndIf
+    EndIf
+    
+    ox=x2
+    oy=y2
+    
+  Next
+
+EndProcedure
+
+; box drawing with flashing colours - single pixel
+Procedure dBoxFlash(x1,y1,x2,y2)
+  If x1>x2:Swap x1,x2:EndIf
+  If y1>y2:Swap y1,y2:EndIf
+
+  dLineFlash(x1,y1,x1,y2)
+  dLineFlash(x1+4,y2,x2,y2)
+  dLineFlash(x2,y2-2,x2,y1)
+  dLineFlash(x2-4,y1,x1,y1)
+  
+EndProcedure
+
+
 ; flood fill With current pattern
 Procedure floodFill(sx,sy)
   
@@ -1672,7 +1755,7 @@ Repeat
                     Select tSel
                       Case #toolSave ; save
                         opensave(1)
-                      Case #toolLine ; load
+                      Case #toolLoad ; load
                         opensave(0)
                       Case #toolUndo ; undo
                         undo()
@@ -1699,7 +1782,7 @@ Repeat
                         If flashCycle=8:animDir=1:EndIf
                         If flashCycle=15:animDir=-1:EndIf
                         
-                      Case #toolBrushBox,#toolBrushRound,#toolBrushSlash,#toolBrushRND,#toolBrush2x ; brush style
+                      Case #toolBrushBox,#toolBrushRound,#toolBrushSlash,#toolBrushRND,#toolBrush2x,#toolAniDraw ; brush style
                         If tSel<>dSel
                           addToggle(dSel,0)
                           dSel=tSel
@@ -1760,22 +1843,21 @@ Repeat
             
             If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
               
-              ox=mx-MA(0)\lx
-              oy=my-MA(0)\ly
-              
-              
               ; determine tool being used
               Select tCur
                 Case #toolDraw ; brush tool
                   Select dSel
                     Case #toolBrushBox ; standard brush
-                      drawBrush(px(mx),py(my),dWid,0)
+                                       ;drawBrush(px(mx),py(my),dWid,0)
+                      dLine(mx,my,ox+MA(0)\lx,oy+MA(0)\ly)
                     Case #toolBrushRound ; circle brush
                       drawCircle(mx,my,dWid*2)
                     Case #toolBrushRND ; airbrush
                       drawBrush(px(mx),py(my),dWid,2)
                     Case #toolBrush2x ; standard X2 brush
                       drawBrush(px(mx),py(my),dWid,1)
+                    Case #toolAniDraw
+                      flashbrush(px(mx),py(my))
                   EndSelect
                 Case #toolFill ; flood fill
                   i=bSCRN(px(mx)+640*py(my));Point(mx,my)
@@ -1786,10 +1868,12 @@ Repeat
                       StopDrawing()
                     EndIf
                   EndIf
-                Case #toolAniDraw ; flash draw
-                  flashbrush(px(mx),py(my))
+
               EndSelect
               dWire=tCur
+              ox=mx-MA(0)\lx
+              oy=my-MA(0)\ly
+              
               ; *** end drawing tool code
             EndIf
             
@@ -1802,11 +1886,20 @@ Repeat
                        ; determine tool being used
                   Select tCur
                     Case #toolLine ; line tool completion
-                      dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
+                      Select dSel
+                        Case #toolAniDraw
+                          dLineFlash(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
+                        Default
+                          dLine(sx+MA(0)\lx,sy+MA(0)\ly,ox+MA(0)\lx,oy+MA(0)\ly)
+                      EndSelect
                       
                     Case #toolCirOut ; polygon completion
-                      dCircOut(sx,sy,Abs(sx-ox))
-                      
+                      Select dSel
+                        Case #toolAniDraw
+                          dCircOutFlash(sx,sy,Abs(sx-ox))
+                        Default
+                          dCircOut(sx,sy,Abs(sx-ox))
+                      EndSelect                      
                     Case #toolCirFil
                       drawCircle(sx,sy,Abs(sx-ox))
                       
@@ -1816,8 +1909,12 @@ Repeat
                       EndIf
                       
                     Case #toolBoxOut,#toolBoxFil ; boxes, gradient
-                      dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
-                      
+                      Select dSel
+                        Case #toolAniDraw
+                          dBoxFlash(sx,sy,ox,oy)
+                        Default
+                          dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
+                      EndSelect                      
                     Case #toolFill ; flood fill
                       floodfill(mx,my)
                       
@@ -2090,9 +2187,9 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 1366
-; FirstLine = 1362
-; Folding = ------
+; CursorPosition = 810
+; FirstLine = 791
+; Folding = -------
 ; EnableXP
 ; Executable = ART_PB_016_x86.exe
 ; DisableDebugger
