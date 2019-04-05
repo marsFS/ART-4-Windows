@@ -9,28 +9,19 @@
 ;
 
 ; TODO 16/07/2018
-;1) Ability To draw colour cycles along a straight line Or plot out a cycle.........As they tend To be Not very accurate when I use the mouse
 
-;2) Directional Gradient Fills
+;* Directional Gradient Fills
 
-;3) Ellipses
+;* Ellipses
 
-;4) Ability To lock the cursort horizontall Or vertically ( so you can draw straight lines With ease )
-; ### DONE!!
+;* Spray brush - would be nice To be able To alter the flow And maybe more paint centred in the middle / less around the edges
 
-;5) Spray brush - would be nice To be able To alter the flow And maybe more paint centred in the middle / less around the edges
+;* Cut n paste would be very interesting.......
 
-;6) Cut n paste would be very interesting.......
+;* Zoom tool? Could be very useful this one......
 
-;7) Direction Gradient Fills
-
-;8) Zoom tool? Could be very useful this one......
-
-;9) Also If there was a way of making the brush crosshair thicker And be able To turn it off And on.....I do use it a lot And sometimes would like To turn it off
-; ### DONE!
-
-;10) Tracing layer with variable transparency, ability to load a graphic file and scale as an overlay tracing guide
-
+;* Tracing layer with variable transparency, ability to load a graphic file and scale as an overlay tracing guide
+;  Partially implemented, need to experiment with it at different layer etc.
 
 
 ; png file support
@@ -68,7 +59,7 @@ UsePNGImageDecoder()
 #toolCLS=16
 #toolCLSall=17
 #toolBrushType=18
-#Toolspare1=19
+#ToolLineConnect=19
 #Toolspare2=20
 #toolTransparent=21
 
@@ -79,10 +70,12 @@ UsePNGImageDecoder()
 #toolBrushRND=1
 #toolBrushSPR=0
 
+; animate menu select items
+#toolAnimate=0
+#toolAniCycle=1
+#toolAniPing=2
+#toolAniExport=3
 
-#toolAnimate=15
-#toolAniPing=16
-#toolAniCycle=17
 
 ; gadget area constants
 #GA_MainCanvas=0
@@ -99,13 +92,14 @@ UsePNGImageDecoder()
 #MA_SelectedPat=9
 #MA_FillCol=10
 #MA_PatSel=11
-#MA_Layers=12
-#MA_SpriteShow=13
-#MA_OptionShow=14
-#MA_FlashSpeed=15
-#MA_FlashDraw=16
-#MA_FlashCycle=17
-#MA_ToolAnimate=18
+#MA_AniSel=12
+#MA_Layers=13
+#MA_SpriteShow=14
+#MA_OptionShow=15
+#MA_FlashSpeed=16
+#MA_FlashDraw=17
+#MA_FlashCycle=18
+#MA_ToolAnimate=19
 
 ; mouse options index
 #MO_OptThin=0
@@ -125,6 +119,13 @@ UsePNGImageDecoder()
 
 #MO_OptGrid=13
 #MO_OptTrace=14
+#MO_OptTrnVal=15
+
+; drawing mode options
+#DM_Drawing=0
+#DM_Palette=1
+#DM_Animate=2
+
 
 
 
@@ -197,6 +198,7 @@ Global dCol.a=1 ; drawing colour
 Global dTrn.a=1 ; drawing transparency toggle
 Global dWid.a=8 ; drawing width
 Global dSel.a=#toolBrushBox; drawing brush selected
+Global dCon.a=0 ; line connector
 Global dFil.i=0            ; fill colour
 Global tFont1.i, tFont2.i  ; font index
 
@@ -205,12 +207,15 @@ Global flashBak=8             ; flashing colour index background
 Global flashFor=7             ; flashing colour index foreground
 Global flashCol=8             ; flashing index for drawing
 Global flashAnim=0            ; flash animation toggle
+Global flashAniOld=0          ; flash animation toggle
 Global flashCycle=8           ; flash cycle counter
 Global fSpeed=540             ; flash speed in ms
+Global fSpdOld=540            ; flash speed in ms
 Global animExport=-1          ; export animation frames
 Global animFile.s=""          ; export filename
 Global animSave=0             ; frame save flag
 Global animType=0             ; animation selector
+Global animTypeOld=0          ; animation selector
 Global animDir=1              ; animation direction
 Global savePattern=0          ; save file pattern selector
 Global loadPattern=0          ; load file pattern selector
@@ -227,7 +232,7 @@ Global dWire.a=0; draw wireframe
 Global dGRD.a=0 ; draw transparent grid
 Global dDSP.a=0 ; main canvas screen display selector: 0=paint, 1=spr drawing, 2=options
 Global dSED.a=0 ; editing spr
-Global dPAL.a=0 ; showing palette
+Global dOVL.a=0 ; main canvas overlay, 0=main canvas, 1=show palette, 2=show animate menu
 Global dShift.a=0 ; Shift key flag
 Global dCtrl.a=0  ; ctrl key flag
 Global dMode.a=2  ; current mode
@@ -263,7 +268,7 @@ Global Dim SCRNout.a(#SCRNsize) ; final output buffer
 Global Dim pat.a(17,15) ; drawing patterns
 Global Dim bp(16)       ; beeb palette
                         ;Global Dim MA.MouseArea(#maApp) ; mouse area structure array for main app
-;Global Dim MO.MouseArea(#maOpt) ; mouse area structure array for options page
+                        ;Global Dim MO.MouseArea(#maOpt) ; mouse area structure array for options page
 
 Global Dim rgbT.rgbTable(16)     ; rgb lookup table
 Global Dim ct(16)                ; colour table look for redrawing main canvas
@@ -1059,8 +1064,8 @@ EndProcedure
 Procedure toolAniToggle(i,c)
   Protected x,y,lx,ly
   
-  x=4
-  y=i*50+4
+  x=4+i*50
+  y=4
   
   ; default or erase button colour is 7
   If c=0: c=7: EndIf
@@ -1205,7 +1210,7 @@ Procedure floodFill(sx,sy)
     
     uf=0
     df=0
-    dc=15
+    dc=255
     mc=dFil
     
     
@@ -1265,7 +1270,7 @@ Procedure floodFill(sx,sy)
         
       Until ListSize(lFS())=0
       
-      mc=15
+      mc=255
     Next
   EndIf
   
@@ -1289,10 +1294,10 @@ Procedure FillReplace(sx,sy)
     ; second iteration replaces mask colour with current pattern
     For i=0 To #SCRNsize
       
-        If dl(dLay)\SCRN[i]=mc 
-          dl(dLay)\SCRN[i]=curPat(i % 16,15-((i / 640) % 16))
-        EndIf
-        
+      If dl(dLay)\SCRN[i]=mc 
+        dl(dLay)\SCRN[i]=curPat(i % 16,15-((i / 640) % 16))
+      EndIf
+      
     Next
   EndIf
   
@@ -1471,7 +1476,6 @@ Procedure updateTRN(imgTRN)
   
   ; copy output buffer to final image
   If StartDrawing(ImageOutput(imgTRN))
-    ;Box(0,0,640,512,bp(0))          
     Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
     Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
     PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
@@ -1485,15 +1489,15 @@ Procedure updateTRN(imgTRN)
         b=Blue(*Line\Pixel)
         
         If r+g+b>0
-        If PixelFormat = #PB_PixelFormat_32Bits_RGB
-          dc=RGBA(r,g,b,tGTR)
-        Else ; Else it's 32bits_BGR
-          dc=RGBA(b,g,r,tGTR)
+          If PixelFormat = #PB_PixelFormat_32Bits_RGB
+            dc=RGBA(r,g,b,tGTR)
+          Else ; Else it's 32bits_BGR
+            dc=RGBA(b,g,r,tGTR)
+          EndIf
+        Else 
+          dc=RGBA(0,0,0,0)
         EndIf
-      Else 
-        dc=RGBA(0,0,0,0)
-      EndIf
-      
+        
         *Line\Pixel=dc
         
         *line+4
@@ -1780,7 +1784,7 @@ Procedure openSave(mode)
   
   Select mode
     Case 0 ; get filename to load
-      ff = "PNG file - Load Current Layer (*.PNG)|*.PNG|PNG file - Load All Layers (*.PNG)|*.PNG|BBC file - Load Current Layer (*.*)|*.*|BBC file - Load All Layers (*.*)|*.*|Tracing Layer (PNG Only) (*.PMG)|*.PNG"
+      ff = "PNG file - Load Current Layer (*.PNG)|*.PNG|PNG file - Load All Layers (*.PNG)|*.PNG|BBC file - Load Current Layer (*.*)|*.*|BBC file - Load All Layers (*.*)|*.*|Tracing Layer (PNG Only) (*.PNG)|*.PNG"
       filename=OpenFileRequester(" Load Image",GetCurrentDirectory(),ff,loadPattern)
       loadPattern=SelectedFilePattern()
       
@@ -1860,43 +1864,43 @@ Procedure openSave(mode)
             Next
             
           Case 4 ; load png to trace layer
-             ;f=Left(filename,Len(filename)-2)+"0"+Str(i+1)
-  
-             iTMP=LoadImage(#PB_Any,filename)
-             If iTMP
-               ; scale image and copy into trace layer
-               xx.f=ImageWidth(iTMP)
-               
-               yy.f=ImageHeight(iTMP)
-               
-               If xx>640
-                 fix.f=640/xx
-                 xx*fix
-                 yy*fix
-               EndIf
-               If yy>512
-                 fix.f=512/yy
-                 xx*fix
-                 yy*fix
-               EndIf
-               
-               ResizeImage(iTMP,xx,yy)
-               fixx=(640/2)-(ImageWidth(iTMP)/2)
-               fixy=(512/2)-(ImageHeight(iTMP)/2)
-               
-               
-               If StartDrawing(ImageOutput(imgTraceLayer))
+                 ;f=Left(filename,Len(filename)-2)+"0"+Str(i+1)
+            
+            iTMP=LoadImage(#PB_Any,filename)
+            If iTMP
+              ; scale image and copy into trace layer
+              xx.f=ImageWidth(iTMP)
+              
+              yy.f=ImageHeight(iTMP)
+              
+              If xx>640
+                fix.f=640/xx
+                xx*fix
+                yy*fix
+              EndIf
+              If yy>512
+                fix.f=512/yy
+                xx*fix
+                yy*fix
+              EndIf
+              
+              ResizeImage(iTMP,xx,yy)
+              fixx=(640/2)-(ImageWidth(iTMP)/2)
+              fixy=(512/2)-(ImageHeight(iTMP)/2)
+              
+              
+              If StartDrawing(ImageOutput(imgTraceLayer))
                 DrawImage(ImageID(iTMP),fixx,fixy)
                 StopDrawing()
               EndIf
-               
+              
               FreeImage(iTMP)            
               
               updateTRN(imgTraceLayer)
-               
-             Else
-               MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + f,#PB_MessageRequester_Error)
-             EndIf            
+              
+            Else
+              MessageRequester(" File Error","ERROR: Cannot load file..." + #CRLF$ + #CRLF$ + f,#PB_MessageRequester_Error)
+            EndIf            
             
         EndSelect
         
@@ -2162,8 +2166,15 @@ Repeat
     MO()\name=tName
     Read.w MO()\lx
     Read.w MO()\ly
-    MO()\rx=MO()\lx+20
-    MO()\ry=MO()\ly+20
+    Read.w MO()\img
+    Select MO()\img
+      Case 0 ; check box
+        MO()\rx=MO()\lx+20
+        MO()\ry=MO()\ly+20
+      Case 1 ; slider vertical
+        MO()\rx=MO()\lx+30
+        MO()\ry=MO()\ly+132
+    EndSelect
   EndIf
 Until tName="DATAEND"
 
@@ -2310,7 +2321,7 @@ If StartDrawing(CanvasOutput(#GA_TSButtons))
   toolToggle(#toolRedo,8) ; redo
   toolToggle(tCur,tTog)   ; standard
   toolToggle(#toolTransparent,2)      ; transparency
-  ;toolToggle(dSel,6)                  ; draw style  
+                                      ;toolToggle(dSel,6)                  ; draw style  
   
   ; brush size control
   selectMA(#MA_BrushSize)
@@ -2350,10 +2361,8 @@ EndIf
 
 
 ; animate menu
-If StartDrawing(ImageOutput(imgAnimateButtons))
-  toolAniToggle(1,(1-animType)*2)
-  StopDrawing()
-EndIf
+
+toolAniToggle(#toolAniCycle,(1-animType)*2)
 
 
 ; enable For debugging mouse area squares
@@ -2397,12 +2406,12 @@ Repeat
           flashing=(flashing+1) & 1
           
           Select animType
-            Case 0 ; ping style animate
+            Case 1 ; ping style animate
               flashCycle+animDir
               If flashCycle=15:animDir=-1:EndIf
               If flashCycle=8:animDir=1:EndIf
               
-            Case 1 ; cycle style animate
+            Case 0 ; cycle style animate
               flashCycle+1
               If flashCycle>15:flashCycle=8:EndIf
               
@@ -2432,22 +2441,9 @@ Repeat
             selectMA(#MA_Drawing)
             dx = mx - MA()\lx
             dy = my - MA()\ly
-            
-            ; change cursor if needed
-            x=GetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor)
-            If gcur=#GA_MainCanvas And dPAL=0 And dDSP=0
-              If x<>#PB_Cursor_Invisible
-                SetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor , #PB_Cursor_Invisible)
-              EndIf
-            Else
-              If x<>#PB_Cursor_Cross
-                SetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor , #PB_Cursor_Cross)
-              EndIf
-            EndIf        
-            
           EndIf
           
-          ; set mouse action if none already set for left mouse click
+          ; set mouse action if none already set for left mouse click for all gadgets
           If EventType() = #PB_EventType_LeftButtonDown
             If mact=-1 And tLIF=0
               
@@ -2468,6 +2464,8 @@ Repeat
                 i+1
               Wend
               
+
+              
               Select mact
                 Case #MA_Drawing ; main drawing canvas - save undo
                                  ; clear redo when new drawing starts
@@ -2486,6 +2484,15 @@ Repeat
                     foy=py1(my)
                   EndIf
                   
+                  ; reset overlay menus
+                  If dOVL=2 And rangeApp(#MA_AniSel)=0
+                    dOVL=0
+                  EndIf
+                  
+                  If dOVL=1 And rangeApp(#MA_PatSel)=0
+                    dOVL=0
+                  EndIf
+                  
               EndSelect
               
             EndIf
@@ -2495,6 +2502,382 @@ Repeat
           
           ; determine which gadget has triggered an event
           Select gCur
+              
+              ;
+              ;-------- Drawing Gadget Area --------
+              ;              
+              
+            Case #GA_MainCanvas ; drawing area
+              
+              ; change cursor if needed
+              x=GetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor)
+              If dOVL=2 And rangeApp(#MA_AniSel) ; animate menu visible
+                If x<>#PB_Cursor_Cross
+                  SetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor , #PB_Cursor_Cross)
+                EndIf
+              ElseIf dOVL=1 And rangeApp(#MA_PatSel) ; palette menu visible
+                If x<>#PB_Cursor_Cross
+                  SetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor , #PB_Cursor_Cross)
+                EndIf
+              Else
+                If x<>#PB_Cursor_Invisible
+                  SetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor , #PB_Cursor_Invisible)
+                EndIf
+              EndIf        
+              
+              ; left mouse button down or mouse move with left button events
+              If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
+                
+                Select dOVL
+                  Case 1 ; palette is visible
+                    
+                    If rangeApp(#MA_PatSel)
+                      selectMA(#MA_PatSel)
+                      i=8-((my-MA()\ly-8) / 22)
+                      j=((mx-MA()\lx-8) / 32)
+                      If i<0: i=0: EndIf
+                      If i>8: i=8: EndIf
+                      If j<0: j=0: EndIf
+                      If j>17: j=17: EndIf
+                      If pCol<>i Or pSel<>j
+                        
+                        ; highlight selected pattern and update selected brush size pattern
+                        ; Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(0))
+                        pCol=i
+                        pSel=j
+                        ;Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(7))
+                        If StartDrawing(CanvasOutput(#GA_TSButtons))
+                          updateBrush()
+                          StopDrawing()
+                        EndIf
+                      EndIf
+                    EndIf
+                    
+                  Case 2 ; animate menu visible if active
+                    If rangeApp(#MA_AniSel) And dOVL=2
+                      selectMA(#MA_AniSel)
+                      tAni=(mx-MA()\lx) / 50
+                    Else 
+                      tani=-1
+                    EndIf
+                    
+                      
+                    Case 0 ; main canvas
+                      
+                      
+                      ; main canvas do any drawing actions For mouse move
+                      dOVL=0 ; ensure animate overlay is hidden when drawing
+                      
+                      Select mact
+                        Case #MA_Drawing ; main drawing canvas
+                          Select dDSP
+                            Case 0 ; standard painting mode
+                              
+                              setP(mx,my)
+                              
+                              ; determine tool being used
+                              Select tCur
+                                Case #toolDraw ; brush tool
+                                  Select dSel
+                                    Case #toolBrushBox ; standard brush
+                                      selectMA(#MA_Drawing)
+                                      dLine(mx,my,ox+MA()\lx,oy+MA()\ly)
+                                    Case #toolBrushRound ; circle brush
+                                      dCircle(mx,my,dWid*2)
+                                    Case #toolBrushRND ; airbrush
+                                      dbrush(px,py,dWid,2)
+                                    Case #toolBrush2x ; standard X2 brush
+                                      dbrush(px,py,dWid,1)
+                                    Case #toolBrushFlash
+                                      flashbrush(px1(mx),py1(my))                                
+                                  EndSelect
+                                Case #toolLine,#toolCirOut,#toolCirFil,#toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer
+                                  
+                                  
+                                Case #toolFill, #toolReplace ; flood fill
+                                  If rangeApp(#MA_Drawing)
+                                    i=dl(dLay)\SCRN[px+640*py];Point(mx,my) get pixel colour under cursor
+                                    If i<>dFil                ; continue if fill colour is not the same as last fill
+                                      dFil=i
+                                      If StartDrawing(CanvasOutput(#GA_TSButtons)) ; update fill colour box in tool box
+                                        selectMA(#MA_FillCol)
+                                        Box(MA()\lx+4,MA()\ly+4,MA()\rx-MA()\lx-7,MA()\ry-MA()\ly-7,bp(dFil))
+                                        StopDrawing()
+                                      EndIf
+                                    EndIf
+                                  EndIf
+                              EndSelect
+                              
+                              dWire=tCur
+                              ox=dx
+                              oy=dy
+                              ; *** end drawing tool code
+                              
+                            Case 1 ; sprite drawing mode
+                              sprBrush(mx,my)
+                              Select tCur
+                                Case #toolDraw ; brush tool
+                                  Select dSel
+                                    Case #toolBrushBox ; standard brush
+                                                       ;dbrush(px(mx),py(my),dWid,0)
+                                                       ;sprBrush(mx,my)
+                                    Case #toolBrushRound ; circle brush
+                                                         ;dCircle(mx,my,dWid*2)
+                                    Case #toolBrushRND   ; airbrush
+                                                         ;dbrush(px(mx),py(my),dWid,2)
+                                    Case #toolBrush2x    ; standard X2 brush
+                                                         ;dbrush(px(mx),py(my),dWid,1)
+                                  EndSelect
+                              EndSelect
+                              
+                            Case 2 ; options screen
+                              ResetList(MO())
+                              i=0
+                              While NextElement(MO())
+                                If rangeOpt(i,dx,dy)
+                                  Select i
+                                    Case #MO_OptThin,#MO_OptThick,#MO_OptPixel,#MO_OptOff1
+                                      oCrossHair=i
+                                      If i=#MO_OptOff1
+                                        oMouseGuide=1
+                                      EndIf
+                                    Case #MO_OptGuide
+                                      oMouseGuide=1-oMouseGuide
+                                      If oCrossHair=3
+                                        oMouseGuide=1
+                                      EndIf 
+                                    Case #MO_OptMode0 To #MO_OptMode7
+                                      dMode=i-#MO_OptMode0
+                                      
+                                      Select dMode
+                                        Case 0
+                                          dMdx=640 ; current mode horizontal pixels
+                                          dMdy=256 ; current mode vertical pixels
+                                          dMpx=1   ; current mode horizontal pixel size
+                                          dMpy=2   ; current mode vertical pixel size
+                                          dBits=2
+                                          
+                                        Case 1
+                                          dMdx=320 ; current mode horizontal pixels
+                                          dMdy=256 ; current mode vertical pixels
+                                          dMpx=2   ; current mode horizontal pixel size
+                                          dMpy=2   ; current mode vertical pixel size
+                                          dBits=4
+                                          
+                                        Case 2
+                                          dMdx=160 ; current mode horizontal pixels
+                                          dMdy=256 ; current mode vertical pixels
+                                          dMpx=4   ; current mode horizontal pixel size
+                                          dMpy=2   ; current mode vertical pixel size
+                                          dBits=8
+                                          
+                                        Case 3
+                                          
+                                        Case 4
+                                          
+                                        Case 5
+                                          
+                                        Case 6
+                                          
+                                        Case 7
+                                          dMdx=80 ; current mode horizontal pixels
+                                          dMdy=64 ; current mode vertical pixels
+                                          dMpx=8  ; current mode horizontal pixel size
+                                          dMpy=8  ; current mode vertical pixel size
+                                          dBits=8
+                                          
+                                      EndSelect
+                                      If StartDrawing(CanvasOutput(#GA_TSPalette)) ; update brush on mode change
+                                        updateBrush()
+                                        resetColSel()
+                                        StopDrawing()
+                                      EndIf                        
+                                      
+                                      
+                                      
+                                    Case #MO_OptTrnVal
+                                      y=(my-MO()\ly-4)*2
+                                      If y>-1 And y<256
+                                        tGTR=y
+                                      EndIf
+                                      
+                                  EndSelect
+                                  Break
+                                EndIf
+                                i+1
+                              Wend
+                              
+                          EndSelect
+                          
+                      EndSelect
+                    
+                EndSelect
+                
+              EndIf
+              
+              
+              If EventType()=#PB_EventType_LeftButtonUp
+                ; do any mouse up actions such as tools and pattern select
+                
+                Select dOVL
+                  Case 0
+                    Select mact
+                      Case #MA_Drawing ; drawing area
+                        
+                        Select dDSP
+                          Case 0 ; standard painting mode
+                            
+                            ; determine tool being used
+                            Select tCur
+                              Case #tooldraw
+                                If dsel=#toolBrushSPR
+                                  setP(mx,my)
+                                  dBrushSPR(px,py,dWid,0,0)
+                                  
+                                EndIf   
+                                
+;                               Case #toolDraw
+;                                 If dCon And dsel=#toolBrushFlash
+;                                   dLineFlash(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,oy+MA()\ly)
+;                                 EndIf
+
+                              Case #toolLine ; line tool completion
+                                selectMA(#MA_Drawing)
+                                Select dSel
+                                    
+                                  Case #toolBrushFlash
+                                    dLineFlash(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,oy+MA()\ly)
+                                  Default
+                                    If dShift ; horizontal
+                                      dLine(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,sy+MA()\ly)
+                                    ElseIf dCtrl ; vertical
+                                      dLine(sx+MA()\lx,sy+MA()\ly,sx+MA()\lx,oy+MA()\ly)
+                                    Else ; any direction
+                                      dLine(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,oy+MA()\ly)
+                                    EndIf
+                                EndSelect                            
+                                
+                              Case #toolCirOut ; polygon completion
+                                Select dSel
+                                  Case #toolBrushFlash
+                                    dCircOutFlash(sx,sy,Abs(sx-ox))
+                                  Default
+                                    dCircOut(sx,sy,Abs(sx-ox))
+                                EndSelect                            
+                              Case #toolCirFil ; polygon completion
+                                dCircle(sx,sy,Abs(sx-ox))
+                                
+                              Case #toolBoxOut ; boxes out line
+                                Select dSel
+                                  Case #toolBrushFlash
+                                    dBoxFlash(sx,sy,ox,oy)
+                                  Default
+                                    dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
+                                EndSelect                         
+                                
+                              Case #toolBoxFil 
+                                dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
+                                
+                              Case #toolGradHor,#toolGradVer  ; gradient
+                                If sx<>ox And sy<>oy 
+                                  dBoxG(sx,sy,ox,oy,tCur-#toolGradHor)
+                                EndIf
+                                
+                              Case #toolFill ; flood fill
+                                selectMA(#MA_Drawing)
+                                floodfill(mx-MA()\lx,my-MA()\ly)
+                                
+                              Case #toolReplace ; replace file
+                                selectMA(#MA_Drawing)
+                                FillReplace(mx-MA()\lx,my-MA()\ly)
+                                
+                            EndSelect
+                            
+                          Case 1 ; sprite editor mode
+                            
+                            If dx>199 And dx<221 And dy>239 And dy<277
+                              ;left
+                              dSED-1
+                              If dSED>17 
+                                dSED=17
+                              EndIf
+                              
+                            EndIf
+                            
+                            If dx>419 And dx<441 And dy>239 And dy<277
+                              ;right
+                              dSED+1
+                              If dSED>17 
+                                dSED=0
+                              EndIf
+                            EndIf
+                            
+                          Case 2 ; options screen
+                            If rangeOpt(#MO_OptTrnVal,dx,dy)
+                              updateTRN(imgTraceLayer)
+                            EndIf
+                            
+                            If rangeOpt(#MO_OptGrid,dx,dy)
+                              If tGrd=0
+                                tGrd=-1
+                              Else
+                                tGrd=0 ; configure grid and trace layer
+                              EndIf  
+                            EndIf
+                            
+                            If rangeOpt(#MO_OptTrace,dx,dy)
+                              If tGrd=1
+                                tGrd=-1
+                              Else
+                                tGrd=1 ; configure grid and trace layer
+                              EndIf  
+                            EndIf
+                            
+                        EndSelect
+                        
+                    EndSelect
+                  Case 1 ; handle pattern selector
+                    
+                    dOVL=0  
+                    selectMA(#MA_Drawing)
+                    MA()\active=1            
+                  Case 2
+                    
+                    Select tAni
+
+                      Case #toolAnimate ; Animate on or off toggle
+                        flashAnim=(flashAnim+1) % 2
+                        toolAniToggle(#toolAnimate,flashAnim*2)
+                        
+                      Case #toolAniCycle,#toolAniPing ; animate Ping = 1, animate cycle = 2
+                        animType=tAni-1
+                        toolAniToggle(#toolAniCycle,(1-animType)*2)
+                        toolAniToggle(#toolAniPing,animType*2)
+                        If flashCycle=8:animDir=1:EndIf
+                        If flashCycle=15:animDir=-1:EndIf
+                        
+                      Case #toolAniExport ; export animation frames
+                        If exportAnim()=1
+                          dOVL=0
+                          flashAniOld=flashAnim
+                          animTypeOld=animType
+                          fSpdOld=fSpeed
+                          flashAnim=1
+                          animExport=0
+                          animType=0
+                          toolAniToggle(#toolAniCycle,(1-animType)*2)
+                          toolAniToggle(#toolAniPing,animType*2)
+                          flashCycle=15
+                          RemoveWindowTimer(0,0)
+                          AddWindowTimer(0,0,10)
+                        EndIf 
+                    EndSelect
+                    
+                EndSelect
+                
+                
+              EndIf
+              
               ;
               ;-------- Palette Gadget Area --------
               ;  
@@ -2542,10 +2925,6 @@ Repeat
                   Case #MA_FlashCycle ; flash cycle colour (foreground)
                     drawFlashSel(#MA_FlashCycle)
                     
-                  Case #MA_ToolAnimate ; animate menu
-                    
-                    tAni=(my+206) / 50
-                    
                 EndSelect
                 
               EndIf
@@ -2568,56 +2947,36 @@ Repeat
                     
                   Case #MA_PatternShow ; show pattern area and activate
                     If dDSP=0
-                      If dPAL=0
-                        dPAL=1
+                      If dOVL=1
+                        dOVL=0
                       Else
-                        dPAL=0
+                        dOVL=1
                       EndIf
                     Else
-                      dPAL=1
+                      dOVL=1
                       dDSP=0
                     EndIf
                     
-                    selectMA(#MA_Drawing)
-                    If dPAL=1
-                      MA()\active=0
-                    Else
-                      MA()\active=1
-                    EndIf
-                    
+                  Case #MA_ToolAnimate ; animate menu
+                    If dDSP=0
+                      If dOVL=2
+                        dOVL=0
+                      Else
+                        dOVL=2
+                      EndIf
+                    EndIf                    
                     
                   Case #MA_FlashSpeed ; flash speed slider
                     RemoveWindowTimer(0,0)
                     AddWindowTimer(0,0,fSpeed)                    
                     
-                  Case #MA_ToolAnimate ; animation toggle
-                    Select tAni
-                      Case 3 ; Animate on or off toggle
-                        flashAnim=(flashAnim+1) % 2
-                        toolAniToggle(3,flashAnim*2)
-                        
-                      Case 2,1 ; animate Ping = 1, animate cycle = 2
-                        animType=tAni-1
-                        toolAniToggle(1,(1-animType)*2)
-                        toolAniToggle(2,animType*2)
-                        If flashCycle=8:animDir=1:EndIf
-                        If flashCycle=15:animDir=-1:EndIf
-                        
-                      Case 0 ; export animation frames
-                        If exportAnim()=1
-                          flashAnim=1
-                          animExport=0
-                          animType=1
-                          toolAniToggle(1,(1-animType)*2)
-                          toolAniToggle(2,animType*2)
-                          flashCycle=15
-                          RemoveWindowTimer(0,0)
-                          AddWindowTimer(0,0,10)
-                        EndIf 
-                    EndSelect
-                    
                 EndSelect
-                
+                selectMA(#MA_Drawing)
+                If dOVL=1
+                  MA()\active=0
+                Else
+                  MA()\active=1
+                EndIf
                 
               EndIf
               
@@ -2630,10 +2989,10 @@ Repeat
               If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
                 
                 
-;                 ; draw overlay menu
-;                 If imgOverlay\img=0
-;                   getBackground(0,224,50,200,imgOverlay)
-;                 EndIf
+                ;                 ; draw overlay menu
+                ;                 If imgOverlay\img=0
+                ;                   getBackground(0,224,50,200,imgOverlay)
+                ;                 EndIf
                 
                 ; do any drawing actions for mouse move
                 Select mact
@@ -2673,17 +3032,17 @@ Repeat
                       EndIf           
                     EndIf
                     
-                  If tHi=#toolBrushType
-                    tBRT=#toolBrushType
-                    x=(mx+306) / 50
-                    If x>-1 And x<6
-                      dSel=x
+                    If tHi=#toolBrushType
+                      tBRT=#toolBrushType
+                      x=(mx+306) / 50
+                      If x>-1 And x<6
+                        dSel=x
+                      EndIf
+                      
+                    Else
+                      tBRT=0
                     EndIf
-                                        
-                  Else
-                    tBRT=0
-                  EndIf
-                  
+                    
                     
                   Case #MA_BrushSize ; brush size
                     
@@ -2700,7 +3059,7 @@ Repeat
                         StopDrawing()
                       EndIf
                     EndIf 
-                   
+                    
                 EndSelect
               EndIf
               
@@ -2710,10 +3069,10 @@ Repeat
                 Select mact
                   Case #MA_ToolBar ; tool select
                     
-;                     ; replace overlay menu
-;                     If imgOverlay\img
-;                       putBackground(imgOverlay)
-;                     EndIf
+                    ;                     ; replace overlay menu
+                    ;                     If imgOverlay\img
+                    ;                       putBackground(imgOverlay)
+                    ;                     EndIf
                     
                     selectMA(#MA_ToolBar)
                     
@@ -2784,7 +3143,7 @@ Repeat
                               dl(i)\SCRN[x]=0
                             Next
                           Next
-                        
+                          
                           
                         Case #toolTransparent; toggle transparency
                           dTrn=(dTrn+1) % 2
@@ -2792,11 +3151,14 @@ Repeat
                           
                         Case #toolBrushType
                           tBRT=0
-                            If StartDrawing(CanvasOutput(#GA_TSPalette))
-                              updateBrush()
-                              StopDrawing()
-                            EndIf
-
+                          If StartDrawing(CanvasOutput(#GA_TSPalette))
+                            updateBrush()
+                            StopDrawing()
+                          EndIf
+                          
+                        Case #ToolLineConnect
+                          dCon=1-dCon
+                          addToggle(#ToolLineConnect,dcon*6)
                           
                         Default ; all other tools - should not be needed now
                           If tSel<>tCur
@@ -2863,294 +3225,8 @@ Repeat
                 
               EndIf
               
-              
-              ;
-              ;-------- Drawing Gadget Area --------
-              ;              
-              
-            Case #GA_MainCanvas ; drawing area
-                                ;mx = GetGadgetAttribute(gCur, #PB_Canvas_MouseX)
-                                ;my = GetGadgetAttribute(gCur, #PB_Canvas_MouseY)
-
-              ; left mouse button down or mouse move with left button events
-              If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
-                
-                If dPAL ; palette is visible
-                  
-                  If rangeApp(#MA_PatSel)
-                    selectMA(#MA_PatSel)
-                    i=8-((my-MA()\ly-8) / 22)
-                    j=((mx-MA()\lx-8) / 32)
-                    If i<0: i=0: EndIf
-                    If i>8: i=8: EndIf
-                    If j<0: j=0: EndIf
-                    If j>17: j=17: EndIf
-                    If pCol<>i Or pSel<>j
-                      
-                      ; highlight selected pattern and update selected brush size pattern
-                      ; Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(0))
-                      pCol=i
-                      pSel=j
-                      ;Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(7))
-                      If StartDrawing(CanvasOutput(#GA_TSButtons))
-                        updateBrush()
-                        StopDrawing()
-                      EndIf
-                    EndIf
-                  EndIf
-                  
-                EndIf                
-                
-                ; do any drawing actions for mouse move
-                Select mact
-                  Case #MA_Drawing ; main drawing canvas
-                    Select dDSP
-                      Case 0 ; standard painting mode
-                        
-                        setP(mx,my)
-                        
-                        ; determine tool being used
-                        Select tCur
-                          Case #toolDraw ; brush tool
-                            Select dSel
-                              Case #toolBrushBox ; standard brush
-                                selectMA(#MA_Drawing)
-                                dLine(mx,my,ox+MA()\lx,oy+MA()\ly)
-                              Case #toolBrushRound ; circle brush
-                                dCircle(mx,my,dWid*2)
-                              Case #toolBrushRND ; airbrush
-                                dbrush(px,py,dWid,2)
-                              Case #toolBrush2x ; standard X2 brush
-                                dbrush(px,py,dWid,1)
-                              Case #toolBrushFlash
-                                flashbrush(px1(mx),py1(my))                                
-                            EndSelect
-                          Case #toolLine,#toolCirOut,#toolCirFil,#toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer
-                            
-                            
-                          Case #toolFill, #toolReplace ; flood fill
-                            If rangeApp(#MA_Drawing)
-                              i=dl(dLay)\SCRN[px+640*py];Point(mx,my) get pixel colour under cursor
-                              If i<>dFil                ; continue if fill colour is not the same as last fill
-                                dFil=i
-                                If StartDrawing(CanvasOutput(#GA_TSButtons)) ; update fill colour box in tool box
-                                  selectMA(#MA_FillCol)
-                                  Box(MA()\lx+4,MA()\ly+4,MA()\rx-MA()\lx-7,MA()\ry-MA()\ly-7,bp(dFil))
-                                  StopDrawing()
-                                EndIf
-                              EndIf
-                            EndIf
-                        EndSelect
-                        
-                        dWire=tCur
-                        ox=dx
-                        oy=dy
-                        ; *** end drawing tool code
-                        
-                      Case 1 ; sprite drawing mode
-                        sprBrush(mx,my)
-                        Select tCur
-                          Case #toolDraw ; brush tool
-                            Select dSel
-                              Case #toolBrushBox ; standard brush
-                                                 ;dbrush(px(mx),py(my),dWid,0)
-                                                 ;sprBrush(mx,my)
-                              Case #toolBrushRound ; circle brush
-                                                   ;dCircle(mx,my,dWid*2)
-                              Case #toolBrushRND   ; airbrush
-                                                   ;dbrush(px(mx),py(my),dWid,2)
-                              Case #toolBrush2x    ; standard X2 brush
-                                                   ;dbrush(px(mx),py(my),dWid,1)
-                            EndSelect
-                        EndSelect
-                        
-                      Case 2 ; options screen
-                        ResetList(MO())
-                        i=0
-                        While NextElement(MO())
-                          If rangeOpt(i,dx,dy)
-                            Select i
-                              Case #MO_OptThin,#MO_OptThick,#MO_OptPixel,#MO_OptOff1
-                                oCrossHair=i
-                                If i=#MO_OptOff1
-                                  oMouseGuide=1
-                                EndIf
-                              Case #MO_OptGuide
-                                oMouseGuide=1-oMouseGuide
-                                If oCrossHair=3
-                                  oMouseGuide=1
-                                EndIf 
-                              Case #MO_OptMode0 To #MO_OptMode7
-                                dMode=i-#MO_OptMode0
-                                
-                                Select dMode
-                                  Case 0
-                                    dMdx=640 ; current mode horizontal pixels
-                                    dMdy=256 ; current mode vertical pixels
-                                    dMpx=1   ; current mode horizontal pixel size
-                                    dMpy=2   ; current mode vertical pixel size
-                                    dBits=2
-                                    
-                                  Case 1
-                                    dMdx=320 ; current mode horizontal pixels
-                                    dMdy=256 ; current mode vertical pixels
-                                    dMpx=2   ; current mode horizontal pixel size
-                                    dMpy=2   ; current mode vertical pixel size
-                                    dBits=4
-                                    
-                                  Case 2
-                                    dMdx=160 ; current mode horizontal pixels
-                                    dMdy=256 ; current mode vertical pixels
-                                    dMpx=4   ; current mode horizontal pixel size
-                                    dMpy=2   ; current mode vertical pixel size
-                                    dBits=8
-                                    
-                                  Case 3
-                                    
-                                  Case 4
-                                    
-                                  Case 5
-                                    
-                                  Case 6
-                                    
-                                  Case 7
-                                    dMdx=80 ; current mode horizontal pixels
-                                    dMdy=64 ; current mode vertical pixels
-                                    dMpx=8  ; current mode horizontal pixel size
-                                    dMpy=8  ; current mode vertical pixel size
-                                    dBits=8
-                                    
-                                EndSelect
-                                If StartDrawing(CanvasOutput(#GA_TSPalette)) ; update brush on mode change
-                                  updateBrush()
-                                  resetColSel()
-                                  StopDrawing()
-                                EndIf                        
-                                
-                              Case #MO_OptGrid,#MO_OptTrace
-                                If tGrd=(i-#MO_OptGrid)
-                                  tGrd=-1
-                                Else
-                                  tGrd=(i-#MO_OptGrid) ; configure grid and trace layer
-                                EndIf
-                                                                
-                            EndSelect
-                            Break
-                          EndIf
-                          i+1
-                        Wend
-                        
-                    EndSelect
-                    
-                EndSelect
-              EndIf
-              
-              If EventType()=#PB_EventType_LeftButtonUp
-                ; do any mouse up actions such as tools and pattern select
-                
-                ; handle pattern selector
-                If dPAL
-                  dPAL=0  
-                  selectMA(#MA_Drawing)
-                  MA()\active=1            
-                EndIf
-                
-                Select mact
-                  Case #MA_Drawing ; drawing area
-                    
-                    Select dDSP
-                      Case 0 ; standard painting mode
-                        
-                        ; determine tool being used
-                        Select tCur
-                          Case #tooldraw
-                            If dsel=#toolBrushSPR
-                              setP(mx,my)
-                              dBrushSPR(px,py,dWid,0,0)
-                            EndIf                
-                          Case #toolLine ; line tool completion
-                            selectMA(#MA_Drawing)
-                            Select dSel
-                                
-                              Case #toolBrushFlash
-                                dLineFlash(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,oy+MA()\ly)
-                              Default
-                                If dShift ; horizontal
-                                  dLine(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,sy+MA()\ly)
-                                ElseIf dCtrl ; vertical
-                                  dLine(sx+MA()\lx,sy+MA()\ly,sx+MA()\lx,oy+MA()\ly)
-                                Else ; any direction
-                                  dLine(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,oy+MA()\ly)
-                                EndIf
-                            EndSelect                            
-                            
-
-                            
-                          Case #toolCirOut ; polygon completion
-                            Select dSel
-                              Case #toolBrushFlash
-                                dCircOutFlash(sx,sy,Abs(sx-ox))
-                              Default
-                                dCircOut(sx,sy,Abs(sx-ox))
-                            EndSelect                            
-                          Case #toolCirFil ; polygon completion
-                            dCircle(sx,sy,Abs(sx-ox))
-                            
-                          Case #toolBoxOut ; boxes out line
-                            Select dSel
-                              Case #toolBrushFlash
-                                dBoxFlash(sx,sy,ox,oy)
-                              Default
-                                dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
-                            EndSelect                         
-                            
-                          Case #toolBoxFil 
-                            dBox(sx,sy,ox,oy,tCur-#toolBoxOut)
-                            
-                          Case #toolGradHor,#toolGradVer  ; gradient
-                            If sx<>ox And sy<>oy 
-                              dBoxG(sx,sy,ox,oy,tCur-#toolGradHor)
-                            EndIf
-                            
-                          Case #toolFill ; flood fill
-                            selectMA(#MA_Drawing)
-                            floodfill(mx-MA()\lx,my-MA()\ly)
-                            
-                          Case #toolReplace ; replace file
-                            selectMA(#MA_Drawing)
-                            FillReplace(mx-MA()\lx,my-MA()\ly)
-                            
-                        EndSelect
-                        
-                      Case 1 ; sprite editor mode
-                        
-                        If dx>199 And dx<221 And dy>239 And dy<277
-                          ;left
-                          dSED-1
-                          If dSED>17 
-                            dSED=17
-                          EndIf
-                          
-                        EndIf
-                        
-                        If dx>419 And dx<441 And dy>239 And dy<277
-                          ;right
-                          dSED+1
-                          If dSED>17 
-                            dSED=0
-                          EndIf
-                        EndIf
-                        
-                        
-                    EndSelect
-                    
-                    
-                EndSelect   
-              EndIf
-              
-              
-              
           EndSelect
+          
           
           ; pattern selector block
           If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
@@ -3290,98 +3366,117 @@ Repeat
             DrawAlphaImage(ImageID(imgTraceLayer),0,0)
           EndIf           
           
+          If dOVL=2
+            selectMA(#MA_AniSel)
+            x=MA()\lx
+            ;selectMA(#GA_MainCanvas)
+            y=MA()\ly
+            DrawImage(ImageID(imgAnimateButtons),x,y)
+            If tAni>-1 And tAni<4
+              DrawingMode(#PB_2DDrawing_Outlined)
+              Box(x+2+tAni*50,y+2,46,46,bp(2))
+            EndIf 
+          EndIf
+          
           ; draw cross hair
-          If dPAL=0 ; skip if pattern select visible
-            DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
-            If rangeApp(#GA_MainCanvas)
-              
-              Select oCrossHair
-                Case 0 ; thin
-                  LineXY(mx-4,MA()\ly-4,mx-4,MA()\ry,RGB(63,63,63))
-                  LineXY(MA()\lx-4,my-4,MA()\rx,my-4,RGB(63,63,63))
-                Case 1 ; thick
-                  For x=-1 To 1
-                    LineXY(mx-4+x,MA()\ly-4,mx-4+x,MA()\ry,RGB(63,63,63))
-                    LineXY(MA()\lx-4,my-4+x,MA()\rx,my-4+x,RGB(63,63,63))
-                  Next
-                Case 2 ; pixel
-                  x=((mx-4) / 4)*dMpx
-                  y=((my-4) / 2)*dMpy
+          Select dOVL
+            Case 0,2 ; skip if pattern select visible
+              If dOVL=2 And rangeapp(#MA_AniSel)
+                
+              Else
+                
+                DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
+                If rangeApp(#GA_MainCanvas)
                   
-                  For i=0 To 3
-                    LineXY(x+i,MA()\ly-4,x+i,MA()\ry,RGB(63,63,63))
-                    If i<2
-                      LineXY(MA()\lx-4,y+i,MA()\rx,y+i,RGB(63,63,63))
-                    EndIf
-                  Next
-              EndSelect
-              
-              
-              ; draw brush size guide or small circle
-              If oMouseGuide
-                Select tCur
-                  Case #toolDraw,#toolLine ; brush and line draw
-                    If dwid>3 And dSel<>#toolBrushFlash
-                      ; drawsize guide
-                      x=dx / dMpx-dWid / 2
-                      y=dy / dMpy-dWid
-                      x2=(x+dWid)*dMpx
-                      y2=(y+dWid*2)*dMpy
-                      x*dMpx
-                      y*dMpy    
+                  Select oCrossHair
+                    Case 0 ; thin
+                      LineXY(mx-4,MA()\ly-4,mx-4,MA()\ry,RGB(63,63,63))
+                      LineXY(MA()\lx-4,my-4,MA()\rx,my-4,RGB(63,63,63))
+                    Case 1 ; thick
+                      For x=-1 To 1
+                        LineXY(mx-4+x,MA()\ly-4,mx-4+x,MA()\ry,RGB(63,63,63))
+                        LineXY(MA()\lx-4,my-4+x,MA()\rx,my-4+x,RGB(63,63,63))
+                      Next
+                    Case 2 ; pixel
+                      x=((mx-4) / 4)*dMpx
+                      y=((my-4) / 2)*dMpy
                       
-                      LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
-                      LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
-                      
-                      LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
-                      LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
-                      
-                      LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
-                      LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
-                      
-                      LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
-                      LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
-                    Else
-                      Circle(dx,dy,10,bp(2))
+                      For i=0 To 3
+                        LineXY(x+i,MA()\ly-4,x+i,MA()\ry,RGB(63,63,63))
+                        If i<2
+                          LineXY(MA()\lx-4,y+i,MA()\rx,y+i,RGB(63,63,63))
+                        EndIf
+                      Next
+                  EndSelect
+                  
+                  
+                  ; draw brush size guide or small circle
+                  If oMouseGuide
+                    Select tCur
+                      Case #toolDraw,#toolLine ; brush and line draw
+                        If dwid>3 And dSel<>#toolBrushFlash
+                          ; drawsize guide
+                          x=dx / dMpx-dWid / 2
+                          y=dy / dMpy-dWid
+                          x2=(x+dWid)*dMpx
+                          y2=(y+dWid*2)*dMpy
+                          x*dMpx
+                          y*dMpy    
+                          
+                          LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
+                          LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
+                          
+                          LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
+                          LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
+                          
+                          LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
+                          LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
+                          
+                          LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
+                          LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
+                        Else
+                          Circle(dx,dy,10,bp(2))
+                        EndIf
+                        
+                        ; draw sprite
+                        If tcur=#toolDraw And dSel=#toolBrushSPR
+                          setP(mx,my)
+                          DrawingMode(#PB_2DDrawing_Default)
+                          dBrushSPR(px,py,dWid,0,1)
+                        EndIf
+                    EndSelect
+                  EndIf
+                EndIf
+                
+                
+                ; draw shape guides
+                DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)                
+                Select dWire
+                  Case #toolLine   ; line tool
+                    If dShift      ; horizontal
+                      LineXY(sx,sy,dx,sy,bp(7))                    
+                    ElseIf dCtrl ; vertical
+                      LineXY(sx,sy,sx,dy,bp(7))
+                    Else ; any direction
+                      LineXY(sx,sy,dx,dy,bp(7))
                     EndIf
                     
-                    ; draw sprite
-                    If tcur=#toolDraw And dSel=#toolBrushSPR
-                      setP(mx,my)
-                      DrawingMode(#PB_2DDrawing_Default)
-                      dBrushSPR(px,py,dWid,0,1)
+                    
+                  Case #toolCirOut,#toolCirFil ; polygon tool
+                    Circle(sx,sy,Abs(sx-dx),bp(7))
+                  Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
+                    If dShift
+                      Box(sx,sy,dx-sx,dx-sx,bp(7))
+                    Else
+                      Box(sx,sy,dx-sx,dy-sy,bp(7))
                     EndIf
                 EndSelect
               EndIf
-            EndIf
-            
-            
-            ; draw shape guides
-            DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)                
-            Select dWire
-              Case #toolLine   ; line tool
-                If dShift      ; horizontal
-                  LineXY(sx,sy,dx,sy,bp(7))                    
-                ElseIf dCtrl ; vertical
-                  LineXY(sx,sy,sx,dy,bp(7))
-                Else ; any direction
-                  LineXY(sx,sy,dx,dy,bp(7))
-                EndIf
-                
-                
-              Case #toolCirOut,#toolCirFil ; polygon tool
-                Circle(sx,sy,Abs(sx-dx),bp(7))
-              Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
-                If dShift
-                  Box(sx,sy,dx-sx,dx-sx,bp(7))
-                Else
-                  Box(sx,sy,dx-sx,dy-sy,bp(7))
-                EndIf
-            EndSelect
-            
-          Else
-            updatePalette()
-          EndIf
+              
+            Case 1 ; show palette
+              updatePalette()
+              
+          EndSelect
           
           ; handle popups on main canvas
           Select mact
@@ -3389,20 +3484,12 @@ Repeat
               DrawingMode(#PB_2DDrawing_Default)
               pickFlashColour(mact)  
             Case #MA_ToolAnimate ; show animate buttons
-              selectMA(#MA_ToolAnimate)
-              x=MA()\lx-12
-              selectMA(#GA_MainCanvas)
-              y=MA()\ry-206
-              DrawImage(ImageID(imgAnimateButtons),x,y)
-              If tAni>-1 And tAni<4
-                DrawingMode(#PB_2DDrawing_Outlined)
-                Box(x+2,y+2+tAni*50,46,46,bp(2))
-              EndIf
+              
           EndSelect
           
           If tBRT=#toolBrushType
-              DrawingMode(#PB_2DDrawing_Outlined)
-              drawBrushtypeMenu() 
+            DrawingMode(#PB_2DDrawing_Outlined)
+            drawBrushtypeMenu() 
           EndIf
           
           StopDrawing()
@@ -3519,14 +3606,14 @@ Repeat
             y=127
           EndIf
           
-          selectMA(#MO_OptTrace)
-          ;Box(MA()\lx,MA()\ly+20,30,132,bp(0))
-          Box(MO()\lx+13,MO()\ly+30,5,132,bp(1))
-          LineXY(MO()\lx+15,MO()\ly+32,MO()\lx+15,MO()\ly+160,bp(7))
-          Box(MO()\lx+1,MO()\ly+32+y,28,6,bp(7))
-          Box(MO()\lx+3,MO()\ly+34+y,24,2,bp(8))
-          DrawText(MO()\lx+40,MO()\ly+30,"255",bp(7))
-          DrawText(MO()\lx+40,MO()\ly+146,"000",bp(7))
+          ;selectMA(#MO_OptTrace)
+          selectMO(#MO_OptTrnVal)
+          Box(MO()\lx+13,MO()\ly,5,132,bp(1))
+          LineXY(MO()\lx+15,MO()\ly+2,MO()\lx+15,MO()\ly+130,bp(7))
+          Box(MO()\lx+1,MO()\ly+y,28,6,bp(7))
+          Box(MO()\lx+3,MO()\ly+2+y,24,2,bp(8))
+          DrawText(MO()\lx+40,MO()\ly,"000",bp(7))
+          DrawText(MO()\lx+40,MO()\ly+116,"255",bp(7))
           
           
           StopDrawing()
@@ -3578,11 +3665,12 @@ Repeat
       animExport+1
       If animExport=8
         animExport=-1
-        flashAnim=0
-        fspeed=540
+        flashAnim=flashAniOld
+        animType=animTypeOld
+        fSpeed=fSpdOld
         RemoveWindowTimer(0,0)
         AddWindowTimer(0,0,fspeed)
-        toolAniToggle(3,0)
+        ;toolAniToggle(#toolAnimate,0)
         If StartDrawing(CanvasOutput(#GA_TSPalette))
           updateFlashSpeed(fSpeed)
           StopDrawing()
@@ -3671,6 +3759,8 @@ DataSection
   Data.w 102,526,44,44,0,1
   Data.s "MA_PatSel"          ; palette / pattern selector - only visible when activated via MA_PatternShow
   Data.w 4,300,586,208,0,0
+  Data.s "MA_AniSel"          ; animate menu - only visible when activated via MA_ToolAnimate
+  Data.w 288,464,200,50,0,0  
   Data.s "MA_Layers"          ; layers selector, needs redesign to allow other layers
   Data.w 102,200,50,238,1,1
   Data.s "MA_SpriteShow"      ; select sprite drawing mode
@@ -3709,37 +3799,41 @@ DataSection
   Data.s "DATAEND"
   
   ; options view mouse area data
+  ; name, x, y, type
+  ; type 0=button, 1=slider
   optionsData:
   Data.s "Thin"
-  Data.w 20,140
+  Data.w 20,140,0
   Data.s "Thick"
-  Data.w 20,164
+  Data.w 20,164,0
   Data.s "Pixel"
-  Data.w 20,188
+  Data.w 20,188,0
   Data.s "Off"
-  Data.w 20,212
+  Data.w 20,212,0
   Data.s "Guide"
-  Data.w 20,236
+  Data.w 20,236,0
   Data.s "Mode 0"
-  Data.w 20,290
+  Data.w 20,290,0
   Data.s "Mode 1"
-  Data.w 20,314
+  Data.w 20,314,0
   Data.s "Mode 2"
-  Data.w 20,338
+  Data.w 20,338,0
   Data.s "Mode 3"
-  Data.w 20,362
+  Data.w 20,362,0
   Data.s "Mode 4"
-  Data.w 20,386
+  Data.w 20,386,0
   Data.s "Mode 5"
-  Data.w 20,410
+  Data.w 20,410,0
   Data.s "Mode 6"
-  Data.w 20,434
+  Data.w 20,434,0
   Data.s "Mode 7"
-  Data.w 20,458
+  Data.w 20,458,0
   Data.s "Grid"
-  Data.w 150,140
+  Data.w 150,140,0
   Data.s "Trace"
-  Data.w 150,164
+  Data.w 150,164,0
+  Data.s "TRNValue"
+  Data.w 150,188,1
   
   Data.s "DATAEND"
   ; Patterns 0 - 17, format: 4x4 grid
@@ -3821,8 +3915,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 1782
-; FirstLine = 1759
+; CursorPosition = 2742
+; FirstLine = 2716
 ; Folding = -----------
 ; EnableXP
 ; UseIcon = Art-icon.ico
