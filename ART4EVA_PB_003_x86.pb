@@ -574,7 +574,7 @@ Procedure updatePalette()
   s=(4/dMpx)*8-1  
   
   Box(MA()\lx,MA()\ly,MA()\w,MA()\h,bp(0))
-  drawBox(MA()\lx+1,MA()\ly+1,MA()\rx-1,MA()\ry-1,bp(7))
+  drawBox(MA()\lx+1,MA()\ly+1,MA()\rx-1,MA()\ry-10,bp(7))
   
   For i=0 To 8          ; colour loop 0 = bottom - 7 = top
                         ; preset plot positions
@@ -614,7 +614,7 @@ Procedure updatePalette()
   Next
   
   ; highlight selected pattern and update selected brush size pattern
-  Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(7))
+  Box(MA()\lx+pSel*32+4,MA()\ry-22-pCol*22+4,32,2,bp(7))
   
 EndProcedure
 
@@ -916,8 +916,8 @@ Procedure updatepCol(c.b)
     
     If mact=#MA_PatSel
       selectMA(#MA_PatSel)
-      Box(MA()\lx+pSel*32+4,MA()\ry-11-oldP*22+4,32,2,bp(0))
-      Box(MA()\lx+pSel*32+4,MA()\ry-11-pCol*22+4,32,2,bp(7))
+      Box(MA()\lx+pSel*32+4,MA()\ry-22-oldP*22+4,32,2,bp(0))
+      Box(MA()\lx+pSel*32+4,MA()\ry-22-pCol*22+4,32,2,bp(7))
     EndIf
     
     StopDrawing()
@@ -2391,14 +2391,14 @@ Repeat
   ;Event = WaitWindowEvent()
   
   ; event loop
-  noevent=0
+  someEvent=0
   Repeat
     
     Event = WindowEvent()
     
     ; if no events are detected small delay
     If Event
-      noevent=1
+      someEvent=1
       ; process all events
       Select event
           
@@ -3273,7 +3273,7 @@ Repeat
   ;
   ;-------- Update Screen --------
   ;         
-  If noevent ; reduce screen redraw unless event has occured
+  If someEvent ; reduce screen redraw unless event has occured
     
     Select dDSP
         ;-------- Update Painting Screen
@@ -3371,6 +3371,10 @@ Repeat
             DrawAlphaImage(ImageID(imgTraceLayer),0,0)
           EndIf           
           
+          ; set grid visible flag
+          showGrid=0
+          
+          ; show animate tools and set grid flag if in range
           If dOVL=2
             selectMA(#MA_AniSel)
             x=MA()\lx
@@ -3381,23 +3385,18 @@ Repeat
               DrawingMode(#PB_2DDrawing_Outlined)
               Box(x+2+tAni*50,y+2,46,46,bp(2))
             EndIf 
+            showGrid=rangeapp(#MA_AniSel)
           EndIf
-          
-          x=0
           
            ; show palette and set x if mouse in range
           If dOVL=1
             updatePalette()
-            x=rangeapp(#MA_PatSel)
+            showGrid=rangeapp(#MA_PatSel)
           EndIf
           
-          ; set x if animate menu visible and in range
-          If dOVL=2
-            x=rangeapp(#MA_AniSel)
-          EndIf
-          
+         
           ; draw cross hair if mouse not in range of visible overlays
-          If x=0
+          If showGrid=0
               
                 DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
                 If rangeApp(#GA_MainCanvas)
@@ -3768,9 +3767,9 @@ DataSection
   Data.s "MA_FillCol"         ; fill colour indicator
   Data.w 102,526,44,44,0,1
   Data.s "MA_PatSel"          ; palette / pattern selector - only visible when activated via MA_PatternShow
-  Data.w 4,300,586,208,0,0
+  Data.w 4,300,586,220,0,0
   Data.s "MA_AniSel"          ; animate menu - only visible when activated via MA_ToolAnimate
-  Data.w 288,464,200,50,0,0  
+  Data.w 288,464,200,56,0,0  
   Data.s "MA_Layers"          ; layers selector, needs redesign to allow other layers
   Data.w 102,200,50,238,1,1
   Data.s "MA_SpriteShow"      ; select sprite drawing mode
@@ -3925,8 +3924,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 3398
-; FirstLine = 3357
+; CursorPosition = 93
+; FirstLine = 90
 ; Folding = -----------
 ; EnableXP
 ; UseIcon = Art-icon.ico
