@@ -2519,7 +2519,12 @@ Repeat
                 If x<>#PB_Cursor_Cross
                   SetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor , #PB_Cursor_Cross)
                 EndIf
+              ElseIf dDSP<>0
+                If x<>#PB_Cursor_Cross
+                  SetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor , #PB_Cursor_Cross)
+                EndIf
               Else
+                
                 If x<>#PB_Cursor_Invisible
                   SetGadgetAttribute(#GA_MainCanvas, #PB_Canvas_Cursor , #PB_Cursor_Invisible)
                 EndIf
@@ -3378,13 +3383,22 @@ Repeat
             EndIf 
           EndIf
           
-          ; draw cross hair
-          Select dOVL
-            Case 0,2 ; skip if pattern select visible
-              If dOVL=2 And rangeapp(#MA_AniSel)
-                
-              Else
-                
+          x=0
+          
+           ; show palette and set x if mouse in range
+          If dOVL=1
+            updatePalette()
+            x=rangeapp(#MA_PatSel)
+          EndIf
+          
+          ; set x if animate menu visible and in range
+          If dOVL=2
+            x=rangeapp(#MA_AniSel)
+          EndIf
+          
+          ; draw cross hair if mouse not in range of visible overlays
+          If x=0
+              
                 DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
                 If rangeApp(#GA_MainCanvas)
                   
@@ -3473,10 +3487,6 @@ Repeat
                 EndSelect
               EndIf
               
-            Case 1 ; show palette
-              updatePalette()
-              
-          EndSelect
           
           ; handle popups on main canvas
           Select mact
@@ -3915,8 +3925,8 @@ EndDataSection
 
 
 ; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 2742
-; FirstLine = 2716
+; CursorPosition = 3398
+; FirstLine = 3357
 ; Folding = -----------
 ; EnableXP
 ; UseIcon = Art-icon.ico
