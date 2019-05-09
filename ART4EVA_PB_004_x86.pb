@@ -35,8 +35,6 @@ UsePNGImageDecoder()
 #maxUndo=32
 #SCRNsize=163839 ; screen buffer array size
 #RAWsize=20480
-#maApp=11 ; mouse area count 0-n for main application
-#maOpt=12 ; mouse area count 0-n for options page
 
 ; tool strip constants
 #toolSave=0
@@ -59,15 +57,19 @@ UsePNGImageDecoder()
 #toolCLSall=17
 #toolBrushType=18
 #ToolLineConnect=19
-#Toolspare2=20
+#ToolCopyPaste=20
 #toolTransparent=21
 
-#toolBrushBox=5
-#toolBrushRound=4
-#toolBrushFlash=3
-#toolBrush2x=2
-#toolBrushRND=1
-#toolBrushSPR=0
+; add new brushes to bottom
+#ToolBrushTypeCount=7
+#toolBrushBox=#ToolBrushTypeCount-1
+#toolBrushRound=#ToolBrushTypeCount-2
+#toolBrushFlash=#ToolBrushTypeCount-3
+#toolBrush2x=#ToolBrushTypeCount-4
+#toolBrushRND=#ToolBrushTypeCount-5
+#toolBrushSPR=#ToolBrushTypeCount-6
+#toolBrushPaste=#ToolBrushTypeCount-7
+
 
 ; animate menu select items
 #toolAnimate=0
@@ -167,6 +169,12 @@ Structure undoArray
   buf.a[#SCRNsize+1]
 EndStructure
 
+Structure copyArray
+  buf.a[#SCRNsize+1]
+  w.w
+  h.w
+EndStructure
+
 Structure drawLayers
   VIS.l                   ; visible flag
   SCRN.a[#SCRNsize+1]     ; screen buffer
@@ -262,14 +270,13 @@ Global imgBrushType, imgTraceLayer
 Global savePattern=0                                  ; save file pattern selector
 Global loadPattern=0                                  ; load file pattern selector
 Global imgOverlay.Overlay                             ; image menu overlay
+Global SCRNcopy.copyArray                             ; copy past buffer object
 
 Global Dim dl.drawLayers(4) ; layers array
 Global Dim SCRNout.a(#SCRNsize) ; final output buffer
 
 Global Dim pat.a(17,15) ; drawing patterns
 Global Dim bp(16)       ; beeb palette
-                        ;Global Dim MA.MouseArea(#maApp) ; mouse area structure array for main app
-                        ;Global Dim MO.MouseArea(#maOpt) ; mouse area structure array for options page
 
 Global Dim rgbT.rgbTable(16)     ; rgb lookup table
 Global Dim ct(16)                ; colour table look for redrawing main canvas
@@ -338,7 +345,8 @@ EndProcedure
 Procedure setP(x,y)
   selectMA(#MA_Drawing)
   px=(x-MA()\lx) / dMpx
-  py=255-((y-MA()\ly) / dMpy)
+  ;py=255-((y-MA()\ly) / dMpy)
+  py=(511-(y-MA()\ly)) / dMpy
   ;py=(y-MA()\ly) / dMpy
 EndProcedure
 
@@ -346,7 +354,8 @@ Procedure px1(x)
   ProcedureReturn (x-MA()\lx) / dMpx
 EndProcedure
 Procedure py1(y)
-  ProcedureReturn 255-((y-MA()\ly) / dMpy)
+  ;ProcedureReturn 255-((y-MA()\ly) / dMpy)
+  ProcedureReturn (511-(y-MA()\ly)) / dMpy
 EndProcedure
 
 ; display program stats
@@ -374,8 +383,9 @@ Procedure showstats()
   DrawText(MA()\lx+x+g,MA()\ly,Str(px))
   DrawText(MA()\lx+x+g,MA()\ly+y,Str(py))
   DrawText(MA()\lx+x+g,MA()\ly+y*2,Str(dWid))
-  DrawText(MA()\lx+x+g,MA()\ly+y*3,Str(tGrd))
+  DrawText(MA()\lx+x+g,MA()\ly+y*3,Str(SCRNcopy\w))
   
+                                
   ;DrawText(MA()\lx+x+160,MA()\ly,Str(gCur))
   ;DrawText(MA()\lx+x+160,MA()\ly+16,Str(dDSP))
   
@@ -496,9 +506,40 @@ Procedure dBrushSPR(dx,dy,w,d,oP)
   
 EndProcedure
 
+Procedure dBrushPaste(dx,dy,oP)
+  Protected lx,ly,dc,s,p,dw,dh,x1
+  
+  dw=SCRNcopy\w
+  dh=SCRNcopy\h
+  ;dx=((dx-dw / 2) / 2)*2
+  ;dy=((dy-dh) / 2)*2  
+  x1=0
+  
+  ; draw pattern loop centered at pixel location dx,dy
+  For ly=dy To dy+dh
+    For lx=dx To dx+dw
+      ; range check, set pattern colour And plot
+      If lx>-1 And lx<dMdx And ly>-1 And ly<dMdy
+        dc=SCRNcopy\buf[x1]
+        
+        ; check For transparency
+        If dc-dTrn>-1
+          If op 
+            Box(lx*dMpx,508-ly*dMpy,dMpx,dMpy,bp(dc))
+          Else
+            dl(dLay)\SCRN[ly*640+lx]=dc
+          EndIf
+        EndIf
+      EndIf
+      x1+1
+    Next
+  Next
+  
+EndProcedure
+
 ; update current pattern template
 Procedure updateBrush()
-  Protected px,py,lx,ly,dc,ps,s
+  Protected px,py,lx,ly,dc,ps,s,h
   
   ; set skip counter  
   If dSel=#toolBrush2x
@@ -552,13 +593,15 @@ Procedure updateBrush()
   Next  
   
   
-  ;draw pattern loop
+  ;draw pattern loop 32,16,8,4
   selectMA(#MA_SelectedPat)
-  s=(4/dMpx)*9-1
+  s=32/dMpx-1 ;s=(4/dMpx)*9-1
+  h=32/dMpy-1 ;(old value 17)
+  
   
   ; update brush view on tools palette
   For lx=0 To s
-    For ly=0 To 17
+    For ly=0 To h
       px=lx % 16
       py=ly % 16
       If curPat(px,py)=16 
@@ -566,7 +609,7 @@ Procedure updateBrush()
       Else
         dc=curPat(px,py) % dBits
       EndIf
-      Box(MA()\lx+lx*dMpx+4,MA()\ly+ly*dMpy+4,dMpx,dMpy,bp(dc))
+      Box(MA()\lx+lx*dMpx+6,MA()\ly+ly*dMpy+6,dMpx,dMpy,bp(dc))
     Next
   Next
   
@@ -574,11 +617,13 @@ EndProcedure
 
 ; update palette, assumes startdrawing is already active
 Procedure updatePalette()
-  Protected i,p,x,dc,p1,p2,i1,i2,xd,yd,s,lx,ly,px,py
+  Protected i,p,x,dc,p1,p2,i1,i2,xd,yd,s,h,lx,ly,px,py
   
   selectMA(#MA_PatSel)
   dc=bp(1)
-  s=(4/dMpx)*8-1  
+  ;s=(4/dMpx)*8-1  
+  s=32/dMpx-1
+  h=16/dMpy-1
   
   Box(MA()\lx,MA()\ly,MA()\w,MA()\h,bp(0))
   drawBox(MA()\lx+1,MA()\ly+1,MA()\rx-1,MA()\ry-10,bp(7))
@@ -593,7 +638,7 @@ Procedure updatePalette()
       p2=MA()\lx+dMpx*5+p*32
       If i<8            ; branch for custom patterns
         
-        For ly=0 To 7
+        For ly=0 To h
           For lx=0 To s
             If pat(p,(lx % 4)+(ly % 4)*4) 
               dc=bp(i % dBits)
@@ -610,7 +655,7 @@ Procedure updatePalette()
         
       Else
         ; custom pattern loop
-        For ly=0 To 7
+        For ly=0 To h
           For lx=0 To s
             ;Box(p1+(x % 8)*dMpx,i1+(x / 8)*dMpy,dMpx,dMpy,bp(cusPat(p,(lx % 16)+(ly % 16)*16)))
             Box(p1+lx*dMpx,i1+ly*dMpy,dMpx,dMpy,bp(cusPat(p,(lx % 8)+(ly % 8)*8)))
@@ -820,8 +865,8 @@ Procedure dBoxG(x1,y1,x2,y2,d)
   For lx=x1 To x2
     If d : gR=gRd : EndIf
     For ly=y1 To y2
-      ; range check, set pattern colour And plot
-      If lx>-1 And lx<160 And ly>-1 And ly<256 
+      ; range check, set pattern colour And plot (old 160x256)
+      If lx>-1 And lx<dMdx And ly>-1 And ly<dMdy 
         pS=lx % 4+(ly % 4)*4
         If pat(Int(gR),pS)
           dc=pCol % 8
@@ -1067,10 +1112,10 @@ EndProcedure
 ; show animate menu and button status, assumes start drawing active
 Procedure drawBrushtypeMenu()
   selectMA(#GA_MainCanvas)
-  x=MA()\rx-306
+  x=MA()\rx-#ToolBrushTypeCount*50-6
   y=MA()\ry-56
   DrawImage(ImageID(imgBrushType),x,y)
-  If dSel>-1 And dSel<6
+  If dSel>-1 And dSel<#ToolBrushTypeCount
     Box(x+2+dSel*50,y+2,46,46,bp(2))
   EndIf
   
@@ -1472,7 +1517,7 @@ Procedure LayerToOutput(l,t)
         SCRNout(x)=dl(l)\SCRN[x] % 16 ; convert colour 16 (fake black) to true black for raw images
       EndIf
     EndIf
-  Next    
+  Next
 EndProcedure
 
 ; render image from SCRNout buffer and save PNG image
@@ -2456,7 +2501,7 @@ Repeat
           Select gCur
               
               ;
-              ;-------- Drawing Gadget Area --------
+              ;--- Drawing Gadget Mouse Down / Move ---
               ;              
               
             Case #GA_MainCanvas ; drawing area
@@ -2519,8 +2564,7 @@ Repeat
                     EndIf
                     
                       
-                    Case 0 ; main canvas
-                      
+                  Case 0 ; main canvas
                       
                       ; main canvas do any drawing actions For mouse move
                       dOVL=0 ; ensure animate overlay is hidden when drawing
@@ -2549,7 +2593,7 @@ Repeat
                                     Case #toolBrushFlash
                                       flashbrush(px1(mx),py1(my))                                
                                   EndSelect
-                                Case #toolLine,#toolCirOut,#toolCirFil,#toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer
+                                Case #toolLine,#toolCirOut,#toolCirFil,#toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer, #ToolCopyPaste
                                   
                                   
                                 Case #toolFill, #toolReplace ; flood fill
@@ -2630,7 +2674,11 @@ Repeat
                                           dBits=8
                                           
                                         Case 3
-                                          
+                                          dMdx=80 ; current mode horizontal pixels
+                                          dMdy=128 ; current mode vertical pixels
+                                          dMpx=8   ; current mode horizontal pixel size
+                                          dMpy=4   ; current mode vertical pixel size
+                                          dBits=8                                          
                                         Case 4
                                           
                                         Case 5
@@ -2676,6 +2724,9 @@ Repeat
                 
               EndIf
               
+              ;
+              ;--- Drawing Gadget Mouse Up ---
+              ; 
               
               If EventType()=#PB_EventType_LeftButtonUp
                 ; do any mouse up actions such as tools and pattern select
@@ -2697,7 +2748,12 @@ Repeat
                                   dBrushSPR(px,py,dWid,0,0)
                                   
                                 Case #toolBrushRND
-                                dAir=0  
+                                  dAir=0
+                                  
+                              Case #toolBrushPaste ; copy and paste finalise
+                                setP(mx,my)
+                                dBrushPaste(px,py,0)
+                                 
                                 EndSelect
                                 
                                 
@@ -2756,6 +2812,28 @@ Repeat
                                 selectMA(#MA_Drawing)
                                 FillReplace(mx-MA()\lx,my-MA()\ly)
                                 
+                              Case #ToolCopyPaste ; copy and paste finalise
+                                ; get screen coords for start and end mouse pos
+                                x1=px1(sx): x2=px1(ox)
+                                y1=py1(sy): y2=py1(oy)
+                                If x1>x2 : Swap x1,x2 : EndIf
+                                If y1>y2 : Swap y1,y2 : EndIf
+                                If x1<0 : x1=0: EndIf
+                                If x2>639 : x2=639: EndIf
+                                If y1<0 : y1=0: EndIf
+                                If y2>255 : y2=255: EndIf                               
+                                x=0
+                                For ly=y1 To y2
+                                  For lx=x1 To x2
+                                    SCRNcopy\buf[x]=dl(dLay)\SCRN[ly*640+lx]
+                                    x+1
+                                  Next
+                                Next
+                              
+                                SCRNcopy\w=x2-x1
+                                SCRNcopy\h=y2-y1
+                                  
+                                
                             EndSelect
                             
                           Case 1 ; sprite editor mode
@@ -2813,22 +2891,12 @@ Repeat
                       Case #toolAnimate ; Animate on or off toggle
                         flashAnim=(flashAnim+1) % 2
                         addToggle(#toolAnimate,flashAnim*2,1)
-;                         If StartDrawing(ImageOutput(imgAnimateButtons))
-;                           toolToggle(#toolAnimate,flashAnim*2,1)
-;                           StopDrawing()
-;                         EndIf
                         
                       Case #toolAniCycle,#toolAniPing ; animate Ping = 1, animate cycle = 2
                         animType=tAni-1
                         addToggle(#toolAniCycle,(1-animType)*2,1)
                         addToggle(#toolAniPing,animType*2,1)
                         
-;                         If StartDrawing(ImageOutput(imgAnimateButtons))
-;                           toolToggle(#toolAniCycle,(1-animType)*2,1)
-;                           toolToggle(#toolAniPing,animType*2,1)
-;                           StopDrawing()
-;                         EndIf
-                                                
                         If flashCycle=8:animDir=1:EndIf
                         If flashCycle=15:animDir=-1:EndIf
                         
@@ -2843,13 +2911,6 @@ Repeat
                           animType=0
                           addToggle(#toolAniCycle,(1-animType)*2,1)
                           addToggle(#toolAniPing,animType*2,1)
-
-;                           If StartDrawing(ImageOutput(imgAnimateButtons))
-;                             toolToggle(#toolAniCycle,(1-animType)*2,1)
-;                             toolToggle(#toolAniPing,animType*2,1)
-;                             StopDrawing()
-;                           EndIf
-                          
                           flashCycle=15
                           RemoveWindowTimer(0,0)
                           AddWindowTimer(0,0,10)
@@ -2862,7 +2923,7 @@ Repeat
               EndIf
               
               ;
-              ;-------- Palette Gadget Area --------
+              ;--- Palette Gadget Mouse Down / Move ---
               ;  
               
             Case #GA_TSPalette
@@ -2911,6 +2972,10 @@ Repeat
                 EndSelect
                 
               EndIf
+              
+              ;
+              ;--- Palette Gadget Mouse Up ---
+              ;  
               
               ; left button release events
               If EventType()=#PB_EventType_LeftButtonUp
@@ -2964,7 +3029,7 @@ Repeat
               EndIf
               
               ;
-              ;-------- Tools Gadget Area --------
+              ;--- Tools Gadget Mouse Down / Move ---
               ;              
               
             Case #GA_TSButtons ; tools area
@@ -3011,8 +3076,8 @@ Repeat
                     
                     If tHi=#toolBrushType
                       tBRT=#toolBrushType
-                      x=(mx+306) / 50
-                      If x>-1 And x<6
+                      x=(mx+#ToolBrushTypeCount*50+6) / 50
+                      If x>-1 And x<#ToolBrushTypeCount
                         dSel=x
                       EndIf
                       
@@ -3039,6 +3104,10 @@ Repeat
                     
                 EndSelect
               EndIf
+              
+              ;
+              ;--- Tools Gadget Mouse Down / Move ---
+              ;              
               
               ; Tools Gadget left mouse up
               If EventType()=#PB_EventType_LeftButtonUp
@@ -3200,13 +3269,6 @@ Repeat
           EndSelect
           
           
-          ; pattern selector block
-          If EventType() = #PB_EventType_LeftButtonDown Or (EventType() = #PB_EventType_MouseMove And GetGadgetAttribute(gCur, #PB_Canvas_Buttons) & #PB_Canvas_LeftButton)
-            
-            
-          EndIf      
-          
-          
           
           ;
           ;-------- Mouse Up --------
@@ -3350,6 +3412,7 @@ Repeat
             Next
           Next
           
+          ; trace layer
           If dGRD And tGrd
             DrawAlphaImage(ImageID(imgTraceLayer),0,0)
           EndIf           
@@ -3394,12 +3457,12 @@ Repeat
                         LineXY(MA()\lx-4,my-4+x,MA()\rx,my-4+x,RGB(63,63,63))
                       Next
                     Case 2 ; pixel
-                      x=((mx-4) / 4)*dMpx
-                      y=((my-4) / 2)*dMpy
+                      x=((mx-4) / dMpx)*dMpx
+                      y=((my-4) / dMpy)*dMpy
                       
-                      For i=0 To 3
+                      For i=0 To (dMpx-1)
                         LineXY(x+i,MA()\ly-4,x+i,MA()\ry,RGB(63,63,63))
-                        If i<2
+                        If i<dMpy
                           LineXY(MA()\lx-4,y+i,MA()\rx,y+i,RGB(63,63,63))
                         EndIf
                       Next
@@ -3435,10 +3498,18 @@ Repeat
                         EndIf
                         
                         ; draw sprite
-                        If tcur=#toolDraw And dSel=#toolBrushSPR
-                          setP(mx,my)
-                          DrawingMode(#PB_2DDrawing_Default)
-                          dBrushSPR(px,py,dWid,0,1)
+                        If tcur=#toolDraw
+                          Select dSel
+                            Case #toolBrushSPR
+                              setP(mx,my)
+                              DrawingMode(#PB_2DDrawing_Default)
+                              dBrushSPR(px,py,dWid,0,1)
+                            Case #toolBrushPaste
+                              setP(mx,my)
+                              DrawingMode(#PB_2DDrawing_Default)
+                              dBrushPaste(px,py,1)
+                          EndSelect
+                          
                         EndIf
                     EndSelect
                   EndIf
@@ -3466,6 +3537,9 @@ Repeat
                     Else
                       Box(sx,sy,dx-sx,dy-sy,bp(7))
                     EndIf
+                    
+                  Case #ToolCopyPaste ; copy paste outline
+                    Box(sx,sy,dx-sx,dy-sy,bp(7))
                 EndSelect
               EndIf
               
@@ -3889,13 +3963,3 @@ DataSection
   
 EndDataSection
 
-
-; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 2039
-; FirstLine = 2036
-; Folding = ----------
-; EnableXP
-; UseIcon = Art-icon.ico
-; Executable = ART4EVA_PB_003_x86.exe
-; DisableDebugger
-; Watchlist = gCur
