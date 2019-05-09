@@ -1,4 +1,4 @@
-;
+﻿;
 ; ------------------------------------------------------------
 ;
 ;   ART 4 Exagear - Suits 800x600 screens (576 actual vertical - 24 for menu)
@@ -495,7 +495,8 @@ Procedure dBrushSPR(dx,dy,w,d,oP)
         ; check For transparency
         If dc-dTrn>-1 
           If op 
-            Box(lx*dMpx,510-ly*dMpy,dMpx,dMpy,bp(dc))
+            ;Box(lx*dMpx,504-ly*dMpy,dMpx,dMpy,bp(dc))
+            Box(lx*dMpx,(255-ly)*dMpy,dMpx,dMpy,bp(dc))
           Else
             dl(dLay)\SCRN[ly*640+lx]=dc
           EndIf
@@ -525,7 +526,7 @@ Procedure dBrushPaste(dx,dy,oP)
         ; check For transparency
         If dc-dTrn>-1
           If op 
-            Box(lx*dMpx,508-ly*dMpy,dMpx,dMpy,bp(dc))
+            Box(lx*dMpx,(255-ly)*dMpy,dMpx,dMpy,bp(dc))
           Else
             dl(dLay)\SCRN[ly*640+lx]=dc
           EndIf
@@ -2187,7 +2188,7 @@ imgToolStrip2=CatchImage(#PB_Any,?ToolStripMain2)
 imgToolAnimate=CatchImage(#PB_Any,?ToolAnimate)
 imgAnimateButtons=CatchImage(#PB_Any,?ToolAnimate2)
 imgBrushType=CatchImage(#PB_Any,?ToolBrushType)
-;imgHelpAbout=CatchImage(#PB_Any,?HelpAbout)
+imgHelpAbout=CatchImage(#PB_Any,?HelpAbout)
 
 ; create drawing layers
 For i=0 To ArraySize(dl())
@@ -3586,7 +3587,7 @@ Repeat
           ;drawBox(4,4,636,104,bp(7))
           ;DrawText(20,20,"ART for EXA (c) FourthStone")
           ;DrawText(20,40,"What's needed here is a fancy title, dimensions 636 x 100 (hint hint) ;-)")
-          ;DrawImage(ImageID(imgHelpAbout),4,4)
+          DrawImage(ImageID(imgHelpAbout),4,4)
           
           ; help panel
           drawbox(500,128,636,264,bp(8))
@@ -3938,7 +3939,7 @@ DataSection
   ToolAnimate:         : IncludeBinary #PB_Compiler_FilePath + "/ART_TOOL_Animate_01.BMP"
   ToolAnimate2:        : IncludeBinary #PB_Compiler_FilePath + "/ART_TOOL_Animate_Popup_01.BMP"
   ToolBrushType:       : IncludeBinary #PB_Compiler_FilePath + "/ART_TOOL_BrushType_01.BMP"
-  ;HelpAbout:           : IncludeBinary #PB_Compiler_FilePath + "/Art_About_01.PNG"
+  HelpAbout:           : IncludeBinary #PB_Compiler_FilePath + "/Art_About_01.PNG"
   
   ; custom pattern data
   customPatternData:
@@ -3963,3 +3964,11 @@ DataSection
   
 EndDataSection
 
+; IDE Options = PureBasic 5.61 (Windows - x86)
+; CursorPosition = 3589
+; FirstLine = 3568
+; Folding = ----------
+; EnableXP
+; UseIcon = Art-icon.ico
+; Executable = ART4EVA_PB_004_x86.exe
+; DisableDebugger
