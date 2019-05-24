@@ -31,7 +31,9 @@ UsePNGImageDecoder()
 #scrW=800; 960
 #scrH=576
 #drwW=640
+#drwWloop=#drwW-1
 #drwH=512
+#drwHloop=#drwH-1
 #maxUndo=32
 #SCRNsize=163839 ; screen buffer array size
 #RAWsize=20480
@@ -346,7 +348,7 @@ Procedure setP(x,y)
   selectMA(#MA_Drawing)
   px=(x-MA()\lx) / dMpx
   ;py=255-((y-MA()\ly) / dMpy)
-  py=(511-(y-MA()\ly)) / dMpy
+  py=(#drwHloop-(y-MA()\ly)) / dMpy
   ;py=(y-MA()\ly) / dMpy
 EndProcedure
 
@@ -355,7 +357,7 @@ Procedure px1(x)
 EndProcedure
 Procedure py1(y)
   ;ProcedureReturn 255-((y-MA()\ly) / dMpy)
-  ProcedureReturn (511-(y-MA()\ly)) / dMpy
+  ProcedureReturn (#drwHloop-(y-MA()\ly)) / dMpy
 EndProcedure
 
 ; display program stats
@@ -461,7 +463,7 @@ Procedure dBrush(dx,dy,w,d)
           
           ; check For transparency
           If dc-dTrn>-1 
-            dl(dLay)\SCRN[ly*640+lx]=dc
+            dl(dLay)\SCRN[ly*#drwW+lx]=dc
           EndIf
         EndIf
       EndIf
@@ -498,7 +500,7 @@ Procedure dBrushSPR(dx,dy,w,d,oP)
             ;Box(lx*dMpx,504-ly*dMpy,dMpx,dMpy,bp(dc))
             Box(lx*dMpx,(255-ly)*dMpy,dMpx,dMpy,bp(dc))
           Else
-            dl(dLay)\SCRN[ly*640+lx]=dc
+            dl(dLay)\SCRN[ly*#drwW+lx]=dc
           EndIf
         EndIf
       EndIf
@@ -528,7 +530,7 @@ Procedure dBrushPaste(dx,dy,oP)
           If op 
             Box(lx*dMpx,(255-ly)*dMpy,dMpx,dMpy,bp(dc))
           Else
-            dl(dLay)\SCRN[ly*640+lx]=dc
+            dl(dLay)\SCRN[ly*#drwW+lx]=dc
           EndIf
         EndIf
       EndIf
@@ -686,7 +688,7 @@ Procedure Vline2(x1,y1,y2)
         
         ; Check For transparency
         If dc-dTrn>-1
-          dl(dLay)\SCRN[ly*640+x1]=dc
+          dl(dLay)\SCRN[ly*#drwW+x1]=dc
         EndIf
       EndIf
     Next
@@ -707,7 +709,7 @@ Procedure Hline2(x1,x2,y1)
         
         ; Check For transparency
         If dc-dTrn>-1 
-          dl(dLay)\SCRN[y1*640+lx]=dc
+          dl(dLay)\SCRN[y1*#drwW+lx]=dc
         EndIf
       EndIf
     Next
@@ -881,7 +883,7 @@ Procedure dBoxG(x1,y1,x2,y2,d)
         
         ; Check For transparency
         If dc-dTrn>-1
-          dl(dLay)\SCRN[ly*640+lx]=dc
+          dl(dLay)\SCRN[ly*#drwW+lx]=dc
         EndIf
       EndIf
       If d=1
@@ -1129,7 +1131,7 @@ Procedure flashBrush(dx,dy)
   ;range check, set pattern colour And plot
   If dx>-1 And dx<dMdx And dy>-1 And dy<dMdy
     If fox<>dx Or foy<>dy
-      dl(dLay)\SCRN[dy*640+dx]=flashCol
+      dl(dLay)\SCRN[dy*#drwW+dx]=flashCol
       flashCol+1
       If flashCol>15
         flashCol=8
@@ -1161,7 +1163,7 @@ Procedure dLineFlash(x1,y1,x2,y2)
   ; draw line loop
   Repeat
     If x1>-1 And x1<dMdx And y1>-1 And y1<dMdy
-      dl(dLay)\SCRN[y1*640+x1]=flashCol
+      dl(dLay)\SCRN[y1*#drwW+x1]=flashCol
     EndIf      
     flashCol+1
     If flashCol>15
@@ -1195,7 +1197,7 @@ Procedure dCircOutFlash(x1,y1,r)
     If x2<>ox Or y2<>oy
       
       If x2>-1 And x2<dMdx And y2>-1 And y2<dMdy
-        dl(dLay)\SCRN[y2*640+x2]=flashCol
+        dl(dLay)\SCRN[y2*#drwW+x2]=flashCol
       EndIf
       
       flashCol+1
@@ -1250,25 +1252,25 @@ Procedure floodFill(sx,sy)
         x=lFS()\x : y=lFS()\y
         DeleteElement(lFS())
         
-        If dl(dLay)\SCRN[y*640+x]=mc 
+        If dl(dLay)\SCRN[y*#drwW+x]=mc 
           uf=1 : df=1
           
           ; scan left
-          While x>0 And dl(dLay)\SCRN[y*640+x-1]=mc
+          While x>0 And dl(dLay)\SCRN[y*#drwW+x-1]=mc
             x-1
           Wend
           
           ; scan right and plot fill colour
-          While x<dMdx And dl(dLay)\SCRN[y*640+x]=mc
+          While x<dMdx And dl(dLay)\SCRN[y*#drwW+x]=mc
             If i
               dc=curPat(x % 16,15-(y % 16))
             EndIf
             
-            dl(dLay)\SCRN[y*640+x]=dc
+            dl(dLay)\SCRN[y*#drwW+x]=dc
             
             ; detect colour changes above and add To List
             If y<(dMdy-1)
-              c=dl(dLay)\SCRN[(y+1)*640+x]
+              c=dl(dLay)\SCRN[(y+1)*#drwW+x]
               If uf And c=mc
                 AddElement(lFS())
                 lFS()\x=x : lFS()\y=y+1
@@ -1279,7 +1281,7 @@ Procedure floodFill(sx,sy)
             
             ; detect colour changes below and add To List
             If y>0
-              c=dl(dLay)\SCRN[(y-1)*640+x]
+              c=dl(dLay)\SCRN[(y-1)*#drwW+x]
               If df And c=mc 
                 AddElement(lFS())
                 lFS()\x=x : lFS()\y=y-1
@@ -1318,7 +1320,7 @@ Procedure FillReplace(sx,sy)
     For i=0 To #SCRNsize
       
       If dl(dLay)\SCRN[i]=mc 
-        dl(dLay)\SCRN[i]=curPat(i % 16,15-((i / 640) % 16))
+        dl(dLay)\SCRN[i]=curPat(i % 16,15-((i / #drwW) % 16))
       EndIf
       
     Next
@@ -1416,8 +1418,8 @@ Procedure updateSPR()
   Protected x1,y1,gs
   
   ; determine smallest required box required to fit into drawing frame
-  x1=Int(640/SPR()\sw)
-  y1=Int(512/SPR()\sh)
+  x1=Int(#drwW/SPR()\sw)
+  y1=Int(#drwH/SPR()\sh)
   If x1>y1
     gs=y1
   Else
@@ -1477,9 +1479,9 @@ Procedure updateTRN(imgTRN)
     Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
     PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
     
-    For y = 0 To 511 
+    For y = 0 To #drwHloop 
       *Line.Pixel = Buffer+Pitch*y
-      For x=0 To 639
+      For x=0 To #drwWloop
         
         r=Red(*Line\Pixel)
         g=Green(*Line\Pixel)
@@ -1527,7 +1529,7 @@ Procedure savePNG(f.s,iTrans)
   
   ; copy output buffer to final image
   If StartDrawing(ImageOutput(imgFinal))
-    Box(0,0,640,512,bp(0))          
+    Box(0,0,#drwW,#drwH,bp(0))          
     Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
     Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
     PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format. 
@@ -1561,9 +1563,9 @@ Procedure savePNG(f.s,iTrans)
     
     ct(16)=RGBA(0,0,0,255) ; true black
     
-    For y = 0 To 511 
+    For y = 0 To #drwHloop 
       *Line.Pixel = Buffer+Pitch*y
-      yMul=(y/2)*640
+      yMul=(y/2)*#drwW
       
       For x=0 To 159
         dc = ct(SCRNout(x+yMul))
@@ -1596,9 +1598,9 @@ Procedure loadPNG(f.s,l)
       Buffer      = DrawingBuffer()             ; Get the start address of the screen buffer
       Pitch       = DrawingBufferPitch()        ; Get the length (in byte) took by one horizontal line
       PixelFormat = DrawingBufferPixelFormat()  ; Get the pixel format.           
-      For y = 0 To 511 
+      For y = 0 To #drwHloop 
         *Line.Pixel = Buffer+Pitch*y
-        yMul=(y/2)*640
+        yMul=(y/2)*#drwW
         
         ; scan loaded png file image and write pixel data to image buffer for rgb colours that match beeb palette
         ; attemtpts to preserve colour 0,0,0,0 as transparent black
@@ -1634,8 +1636,8 @@ Procedure saveRAW(f.s)
     x=0
     y=255
     For i=0 To #RAWsize-1
-      a=rawBBC(SCRNout(x+y*640))<<1
-      b=rawBBC(SCRNout(x+1+y*640))
+      a=rawBBC(SCRNout(x+y*#drwW))<<1
+      b=rawBBC(SCRNout(x+1+y*#drwW))
       ; MessageRequester("TEST",Str(a)+"  "+Str(b))
       PokeB(*MemoryID+i, (a | b)) 
       y-1
@@ -1696,8 +1698,8 @@ Procedure loadRAW(f.s,l)
           b=PeekB(*MemoryID+i) & 85
           
           ; convert raw data to pixel colour data via reverse lookup table
-          dl(l)\SCRN[x+y*640]=revBBC(a)
-          dl(l)\SCRN[x+1+y*640]=revBBC(b)
+          dl(l)\SCRN[x+y*#drwW]=revBBC(a)
+          dl(l)\SCRN[x+1+y*#drwW]=revBBC(b)
           
           ; step through mode 2 pixel order
           ; starts at lower right corner and steps left char by char, each char is eight bytes high
@@ -1870,20 +1872,20 @@ Procedure openSave(mode)
               
               yy.f=ImageHeight(iTMP)
               
-              If xx>640
-                fix.f=640/xx
+              If xx>#drwW
+                fix.f=#drwW/xx
                 xx*fix
                 yy*fix
               EndIf
-              If yy>512
-                fix.f=512/yy
+              If yy>#drwH
+                fix.f=#drwH/yy
                 xx*fix
                 yy*fix
               EndIf
               
               ResizeImage(iTMP,xx,yy)
-              fixx=(640/2)-(ImageWidth(iTMP)/2)
-              fixy=(512/2)-(ImageHeight(iTMP)/2)
+              fixx=(#drwW/2)-(ImageWidth(iTMP)/2)
+              fixy=(#drwH/2)-(ImageHeight(iTMP)/2)
               
               
               If StartDrawing(ImageOutput(imgTraceLayer))
@@ -2194,13 +2196,13 @@ imgHelpAbout=CatchImage(#PB_Any,?HelpAbout)
 For i=0 To ArraySize(dl())
   dl(i)\VIS=1
 Next
-imgFinal=CreateImage(#PB_Any,640,512,32)
-imgGRD=CreateImage(#PB_Any,640,512,32)
-imgTraceLayer=CreateImage(#PB_Any,640,512,32)
+imgFinal=CreateImage(#PB_Any,#drwW,#drwH,32)
+imgGRD=CreateImage(#PB_Any,#drwW,#drwH,32)
+imgTraceLayer=CreateImage(#PB_Any,#drwW,#drwH,32)
 
 ; buffered drawing area
 selectMA(#MA_Drawing)
-If OpenWindowedScreen(WindowID(0), MA()\lx,MA()\ly, 640, 512)=0
+If OpenWindowedScreen(WindowID(0), MA()\lx,MA()\ly, #drwW, #drwH)=0
   Exit_ART("Cannot init main canvas windowed screen object!")
 EndIf
 
@@ -2599,7 +2601,7 @@ Repeat
                                   
                                 Case #toolFill, #toolReplace ; flood fill
                                   If rangeApp(#MA_Drawing)
-                                    i=dl(dLay)\SCRN[px+640*py];Point(mx,my) get pixel colour under cursor
+                                    i=dl(dLay)\SCRN[px+#drwW*py];Point(mx,my) get pixel colour under cursor
                                     If i<>dFil                ; continue if fill colour is not the same as last fill
                                       dFil=i
                                       If StartDrawing(CanvasOutput(#GA_TSButtons)) ; update fill colour box in tool box
@@ -2820,13 +2822,13 @@ Repeat
                                 If x1>x2 : Swap x1,x2 : EndIf
                                 If y1>y2 : Swap y1,y2 : EndIf
                                 If x1<0 : x1=0: EndIf
-                                If x2>639 : x2=639: EndIf
+                                If x2>#drwWloop : x2=#drwWloop: EndIf
                                 If y1<0 : y1=0: EndIf
                                 If y2>255 : y2=255: EndIf                               
                                 x=0
                                 For ly=y1 To y2
                                   For lx=x1 To x2
-                                    SCRNcopy\buf[x]=dl(dLay)\SCRN[ly*640+lx]
+                                    SCRNcopy\buf[x]=dl(dLay)\SCRN[ly*#drwW+lx]
                                     x+1
                                   Next
                                 Next
@@ -3300,6 +3302,7 @@ Repeat
     
   Until Event=0
   
+  ; keep calling airbrush even if no other events trigger
   If someEvent=0
     If dAir ; airbrush
       dbrush(px,py,dWid,2)
@@ -3393,18 +3396,19 @@ Repeat
           If dGRD And tGrd=0
             DrawImage(ImageID(imgGRD),0,0)
           Else
-            Box(0,0,640,512,bp(0))
+            Box(0,0,#drwW,#drwH,bp(0))
           EndIf        
           
-          For y = 0 To 511 
+          ; fill screen buffer with data from output screen
+          For y = 0 To #drwHloop 
             *Line.Pixel = Buffer+Pitch*y
-            yMul=(y/dMpy)*640
+            yMul=(y/dMpy)*#drwW
             
             For x=0 To dMdx-1
               dc = ct(SCRNout(x+yMul))
               If dc<>bp(0)
                 For i=0 To dMpx-1
-                  *Line\Pixel = dc ; Write the pixel directly to the memory !
+                  *Line\Pixel = dc ; Write the pixel directly to screen buffer 
                   *line+4
                 Next
               Else
@@ -3565,7 +3569,7 @@ Repeat
         ;-------- Update Sprite Screen
       Case 1 ; sprite drawing mode
         If StartDrawing(ImageOutput(imgFinal))
-          Box(0,0,640,512,bp(0))
+          Box(0,0,#drwW,#drwH,bp(0))
           ;Box(100,100,100,100,bp(1))
           drawGrid()
           drawbox(200,240,220,276,bp(7))
@@ -3583,7 +3587,7 @@ Repeat
         ;-------- Update Options Screen
       Case 2 ; options screen
         If StartDrawing(ImageOutput(imgFinal))
-          Box(0,0,640,512,bp(0))
+          Box(0,0,#drwW,#drwH,bp(0))
           ;drawBox(4,4,636,104,bp(7))
           ;DrawText(20,20,"ART for EXA (c) FourthStone")
           ;DrawText(20,40,"What's needed here is a fancy title, dimensions 636 x 100 (hint hint) ;-)")
@@ -3964,9 +3968,9 @@ DataSection
   
 EndDataSection
 
-; IDE Options = PureBasic 5.61 (Windows - x86)
-; CursorPosition = 3589
-; FirstLine = 3568
+; IDE Options = PureBasic 5.62 (Windows - x86)
+; CursorPosition = 26
+; FirstLine = 11
 ; Folding = ----------
 ; EnableXP
 ; UseIcon = Art-icon.ico
