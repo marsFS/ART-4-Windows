@@ -124,6 +124,9 @@ UsePNGImageDecoder()
 #MO_OptTrace=14
 #MO_OptTrnVal=15
 
+#MO_OptFlashLen=16
+#MO_OptFlashGap=17
+
 ; drawing mode options
 #DM_Drawing=0
 #DM_Palette=1
@@ -220,6 +223,10 @@ Global flashCol=8             ; flashing index for drawing
 Global flashAnim=0            ; flash animation toggle
 Global flashAniOld=0          ; flash animation toggle
 Global flashCycle=8           ; flash cycle counter
+Global flashDgap=0            ; flashing colour pixel gap for line and circle tools
+Global flashDgapCount=0       ; flashing colour pixel gap counter for line And circle tools
+Global flashDlen=1            ; flashing colour pixel length for line and circle tools
+Global flashDlenCount=1       ; flashing colour pixel length counter for line And circle tools
 Global fSpeed=540             ; flash speed in ms
 Global fSpdOld=540            ; flash speed in ms
 Global animExport=-1          ; export animation frames
@@ -1162,13 +1169,30 @@ Procedure dLineFlash(x1,y1,x2,y2)
   
   ; draw line loop
   Repeat
-    If x1>-1 And x1<dMdx And y1>-1 And y1<dMdy
-      dl(dLay)\SCRN[y1*#drwW+x1]=flashCol
-    EndIf      
-    flashCol+1
-    If flashCol>15
-      flashCol=8
-    EndIf    
+    ; check if flash gap is set to 0
+    If flashDgapCount=0
+      
+      ; update pixel if flash gap=0
+      If x1>-1 And x1<dMdx And y1>-1 And y1<dMdy
+        dl(dLay)\SCRN[y1*#drwW+x1]=flashCol
+      EndIf
+      
+      ; update flash length counter and reset gap, length and colour vars
+      flashDlenCount-1
+      If flashDlenCount=0
+        flashDlenCount=flashDlen
+        flashDgapCount=flashDgap
+        flashCol+1
+        If flashCol>15
+          flashCol=8
+        EndIf
+      EndIf
+      
+    Else 
+      flashDgapCount-1
+    EndIf
+    
+    
     If x1=x2 And y1=y2 : Break: EndIf
     e2=2 * err
     If e2>-dy
@@ -1196,14 +1220,37 @@ Procedure dCircOutFlash(x1,y1,r)
     
     If x2<>ox Or y2<>oy
       
-      If x2>-1 And x2<dMdx And y2>-1 And y2<dMdy
-        dl(dLay)\SCRN[y2*#drwW+x2]=flashCol
-      EndIf
+;       If x2>-1 And x2<dMdx And y2>-1 And y2<dMdy
+;         dl(dLay)\SCRN[y2*#drwW+x2]=flashCol
+;       EndIf
       
-      flashCol+1
-      If flashCol>15
-        flashCol=8
-      EndIf
+      ; check if flash gap is set to 0
+      If flashDgapCount=0
+        
+        ; update pixel if flash gap=0
+        If x2>-1 And x2<dMdx And y2>-1 And y2<dMdy
+          dl(dLay)\SCRN[y2*#drwW+x2]=flashCol
+        EndIf
+        
+        ; update flash length counter and reset gap, length and colour vars
+        flashDlenCount-1
+        If flashDlenCount=0
+          flashDlenCount=flashDlen
+          flashDgapCount=flashDgap
+          flashCol+1
+          If flashCol>15
+            flashCol=8
+          EndIf
+        EndIf
+        
+      Else 
+        flashDgapCount-1
+      EndIf      
+      
+;       flashCol+1
+;       If flashCol>15
+;         flashCol=8
+;       EndIf
     EndIf
     
     ox=x2
@@ -1217,6 +1264,9 @@ EndProcedure
 Procedure dBoxFlash(x1,y1,x2,y2)
   If x1>x2:Swap x1,x2:EndIf
   If y1>y2:Swap y1,y2:EndIf
+  
+  flashDlenCount=flashDlen
+  flashDgapCount=0
   
   dLineFlash(x1,y1,x1,y2)
   dLineFlash(x1+4,y2,x2,y2)
@@ -2173,6 +2223,9 @@ Repeat
       Case 1 ; slider vertical
         MO()\rx=MO()\lx+30
         MO()\ry=MO()\ly+132
+      Case 2 ; +/-
+        MO()\rx=MO()\lx+38
+        MO()\ry=MO()\ly+18        
     EndSelect
   EndIf
 Until tName="DATAEND"
@@ -2705,8 +2758,6 @@ Repeat
                                         StopDrawing()        
                                       EndIf                                      
                                       
-                                      
-                                      
                                     Case #MO_OptTrnVal
                                       y=(my-MO()\ly-4)*2
                                       If y>-1 And y<256
@@ -2758,18 +2809,14 @@ Repeat
                                 dBrushPaste(px,py,0)
                                  
                                 EndSelect
-                                
-                                
-;                               Case #toolDraw
-;                                 If dCon And dsel=#toolBrushFlash
-;                                   dLineFlash(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,oy+MA()\ly)
-;                                 EndIf
 
                               Case #toolLine ; line tool completion
                                 selectMA(#MA_Drawing)
                                 Select dSel
                                     
                                   Case #toolBrushFlash
+                                    flashDlenCount=flashDlen
+                                    flashDgapCount=0
                                     dLineFlash(sx+MA()\lx,sy+MA()\ly,ox+MA()\lx,oy+MA()\ly)
                                   Default
                                     If dShift ; horizontal
@@ -2784,6 +2831,8 @@ Repeat
                               Case #toolCirOut ; polygon completion
                                 Select dSel
                                   Case #toolBrushFlash
+                                    flashDlenCount=flashDlen
+                                    flashDgapCount=0
                                     dCircOutFlash(sx,sy,Abs(sx-ox))
                                   Default
                                     dCircOut(sx,sy,Abs(sx-ox))
@@ -2878,6 +2927,31 @@ Repeat
                                 tGrd=1 ; configure grid and trace layer
                               EndIf  
                             EndIf
+                            
+                            If rangeOpt(#MO_OptFlashGap,dx,dy)
+                              If dx>MO()\lx+20
+                                flashDgap-1
+                                If flashDgap<0 : flashDgap=0 : EndIf
+                              Else
+                                flashDgap+1
+                                If flashDgap>32 : flashDgap=32 : EndIf
+                              EndIf
+                              
+                            EndIf
+                            
+                            If rangeOpt(#MO_OptFlashLen,dx,dy)
+                              If dx>MO()\lx+20
+                                flashDlen-1
+                                If flashDlen<1 : flashDlen=0 : EndIf
+                                
+                              Else
+                                flashDlen+1
+                                If flashDlen>32 : flashDlen=32 : EndIf
+                                
+                              EndIf
+                             
+                            EndIf
+                            
                             
                         EndSelect
                         
@@ -3502,6 +3576,12 @@ Repeat
                           Circle(dx,dy,10,bp(2))
                         EndIf
                         
+
+                    EndSelect
+                  EndIf
+                
+                EndIf
+                
                         ; draw sprite
                         If tcur=#toolDraw
                           Select dSel
@@ -3515,10 +3595,7 @@ Repeat
                               dBrushPaste(px,py,1)
                           EndSelect
                           
-                        EndIf
-                    EndSelect
-                  EndIf
-                EndIf
+                        EndIf                  
                 
                 
                 ; draw shape guides
@@ -3686,6 +3763,61 @@ Repeat
           DrawText(MO()\lx+40,MO()\ly,"000",bp(7))
           DrawText(MO()\lx+40,MO()\ly+116,"255",bp(7))
           
+          selectMO(#MO_OptFlashLen)
+          x=MO()\lx
+          y=MO()\ly
+          
+          ; border
+          drawbox(x-2,y-12,x+106,y+52,bp(8))
+          DrawText(x+6,y-20,"Flash Lines",bp(7)) 
+          
+          ; length control
+          drawbox(x+40,y,x+72,y+18,bp(8))
+          DrawText(x+76,y+2,"Len",bp(3))
+          DrawText(x+44,y+2,Str(flashDlen),bp(7))
+          
+          drawbox(x+2,y+2,x+18,y+16,bp(8))
+          Line(x+4,y+9,12,1,bp(7))
+          Line(x+10,y+4,1,11,bp(7))
+          
+          
+          drawbox(x+20,y+2,x+36,y+16,bp(8))
+          Line(x+22,y+9,12,1,bp(7))
+          
+          ; debug
+          ;drawbox(x,y,MO()\rx,MO()\ry,bp(2))          
+          
+          ; gap control
+          selectMO(#MO_OptFlashGap)
+          x=MO()\lx
+          y=MO()\ly
+          drawbox(x+40,y,x+72,y+18,bp(8))
+          DrawText(x+76,y+2,"Gap",bp(3))
+          DrawText(x+44,y+2,Str(flashDgap),bp(7))
+          
+          drawbox(x+2,y+2,x+18,y+16,bp(8))
+          Line(x+4,y+9,12,1,bp(7))
+          Line(x+10,y+4,1,11,bp(7))
+          
+          
+          drawbox(x+20,y+2,x+36,y+16,bp(8))
+          Line(x+22,y+9,12,1,bp(7))
+          
+          ; debug
+          ;drawbox(x,y,MO()\rx,MO()\ry,bp(3))
+          
+;           drawbox(MO()\lx+34,MO()\ly+32,MO()\lx+66,MO()\ly+50,bp(8))
+;           DrawText(MO()\lx+70,MO()\ly+34,"Gap",bp(3)) 
+;           DrawText(MO()\lx+38,MO()\ly+34,Str(flashDgap),bp(7))
+;           
+;           drawbox(MO()\lx-4,MO()\ly+34,MO()\lx+12,MO()\ly+48,bp(8))
+;           Line(x-2,y+41,12,1,bp(7))
+;           Line(x+4,y+36,1,11,bp(7))
+;           
+;           drawbox(MO()\lx+14,MO()\ly+34,MO()\lx+30,MO()\ly+48,bp(8))          
+;           Line(x+16,y+41,12,1,bp(7))
+          
+
           
           StopDrawing()
           
@@ -3846,6 +3978,9 @@ DataSection
   Data.s "MA_GridLayer"
   Data.w 200,140,20,20,0,0
   
+  Data.s "MA_OptFlash"
+  Data.w 400,140,20,20,0,0
+  
   ; sprite screen
   ;...
   
@@ -3855,7 +3990,7 @@ DataSection
   
   ; options view mouse area data
   ; name, x, y, type
-  ; type 0=button, 1=slider
+  ; type 0=button, 1=slider, 2=+/-
   optionsData:
   Data.s "Thin"
   Data.w 20,140,0
@@ -3889,6 +4024,10 @@ DataSection
   Data.w 150,164,0
   Data.s "TRNValue"
   Data.w 150,188,1
+  Data.s "Length"
+  Data.w 280,140,2  
+  Data.s "Gap"
+  Data.w 280,166,2
   
   Data.s "DATAEND"
   ; Patterns 0 - 17, format: 4x4 grid
@@ -3969,8 +4108,8 @@ DataSection
 EndDataSection
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 26
-; FirstLine = 11
+; CursorPosition = 2942
+; FirstLine = 2919
 ; Folding = ----------
 ; EnableXP
 ; UseIcon = Art-icon.ico
