@@ -103,6 +103,8 @@ UsePNGImageDecoder()
 #MA_FlashDraw=17
 #MA_FlashCycle=18
 #MA_ToolAnimate=19
+#MA_FlashLen=20
+#MA_FlashGap=21
 
 ; mouse options index
 #MO_OptThin=0
@@ -2319,18 +2321,18 @@ If StartDrawing(CanvasOutput(#GA_TSPalette))
   resetColSel()
   
   ; stats area
-  x=24
-  y=12
-  g=56
-  selectMA(#MA_Stats)
-  DrawingFont(FontID(tFont1)) 
-  DrawText(MA()\lx,MA()\ly,"mX:")
-  DrawText(MA()\lx,MA()\ly+y,"mY:")
-  DrawText(MA()\lx,MA()\ly+y*2,"mA:")
-  DrawText(MA()\lx,MA()\ly+y*3,"fS:")
-  DrawText(MA()\lx+g,MA()\ly,"pX:")
-  DrawText(MA()\lx+g,MA()\ly+y,"pY:")
-  DrawText(MA()\lx+g,MA()\ly+y*2,"dW:")
+;   x=24
+;   y=12
+;   g=56
+;   selectMA(#MA_Stats)
+;   DrawingFont(FontID(tFont1)) 
+;   DrawText(MA()\lx,MA()\ly,"mX:")
+;   DrawText(MA()\lx,MA()\ly+y,"mY:")
+;   DrawText(MA()\lx,MA()\ly+y*2,"mA:")
+;   DrawText(MA()\lx,MA()\ly+y*3,"fS:")
+;   DrawText(MA()\lx+g,MA()\ly,"pX:")
+;   DrawText(MA()\lx+g,MA()\ly+y,"pY:")
+;   DrawText(MA()\lx+g,MA()\ly+y*2,"dW:")
   ;DrawText(MA()\lx+g,MA()\ly+y*3,"TS:")
   ;DrawText(MA()\lx+g*2,MA()\ly,"gC:")
   ;DrawText(MA()\lx+g*2,MA()\ly+y,"mA:")
@@ -2353,6 +2355,48 @@ If StartDrawing(CanvasOutput(#GA_TSPalette))
   ; animate tool button
   selectMA(#MA_ToolAnimate)
   DrawImage(ImageID(imgToolAnimate),MA()\lx,MA()\ly)
+  
+  selectMA(#MA_FlashLen)
+  x=MA()\lx
+  y=MA()\ly
+  
+  ; border
+  ;drawbox(x-2,y-2,x+106,y+48,bp(8))
+  
+  ; length control
+  drawbox(x+40,y,x+72,y+18,bp(8))
+  DrawText(x+76,y+2,"Len",bp(3))
+  DrawText(x+44,y+2,Str(flashDlen),bp(7))
+  
+  drawbox(x+2,y+2,x+18,y+16,bp(8))
+  Line(x+4,y+9,12,1,bp(7))
+  Line(x+10,y+4,1,11,bp(7))
+  
+  
+  drawbox(x+20,y+2,x+36,y+16,bp(8))
+  Line(x+22,y+9,12,1,bp(7))
+  
+  ; debug
+  ;drawbox(x,y,MO()\rx,MO()\ry,bp(2))          
+  
+  ; gap control
+  selectMA(#MA_FlashGap)
+  x=MA()\lx
+  y=MA()\ly
+  drawbox(x+40,y,x+72,y+18,bp(8))
+  DrawText(x+76,y+2,"Gap",bp(3))
+  DrawText(x+44,y+2,Str(flashDgap),bp(7))
+  
+  drawbox(x+2,y+2,x+18,y+16,bp(8))
+  Line(x+4,y+9,12,1,bp(7))
+  Line(x+10,y+4,1,11,bp(7))
+  
+  
+  drawbox(x+20,y+2,x+36,y+16,bp(8))
+  Line(x+22,y+9,12,1,bp(7))
+  
+  ; debug
+  ;drawbox(x,y,MO()\rx,MO()\ry,bp(3))  
   
   StopDrawing()
 EndIf  
@@ -2928,30 +2972,6 @@ Repeat
                               EndIf  
                             EndIf
                             
-                            If rangeOpt(#MO_OptFlashGap,dx,dy)
-                              If dx>MO()\lx+20
-                                flashDgap-1
-                                If flashDgap<0 : flashDgap=0 : EndIf
-                              Else
-                                flashDgap+1
-                                If flashDgap>32 : flashDgap=32 : EndIf
-                              EndIf
-                              
-                            EndIf
-                            
-                            If rangeOpt(#MO_OptFlashLen,dx,dy)
-                              If dx>MO()\lx+20
-                                flashDlen-1
-                                If flashDlen<1 : flashDlen=0 : EndIf
-                                
-                              Else
-                                flashDlen+1
-                                If flashDlen>32 : flashDlen=32 : EndIf
-                                
-                              EndIf
-                             
-                            EndIf
-                            
                             
                         EndSelect
                         
@@ -3089,7 +3109,42 @@ Repeat
                       Else
                         dOVL=2
                       EndIf
-                    EndIf                    
+                    EndIf 
+                    
+                  Case #MA_FlashLen
+                    selectMA(#MA_FlashLen)
+                    If mx>MA()\lx+20
+                      flashDlen-1
+                      If flashDlen<1 : flashDlen=1 : EndIf
+                      
+                    Else
+                      flashDlen+1
+                      If flashDlen>32 : flashDlen=32 : EndIf
+                      
+                    EndIf
+                    
+                    If StartDrawing(CanvasOutput(#GA_TSPalette))
+                      Box(MA()\lx+44,MA()\ly+1,28,16,bp(0))
+                      DrawText(MA()\lx+44,MA()\ly+2,Str(flashDlen),bp(7))
+                      StopDrawing()
+                    EndIf
+                    
+                  Case #MA_FlashGap
+                    selectMA(#MA_FlashGap)
+                    
+                    If mx>MA()\lx+20
+                      flashDgap-1
+                      If flashDgap<0 : flashDgap=0 : EndIf
+                    Else
+                      flashDgap+1
+                      If flashDgap>32 : flashDgap=32 : EndIf
+                    EndIf
+                    
+                    If StartDrawing(CanvasOutput(#GA_TSPalette))
+                      Box(MA()\lx+44,MA()\ly+1,28,16,bp(0))
+                      DrawText(MA()\lx+44,MA()\ly+2,Str(flashDgap),bp(7))
+                      StopDrawing()
+                    EndIf
                     
                   Case #MA_FlashSpeed ; flash speed slider
                     RemoveWindowTimer(0,0)
@@ -3522,109 +3577,114 @@ Repeat
          
           ; draw cross hair if mouse not in range of visible overlays
           If showGrid=0
+            
+            DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
+            If rangeApp(#GA_MainCanvas)
               
-                DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
-                If rangeApp(#GA_MainCanvas)
+              Select oCrossHair
+                Case 0 ; thin
+                  LineXY(mx-4,MA()\ly-4,mx-4,MA()\ry,RGB(63,63,63))
+                  LineXY(MA()\lx-4,my-4,MA()\rx,my-4,RGB(63,63,63))
+                Case 1 ; thick
+                  For x=-1 To 1
+                    LineXY(mx-4+x,MA()\ly-4,mx-4+x,MA()\ry,RGB(63,63,63))
+                    LineXY(MA()\lx-4,my-4+x,MA()\rx,my-4+x,RGB(63,63,63))
+                  Next
+                Case 2 ; pixel
+                  x=((mx-4) / dMpx)*dMpx
+                  y=((my-4) / dMpy)*dMpy
                   
-                  Select oCrossHair
-                    Case 0 ; thin
-                      LineXY(mx-4,MA()\ly-4,mx-4,MA()\ry,RGB(63,63,63))
-                      LineXY(MA()\lx-4,my-4,MA()\rx,my-4,RGB(63,63,63))
-                    Case 1 ; thick
-                      For x=-1 To 1
-                        LineXY(mx-4+x,MA()\ly-4,mx-4+x,MA()\ry,RGB(63,63,63))
-                        LineXY(MA()\lx-4,my-4+x,MA()\rx,my-4+x,RGB(63,63,63))
-                      Next
-                    Case 2 ; pixel
-                      x=((mx-4) / dMpx)*dMpx
-                      y=((my-4) / dMpy)*dMpy
+                  For i=0 To (dMpx-1)
+                    LineXY(x+i,MA()\ly-4,x+i,MA()\ry,RGB(63,63,63))
+                    If i<dMpy
+                      LineXY(MA()\lx-4,y+i,MA()\rx,y+i,RGB(63,63,63))
+                    EndIf
+                  Next
+              EndSelect
+              
+              
+              ; draw brush size guide or small circle
+              If oMouseGuide
+                Select tCur
+                  Case #toolDraw,#toolLine ; brush and line draw
+                    If dwid>3 And dSel<>#toolBrushFlash
+                      ; drawsize guide
+                      x=dx / dMpx-dWid / 2
+                      y=dy / dMpy-dWid
+                      x2=(x+dWid)*dMpx
+                      y2=(y+dWid*2)*dMpy
+                      x*dMpx
+                      y*dMpy    
                       
-                      For i=0 To (dMpx-1)
-                        LineXY(x+i,MA()\ly-4,x+i,MA()\ry,RGB(63,63,63))
-                        If i<dMpy
-                          LineXY(MA()\lx-4,y+i,MA()\rx,y+i,RGB(63,63,63))
-                        EndIf
-                      Next
-                  EndSelect
-                  
-                  
-                  ; draw brush size guide or small circle
-                  If oMouseGuide
-                    Select tCur
-                      Case #toolDraw,#toolLine ; brush and line draw
-                        If dwid>3 And dSel<>#toolBrushFlash
-                          ; drawsize guide
-                          x=dx / dMpx-dWid / 2
-                          y=dy / dMpy-dWid
-                          x2=(x+dWid)*dMpx
-                          y2=(y+dWid*2)*dMpy
-                          x*dMpx
-                          y*dMpy    
-                          
-                          LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
-                          LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
-                          
-                          LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
-                          LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
-                          
-                          LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
-                          LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
-                          
-                          LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
-                          LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
-                        Else
-                          Circle(dx,dy,10,bp(2))
-                        EndIf
-                        
-
-                    EndSelect
-                  EndIf
-                
-                EndIf
-                
-                        ; draw sprite
-                        If tcur=#toolDraw
-                          Select dSel
-                            Case #toolBrushSPR
-                              setP(mx,my)
-                              DrawingMode(#PB_2DDrawing_Default)
-                              dBrushSPR(px,py,dWid,0,1)
-                            Case #toolBrushPaste
-                              setP(mx,my)
-                              DrawingMode(#PB_2DDrawing_Default)
-                              dBrushPaste(px,py,1)
-                          EndSelect
-                          
-                        EndIf                  
-                
-                
-                ; draw shape guides
-                DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)                
-                Select dWire
-                  Case #toolLine   ; line tool
-                    If dShift      ; horizontal
-                      LineXY(sx,sy,dx,sy,bp(7))                    
-                    ElseIf dCtrl ; vertical
-                      LineXY(sx,sy,sx,dy,bp(7))
-                    Else ; any direction
-                      LineXY(sx,sy,dx,dy,bp(7))
-                    EndIf
-                    
-                    
-                  Case #toolCirOut,#toolCirFil ; polygon tool
-                    Circle(sx,sy,Abs(sx-dx),bp(7))
-                  Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
-                    If dShift
-                      Box(sx,sy,dx-sx,dx-sx,bp(7))
+                      LineXY(x,y,x+8,y,bp(2));RGB(63,63,63))
+                      LineXY(x,y,x,y+8,bp(2));,RGB(63,63,63))
+                      
+                      LineXY(x2-4,y,x2+3,y,bp(2));RGB(63,63,63))
+                      LineXY(x2+3,y,x2+3,y+8,bp(2));,RGB(63,63,63))
+                      
+                      LineXY(x,y2+1,x+8,y2+1,bp(2));RGB(63,63,63))
+                      LineXY(x,y2-8,x,y2+1,bp(2))  ;,RGB(63,63,63))
+                      
+                      LineXY(x2-4,y2+1,x2+3,y2+1,bp(2));RGB(63,63,63))
+                      LineXY(x2+3,y2-8,x2+3,y2+1,bp(2));,RGB(63,63,63))
                     Else
-                      Box(sx,sy,dx-sx,dy-sy,bp(7))
+                      Circle(dx,dy,10,bp(2))
                     EndIf
                     
-                  Case #ToolCopyPaste ; copy paste outline
-                    Box(sx,sy,dx-sx,dy-sy,bp(7))
+                    
                 EndSelect
               EndIf
               
+            EndIf
+            
+            ; draw sprite
+            If tcur=#toolDraw
+              Select dSel
+                Case #toolBrushSPR
+                  setP(mx,my)
+                  DrawingMode(#PB_2DDrawing_Default)
+                  dBrushSPR(px,py,dWid,0,1)
+                Case #toolBrushPaste
+                  setP(mx,my)
+                  DrawingMode(#PB_2DDrawing_Default)
+                  dBrushPaste(px,py,1)
+              EndSelect
+              
+            EndIf                  
+            
+            
+            ; draw shape guides
+            DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)                
+            Select dWire
+              Case #toolLine   ; line tool
+                If dShift      ; horizontal
+                  LineXY(sx,sy,dx,sy,bp(7))                    
+                ElseIf dCtrl ; vertical
+                  LineXY(sx,sy,sx,dy,bp(7))
+                Else ; any direction
+                  LineXY(sx,sy,dx,dy,bp(7))
+                EndIf
+                
+                
+              Case #toolCirOut,#toolCirFil ; polygon tool
+                Circle(sx,sy,Abs(sx-dx),bp(7))
+              Case #toolBoxOut,#toolBoxFil,#toolGradHor,#toolGradVer  ; boxes, gradient
+                If dShift
+                  Box(sx,sy,dx-sx,dx-sx,bp(7))
+                Else
+                  Box(sx,sy,dx-sx,dy-sy,bp(7))
+                EndIf
+                
+              Case #ToolCopyPaste ; copy paste outline
+                Box(sx,sy,dx-sx,dy-sy,bp(7))
+            EndSelect
+          EndIf
+              
+          ; show pixel coords
+          DrawingFont(FontID(tFont1))
+          setP(mx,my)
+          DrawText(560,500,"X: " + Str(px),bp(8))
+          DrawText(600,500,"Y: " + Str(py),bp(8))
           
           ; handle popups on main canvas
           Select mact
@@ -3639,6 +3699,7 @@ Repeat
             DrawingMode(#PB_2DDrawing_Outlined)
             drawBrushtypeMenu() 
           EndIf
+          
           
           StopDrawing()
         EndIf
@@ -3692,7 +3753,7 @@ Repeat
           DrawText(532,180,"Pattern Up",bp(7))
           
           DrawText(508,200,"J",bp(7))
-          DrawText(532,200,"Pattern Up",bp(7))
+          DrawText(532,200,"Pattern Down",bp(7))
           
           DrawText(508,220,"Shift",bp(7))
           DrawText(552,220,"Horz Line",bp(7))
@@ -3763,48 +3824,7 @@ Repeat
           DrawText(MO()\lx+40,MO()\ly,"000",bp(7))
           DrawText(MO()\lx+40,MO()\ly+116,"255",bp(7))
           
-          selectMO(#MO_OptFlashLen)
-          x=MO()\lx
-          y=MO()\ly
-          
-          ; border
-          drawbox(x-2,y-12,x+106,y+52,bp(8))
-          DrawText(x+6,y-20,"Flash Lines",bp(7)) 
-          
-          ; length control
-          drawbox(x+40,y,x+72,y+18,bp(8))
-          DrawText(x+76,y+2,"Len",bp(3))
-          DrawText(x+44,y+2,Str(flashDlen),bp(7))
-          
-          drawbox(x+2,y+2,x+18,y+16,bp(8))
-          Line(x+4,y+9,12,1,bp(7))
-          Line(x+10,y+4,1,11,bp(7))
-          
-          
-          drawbox(x+20,y+2,x+36,y+16,bp(8))
-          Line(x+22,y+9,12,1,bp(7))
-          
-          ; debug
-          ;drawbox(x,y,MO()\rx,MO()\ry,bp(2))          
-          
-          ; gap control
-          selectMO(#MO_OptFlashGap)
-          x=MO()\lx
-          y=MO()\ly
-          drawbox(x+40,y,x+72,y+18,bp(8))
-          DrawText(x+76,y+2,"Gap",bp(3))
-          DrawText(x+44,y+2,Str(flashDgap),bp(7))
-          
-          drawbox(x+2,y+2,x+18,y+16,bp(8))
-          Line(x+4,y+9,12,1,bp(7))
-          Line(x+10,y+4,1,11,bp(7))
-          
-          
-          drawbox(x+20,y+2,x+36,y+16,bp(8))
-          Line(x+22,y+9,12,1,bp(7))
-          
-          ; debug
-          ;drawbox(x,y,MO()\rx,MO()\ry,bp(3))
+
           
 ;           drawbox(MO()\lx+34,MO()\ly+32,MO()\lx+66,MO()\ly+50,bp(8))
 ;           DrawText(MO()\lx+70,MO()\ly+34,"Gap",bp(3)) 
@@ -3836,10 +3856,10 @@ Repeat
     
     
     ; update drawing area and stats
-    If StartDrawing(CanvasOutput(#GA_TSPalette))
-      showstats()
-      StopDrawing()  
-    EndIf
+;     If StartDrawing(CanvasOutput(#GA_TSPalette))
+;       showstats()
+;       StopDrawing()  
+;     EndIf
     
     FlipBuffers()
     
@@ -3962,24 +3982,28 @@ DataSection
   Data.w 374,2,32,26,1,2
   Data.s "Tool Animate"
   Data.w 410,2,32,26,1,2
+  Data.s "Flash Length"
+  Data.w 218,4,38,18,1,2  
+  Data.s "Flash Gap"
+  Data.w 218,28,38,18,1,2  
   
-  ; options screen
-  Data.s "MA_OptThin"
-  Data.w 20,140,20,20,0,0
-  Data.s "MA_OptThick"
-  Data.w 20,164,20,20,0,0
-  Data.s "MA_OptPixel"
-  Data.w 20,188,20,20,0,0
-  Data.s "MA_OptOff"
-  Data.w 20,212,20,20,0,0
-  Data.s "MA_OptGuide"
-  Data.w 20,236,20,20,0,0
-  
-  Data.s "MA_GridLayer"
-  Data.w 200,140,20,20,0,0
-  
-  Data.s "MA_OptFlash"
-  Data.w 400,140,20,20,0,0
+;   ; options screen
+;   Data.s "MA_OptThin"
+;   Data.w 20,140,20,20,0,0
+;   Data.s "MA_OptThick"
+;   Data.w 20,164,20,20,0,0
+;   Data.s "MA_OptPixel"
+;   Data.w 20,188,20,20,0,0
+;   Data.s "MA_OptOff"
+;   Data.w 20,212,20,20,0,0
+;   Data.s "MA_OptGuide"
+;   Data.w 20,236,20,20,0,0
+;   
+;   Data.s "MA_GridLayer"
+;   Data.w 200,140,20,20,0,0
+;   
+;   Data.s "MA_OptFlash"
+;   Data.w 400,140,20,20,0,0
   
   ; sprite screen
   ;...
@@ -4024,10 +4048,6 @@ DataSection
   Data.w 150,164,0
   Data.s "TRNValue"
   Data.w 150,188,1
-  Data.s "Length"
-  Data.w 280,140,2  
-  Data.s "Gap"
-  Data.w 280,166,2
   
   Data.s "DATAEND"
   ; Patterns 0 - 17, format: 4x4 grid
@@ -4108,8 +4128,8 @@ DataSection
 EndDataSection
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 2942
-; FirstLine = 2919
+; CursorPosition = 3681
+; FirstLine = 3663
 ; Folding = ----------
 ; EnableXP
 ; UseIcon = Art-icon.ico
