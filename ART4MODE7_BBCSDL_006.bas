@@ -1093,7 +1093,7 @@
 
       REM LOAD BINARY FILE
       DEF PROCloadbinaryfile(F$)
-      f%=OPENIN(@dir$+F$)
+      f%=OPENIN(F$)
 
       FOR U%=0 TO 999
         char%=BGET#f%
@@ -1233,14 +1233,14 @@
 
           F$=LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
           FOR frame%=1 TO frame_max%
-            PROCloadbinaryfile(F$ + STR$(frame%)+".BIN")
+            PROCloadbinaryfile(@dir$+F$ + STR$(frame%)+".BIN")
             PROCframesave(frame%)
             REM WAIT 10
           NEXT
           PROCloadnextframe(1,0)
         ELSE
           IF RIGHT$(FNUPPER(n$(SEL%)),3)="BIN" THEN
-            PROCloadbinaryfile(n$(SEL%))
+            PROCloadbinaryfile(@dir$+n$(SEL%))
             PROCframesave(frame%)
           ENDIF
         ENDIF
@@ -1267,8 +1267,8 @@
       frame%=frame_max%
       FOR I%=1 TO frame_max%
         PROCloadnextframe(1,0)
-        PROCsavebinaryfile("M7_" + D$ + "_" + STR$(frame%)+".BIN")
-        OSCLI "SCREENSAVE ""M7_" + D$ + "_" + STR$(frame%)+".BMP"" 0,0,1280,1000"
+        PROCsavebinaryfile(@dir$+"M7_" + D$ + "_" + STR$(frame%)+".BIN")
+        OSCLI "SCREENSAVE """ + @dir$+"M7_" + D$ + "_" + STR$(frame%)+".BMP"" 0,0,1280,1000"
         WAIT 10
       NEXT
 
