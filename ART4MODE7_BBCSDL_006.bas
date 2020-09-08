@@ -159,7 +159,7 @@
                       PROCmenurestore
                     ENDIF
 
-                  WHEN 31: PROCmenurestore:PROCloadfilemode3 : REM LOAD
+                  WHEN 31: PROCmenurestore:PROCloadfile: REM mode3 : REM LOAD
                   WHEN 32: PROCmenurestore:PROCsavefile : REM SAVE
 
                   WHEN 34: animation%=(animation%+1) AND 1:PROCmenurestore : REM TOGLE ANIMATION FRAME ADVANCE TOOL
@@ -258,7 +258,7 @@
                         PROCpoint(X%,Y%,1-erase%)
                         PROCpoint(X%+D%,Y%+D%,1-erase%)
                       ELSE
-                        IF TX%>0 THEN
+                        IF TX%>0 AND TX%<40 AND TY%>0 AND TY%<25 THEN
                           CASE dither% OF
                             WHEN 4 : char%=255+(erase%=1)*95 : REM SOLID BLOCK #255
                             WHEN 5 : char%=154-erase% : REM SEPARATED GRAPHICS #154 , CONTIGUOUS $153
@@ -276,7 +276,7 @@
                             PROCpoint(X%,Y%,1-erase%)
                             PROCpoint(X%+D%,Y%+D%,1-erase%)
                           ELSE
-                            IF TX%>0 THEN
+                            IF TX%>0 AND TX%<40 AND TY%>0 AND TY%<25 THEN
                               CASE dither% OF
                                 WHEN 4 : char%=255+(erase%=1)*95 : REM SOLID BLOCK #255
                                 WHEN 5 : char%=154-erase% : REM SEPARATED GRAPHICS #154 , CONTIGUOUS $153
@@ -379,11 +379,11 @@
 
                     WHEN 5: REM BACKGROUND COLOUR
                       PROCundosave
-                      IF TX%<39 THEN VDU 31,TX%,TY%,(curcol%+144),157-erase%
+                      IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144),157-erase%
                       REPEAT
                         PROCREADMOUSE
                         IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                          IF TX%<39 VDU 31,TX%,TY%,(curcol%+144),157-erase%
+                          IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25  VDU 31,TX%,TY%,(curcol%+144),157-erase%
                         ENDIF
                         OLD_TX%=TX%
                         OLD_TY%=TY%
@@ -391,12 +391,14 @@
                       IF animation% THEN PROCloadnextframe(1,1)
                     WHEN 6: REM FORGROUND COLOUR
                       PROCundosave
-                      VDU 31,TX%,TY%,(curcol%+144)
+                      IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144)
                       REPEAT
                         PROCREADMOUSE
-                        IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN VDU 31,TX%,TY%,(curcol%+144)
-                        OLD_TX%=TX%
-                        OLD_TY%=TY%
+                        IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                          IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144)
+                          OLD_TX%=TX%
+                          OLD_TY%=TY%
+                        ENDIF
                       UNTIL MB%=0
                       IF animation% THEN PROCloadnextframe(1,1)
 
@@ -451,7 +453,7 @@
             OLD_TY%=TY%
           ENDIF
         ENDIF
-        VDU 31,TX%,TY%
+        IF TX%>-1 AND TX%<40 AND TY%>-1 AND TY%<25 THEN VDU 31,TX%,TY%
       ELSE
         IF menuext%=1 THEN
           VDU 31,shapesel%-1,1
@@ -850,7 +852,7 @@
                   IF skip%<1 THEN skip%=1
                 WHEN 19 : REM HORIZONTAL INCREMENT
                   skip%+=1
-                  IF skip%>3 THEN skip%=3
+                  IF skip%>5 THEN skip%=5
                 WHEN 21 : REM HORIZONTAL DECREMENT
                   scrollh%-=1
                   IF scrollh%<-5 THEN scrollh%=-5
@@ -1091,7 +1093,7 @@
 
       REM LOAD BINARY FILE
       DEF PROCloadbinaryfile(F$)
-      f%=OPENIN(F$)
+      f%=OPENIN(@dir$+F$)
 
       FOR U%=0 TO 999
         char%=BGET#f%
@@ -1106,7 +1108,7 @@
       PROCmenusave
       PROCWAITMOUSE(0)
 
-      MODE 3
+      MODE 23
 
       A$=FNUPPER(FN_filedlg("FILE LOAD", "LOAD", "", "BIN FILES", ".BIN", 0))
 
@@ -1227,7 +1229,7 @@
       PROCmenurestore
 
       IF F%>0 THEN
-        IF LEFT$(FNUPPER(n$(SEL%)),3)="M7_" THEN
+        IF INSTR(n$(SEL%),"M7_") THEN
 
           F$=LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
           FOR frame%=1 TO frame_max%
