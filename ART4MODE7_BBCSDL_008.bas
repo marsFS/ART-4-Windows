@@ -4,11 +4,9 @@
 
       REM *** INKEY(-256) MATRIX BRANYDY &4D (INCLUDE OTHERS)
 
-      REM *** INVESTIGATE LOCAL VERSIONS OF LIBRARIES TO MAKE PROGRAM CROSS BASIC COMPATIBLE
+      REM *** INVESTIGATE LOCAL VERSIONS OF LIBRARIES TO MAKE PROGRAM CROSS BASIC COMPATIBLE (DONE?? Need Soruk to Test)
 
       REM *** LOAD SCREEN SORT BY NEWEST, NEEDS WORK!
-
-      REM *** SESSION FOLDER FOR PICS, ADD FOLDER SELECT TO LOAD MENU
 
       REM *** COPY AND PASTE
 
@@ -26,7 +24,7 @@
 
       REM FOR 64 BIT COMPARISONS, ESC OFF FOR BACK ARROW ON SOME DEVICES
       REM *HEX 64
-      REM *ESC OFF
+      *ESC OFF
 
       REM INSTALL @lib$+"sortlib"
       REM INSTALL @lib$+"stringlib"
@@ -55,11 +53,13 @@
       REM undo buff
       undo_max%=19
       DIM undo_buffer&(frame_max%,undo_max%,959)
-      DIM undo_index&(frame_max%)
+      DIM undo_index%(frame_max%)
+      DIM undo_count&(frame_max%)
 
       REM redo buffer
       DIM redo_buffer&(frame_max%,undo_max%,959)
-      DIM redo_index&(frame_max%)
+      DIM redo_index%(frame_max%)
+      DIM redo_count&(frame_max%)
 
 
       REM menu buffer
@@ -105,9 +105,6 @@
       session%=0
       curdir$=@dir$
       cursave$=@dir$
-
-      REM FILE DIALOG
-      N%=0
 
       PROCGR(curcol%,bakcol%,1)
       PROCdrawmenu
@@ -987,6 +984,7 @@
 
       ENDPROC
 
+      REM load next frame from buffer and display it
       DEF PROCloadnextframe(F%,S%)
 
       IF S% THEN
@@ -1003,26 +1001,37 @@
       REM save current screen to undo buffer
       DEF PROCundosave
       LOCAL U%
-      undo_index&(frame%)+=1
-      IF undo_index&(frame%)>undo_max% THEN undo_index&(frame%)=undo_max%
+
+      IF undo_count&(frame%)<undo_max% THEN undo_count&(frame%)+=1
 
       FOR U%=0 TO 959
-        undo_buffer&(frame%,undo_index&(frame%),U%)=GET(U% MOD 40,U% DIV 40+1)
+        undo_buffer&(frame%,undo_index%(frame%),U%)=GET(U% MOD 40,U% DIV 40+1)
       NEXT
+
+      undo_index%(frame%)+=1
+      IF undo_index%(frame%)>undo_max% THEN undo_index%(frame%)=0
+
+      redo_count&(frame%)=0
+
       PROCdrawmenu
+
       ENDPROC
 
       REM restore current undo buffer to screen
       DEF PROCundorestore
       LOCAL U%
 
-      IF undo_index&(frame%)>0 THEN
+      IF undo_count&(frame%)>0 THEN
+        undo_count&(frame%)-=1
+
+        undo_index%(frame%)-=1
+        IF undo_index%(frame%)<0 THEN undo_index%(frame%)=undo_max%
+
         PROCredosave
         FOR U%=0 TO 959
-          VDU 31,(U% MOD 40),(U% DIV 40+1),undo_buffer&(frame%,undo_index&(frame%),U%)
+          VDU 31,(U% MOD 40),(U% DIV 40+1),undo_buffer&(frame%,undo_index%(frame%),U%)
         NEXT
 
-        undo_index&(frame%)-=1
       ENDIF
 
       ENDPROC
@@ -1030,12 +1039,15 @@
       REM SAVE REDO SCREEN
       DEF PROCredosave
       LOCAL U%
-      redo_index&(frame%)+=1
-      IF redo_index&(frame%)>undo_max% THEN redo_index&(frame%)=undo_max%
+
+      IF redo_count&(frame%)<undo_max% THEN redo_count&(frame%)+=1
 
       FOR U%=0 TO 959
-        redo_buffer&(frame%,redo_index&(frame%),U%)=GET(U% MOD 40,U% DIV 40+1)
+        redo_buffer&(frame%,redo_index%(frame%),U%)=GET(U% MOD 40,U% DIV 40+1)
       NEXT
+
+      redo_index%(frame%)+=1
+      IF redo_index%(frame%)>undo_max% THEN redo_index%(frame%)=0
 
       ENDPROC
 
@@ -1043,13 +1055,19 @@
       DEF PROCredorestore
       LOCAL U%
 
-      IF redo_index&(frame%)>0 THEN
+      IF redo_count&(frame%)>0 THEN
+        redo_count&(frame%)-=1
+
+        redo_index%(frame%)-=1
+        IF redo_index%(frame%)<0 THEN redo_index%(frame%)=undo_max%
+
         FOR U%=0 TO 959
-          VDU 31,(U% MOD 40),(U% DIV 40+1),redo_buffer&(frame%,redo_index&(frame%),U%)
+          VDU 31,(U% MOD 40),(U% DIV 40+1),redo_buffer&(frame%,redo_index%(frame%),U%)
         NEXT
 
-        redo_index&(frame%)-=1
-        undo_index&(frame%)+=1
+        undo_index%(frame%)+=1
+        IF undo_index%(frame%)>undo_max% THEN undo_index%(frame%)=0
+        IF undo_count&(frame%)<undo_max% THEN undo_count&(frame%)+=1
 
       ENDIF
 
@@ -1369,9 +1387,13 @@
       A%=135-animation%*5
       D%=dither%+1
       E%=135-erase%*5
-      R%=130+(redo_index&(frame%)=0)
-      U%=130+(undo_index&(frame%)=0)
+      R%=130+(redo_count&(frame%)=0)
+      U%=130+(undo_count&(frame%)=0)
       PRINTTAB(14,0)CHR$(135);"PD";STR$(D%);"FS";CHR$(E%);"E";CHR$(U%);"U";CHR$(R%);"R";CHR$(135);"CBF LS";CHR$(A%);"A";CHR$(135);STR$(frame%);"<>P"
+
+      PRINTTAB(0,1)STR$(undo_count&(frame%));"  ";STR$(undo_index%(frame%));"  "
+      PRINTTAB(0,2)STR$(redo_count&(frame%));"  ";STR$(redo_index%(frame%));"  "
+
 
       REM SHAPE MENU
       IF menuext%=1 THEN
