@@ -106,6 +106,24 @@
       curdir$=@dir$
       cursave$=@dir$
 
+      REM colour string constants
+      tr$=CHR$(129) : REM alphanumeric red
+      tg$=CHR$(130) : REM alphanumeric green
+      ty$=CHR$(131) : REM alphanumeric yellow
+      tb$=CHR$(132) : REM alphanumeric blue
+      tm$=CHR$(133) : REM alphanumeric magenta
+      tc$=CHR$(134) : REM alphanumeric cyan
+      tw$=CHR$(135) : REM alphanumeric white
+
+      gr$=CHR$(145) : REM graphics red
+      gg$=CHR$(146) : REM graphics green
+      gy$=CHR$(147) : REM graphics yellow
+      gb$=CHR$(148) : REM graphics blue
+      gm$=CHR$(149) : REM graphics magenta
+      gc$=CHR$(150) : REM graphics cyan
+      gw$=CHR$(151) : REM graphics white
+
+
       PROCGR(curcol%,bakcol%,1)
       PROCdrawmenu
 
@@ -761,7 +779,7 @@
       ELSE
         VDU 32,32,144+curcol%
       ENDIF
-      PRINTTAB(14,10)"abcdefghijklmno";CHR$(156);CHR$(151)
+      PRINTTAB(14,10)"abcdefghijklmno";CHR$(156);gw$
 
       ENDPROC
 
@@ -782,27 +800,27 @@
         PRINTTAB(0,L%)SPC(40);
       NEXT
 
-      PRINTTAB(1,4)CHR$(151);CHR$(232);STRING$(10,CHR$(172));CHR$(130);"CLEARSCREEN";CHR$(151);STRING$(10,CHR$(172));CHR$(180);
+      PRINTTAB(1,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"CLEARSCREEN";gw$;STRING$(10,CHR$(172));CHR$(180);
       FOR L%=5 TO 20
-        PRINTTAB(1,L%)CHR$(151);CHR$(234);STRING$(32," ");CHR$(151);CHR$(181);
+        PRINTTAB(1,L%)gw$;CHR$(234);STRING$(32," ");gw$;CHR$(181);
       NEXT
 
 
-      PRINTTAB(4,12)CHR$(132);"OPTION:  ";CHR$(134);"CLS:";CHR$(130);"Y";CHR$(134);" FIX:";CHR$(130);"Y";
-      PRINTTAB(4,14)CHR$(146);CHR$(157);CHR$(132);"ALL FRAMES  ";CHR$(156);" ";CHR$(145);CHR$(157);CHR$(131);" CANCEL   ";CHR$(156);
+      PRINTTAB(4,12)tb$;"OPTION:  ";tc$;"CLS:";tg$;"Y";tc$;" FIX:";tg$;"Y";
+      PRINTTAB(4,14)gg$;CHR$(157);tb$;"ALL FRAMES  ";CHR$(156);" ";gr$;CHR$(157);ty$;" CANCEL   ";CHR$(156);
 
-      PRINTTAB(4,15)CHR$(129);STRING$(29,"-")
+      PRINTTAB(4,15)tr$;STRING$(29,"-")
 
-      PRINTTAB(4,16)CHR$(132);"SCROLL:  ";CHR$(134);"SKIP : HORZ : VERT"
+      PRINTTAB(4,16)tb$;"SCROLL:  ";tc$;"SKIP : HORZ : VERT"
       A$=STR$(skip%)+" "
       B$=STR$(scrollh%)
       IF LEN(B$)<2 THEN B$=B$+" "
       C$=STR$(scrollv%)
       IF LEN(C$)<2 THEN C$=C$+" "
-      PRINTTAB(13,17)CHR$(135)+"-"+CHR$(131)+A$+CHR$(135)+"+"+CHR$(135)+"-"+CHR$(131)+B$+CHR$(135)+"+ -"+CHR$(131)+C$+CHR$(135)+"+"
-      PRINTTAB(4,19)CHR$(146);CHR$(157);CHR$(132);"DUPE FRAME  ";CHR$(156);
+      PRINTTAB(13,17)tw$+"-"+ty$+A$+tw$+"+"+tw$+"-"+ty$+B$+tw$+"+ -"+ty$+C$+tw$+"+"
+      PRINTTAB(4,19)gg$;CHR$(157);tb$;"DUPE FRAME  ";CHR$(156);
 
-      PRINTTAB(1,20)CHR$(151);CHR$(170);STRING$(33,CHR$(172));CHR$(165);
+      PRINTTAB(1,20)gw$;CHR$(170);STRING$(33,CHR$(172));CHR$(165);
 
       PROCupdateCS
 
@@ -1140,11 +1158,11 @@
       NEXT
 
 
-      PRINTTAB(2,6)CHR$(151);CHR$(232);STRING$(10,CHR$(172));CHR$(130);"LOAD FILE";CHR$(151);STRING$(10,CHR$(172));CHR$(180);
+      PRINTTAB(2,6)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
       FOR L%=7 TO 17
-        PRINTTAB(2,L%)CHR$(151);CHR$(234);STRING$(30," ");CHR$(151);CHR$(181);
+        PRINTTAB(2,L%)gw$;CHR$(234);STRING$(30," ");gw$;CHR$(181);
       NEXT
-      PRINTTAB(2,18)CHR$(151);CHR$(170);STRING$(31,CHR$(172));CHR$(165);
+      PRINTTAB(2,18)gw$;CHR$(170);STRING$(31,CHR$(172));CHR$(165);
 
       N% = FN_dirscan2(n$(), t&(), "dir *.*",".bin")
       F%=0
@@ -1295,14 +1313,14 @@
       PROCloadnextframe(1,0)
 
       PROCmenusave : menuext%=99
-      PRINTTAB(9,10)CHR$(151);CHR$(232);STRING$(18,CHR$(172));CHR$(180);CHR$(144+curcol%);
+      PRINTTAB(9,10)gw$;CHR$(232);STRING$(18,CHR$(172));CHR$(180);CHR$(144+curcol%);
       FOR L%=11 TO 13
-        PRINTTAB(9,L%)CHR$(151);CHR$(234);STRING$(17," ");CHR$(151);CHR$(181);CHR$(144+curcol%);
+        PRINTTAB(9,L%)gw$;CHR$(234);STRING$(17," ");gw$;CHR$(181);CHR$(144+curcol%);
       NEXT
-      PRINTTAB(9,14)CHR$(151);CHR$(170);STRING$(18,CHR$(172));CHR$(165);CHR$(144+curcol%);
+      PRINTTAB(9,14)gw$;CHR$(170);STRING$(18,CHR$(172));CHR$(165);CHR$(144+curcol%);
 
       REM READ FILES
-      PRINTTAB(13,12)CHR$(130);"FILE SAVED!";
+      PRINTTAB(13,12)tg$;"FILE SAVED!";
 
       PROCWAITMOUSE(4)
 
@@ -1361,6 +1379,13 @@
 
       ENDPROC
 
+      REM print text at x,y and clear to end of line
+      DEF PROCprint40(x%,y%,a$)
+      LOCAL S$
+      a$=LEFT$(a$,40)
+      IF LEN(a$)<40 THEN S$=STRING$(40-LEN(a$)," ")
+      PRINTTAB(x%,y%)a$;S$
+      ENDPROC
 
       REM INITIALISE THE SCREEN
       DEF PROCGR(F%,B%,C%)
@@ -1379,42 +1404,44 @@
 
       REM PRINT PALETTE AND MENU
       DEF PROCdrawmenu
-      LOCAL A%,D%,E%,R%,U%
+      LOCAL A$,D$,E$,F$,R$,U$
       FOR count%=1 TO 7
         PRINTTAB(count%*2-2,0) CHR$(128+count%);CHR$(255+(count%=curcol%)*213);
       NEXT count%
 
-      A%=135-animation%*5
-      D%=dither%+1
-      E%=135-erase%*5
-      R%=130+(redo_count&(frame%)=0)
-      U%=130+(undo_count&(frame%)=0)
-      PRINTTAB(14,0)CHR$(135);"PD";STR$(D%);"FS";CHR$(E%);"E";CHR$(U%);"U";CHR$(R%);"R";CHR$(135);"CBF LS";CHR$(A%);"A";CHR$(135);STR$(frame%);"<>P"
+      A$=CHR$(135-animation%*5)
+      D$=STR$(dither%+1)
+      E$=CHR$(135-erase%*5)
+      R$=CHR$(130+(redo_count&(frame%)=0))
+      U$=CHR$(130+(undo_count&(frame%)=0))
+      F$=STR$(frame%)
+      PRINTTAB(14,0)tw$;"PD";D$;"FS";E$;"E";U$;"U";R$;"R";tw$;"CBF LS";A$;"A";tw$;F$;"<>P"
 
-      PRINTTAB(0,1)STR$(undo_count&(frame%));"  ";STR$(undo_index%(frame%));"  "
-      PRINTTAB(0,2)STR$(redo_count&(frame%));"  ";STR$(redo_index%(frame%));"  "
+      REM PRINTTAB(0,1)STR$(undo_count&(frame%));"  ";STR$(undo_index%(frame%));"  "
+      REM PRINTTAB(0,2)STR$(redo_count&(frame%));"  ";STR$(redo_index%(frame%));"  "
 
 
       REM SHAPE MENU
       IF menuext%=1 THEN
-        D%=135-animateshape%*5
+        D$=CHR$(135-animateshape%*5)
+        A$=STR$(animategap%)
+        F$=STR$(animatelen%)
+        A$="LRO"+D$+"A"+tc$+"GAP:"+tw$+"-"+ty$+A$+tw$+"+"+tc$+"LEN:"+tw$+"-"+ty$+F$+tw$+"+"
 
-        A$="LRO"+CHR$(D%)+"A"+CHR$(134)+"GAP:"+CHR$(135)+"-"+CHR$(131)+STR$(animategap%)+CHR$(135)+"+"+CHR$(134)+"LEN:"+CHR$(135)+"-"+CHR$(131)+STR$(animatelen%)+CHR$(135)+"+"
+        PROCprint40(0,1,A$)
+        PROCprint40(0,2,"")
 
-        PRINTTAB(0,1)A$;SPC(40-LEN(A$))
-        PRINTTAB(0,2)SPC(40)
+        A$="136"+CHR$(136)+CHR$(255)+CHR$(137)+CHR$(154)+"154"+gw$+CHR$(255)+CHR$(153)+tw$+"158"+CHR$(158)+CHR$(255)+"  "+ty$+STR$(GET(TX%,TY%))+"  "
+        B$=tb$+"FLSH   SEPR   HOLD   CODE"
+        PROCprint40(0,3,A$)
+        PROCprint40(0,4,B$)
 
-        A$="136"+CHR$(136)+CHR$(255)+CHR$(137)+CHR$(154)+"154"+CHR$(151)+CHR$(255)+CHR$(153)+CHR$(135)+"158"+CHR$(158)+CHR$(255)+"  "+CHR$(131)+STR$(GET(TX%,TY%))+"  "
-        B$=CHR$(132)+"FLSH   SEPR   HOLD   CODE"
-        PRINTTAB(0,3)A$;SPC(40-LEN(A$))
-        PRINTTAB(0,4)B$;SPC(40-LEN(B$))
-
-        PRINTTAB(0,5)SPC(40)
-        PRINTTAB(0,6)" A B C D E F G H I J K L M";SPC(14)
-        PRINTTAB(0,7)SPC(40)
-        PRINTTAB(0,8)" N O P Q R S T U V W X Y Z";SPC(14)
-        PRINTTAB(0,9)SPC(40)
-        PRINTTAB(0,10)"TEXT:";SPC(35)
+        PROCprint40(0,5,"")
+        PROCprint40(0,6," A B C D E F G H I J K L M")
+        PROCprint40(0,7,"")
+        PROCprint40(0,8," N O P Q R S T U V W X Y Z")
+        PROCprint40(0,9,"")
+        PROCprint40(0,10,"TEXT:")
 
       ENDIF
 
