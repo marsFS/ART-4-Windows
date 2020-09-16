@@ -1,5 +1,7 @@
       MODE 7
 
+      version$="v0.01"
+
       REM *** TODO LIST ***
 
       REM *** INKEY(-256) MATRIX BRANYDY &4D (INCLUDE OTHERS)
@@ -339,6 +341,8 @@
                           IF animateshape% THEN
                             oldframe%=frame%
                             PROCframesave(frame%)
+                            animatelencount%=animatelen%
+                            animategapcount%=0
                             PROCbresenham_buf(startx%,starty%,PX%,PY%,1-erase%)
                             frame%=oldframe%-1
                             PROCloadnextframe(1,0)
@@ -366,6 +370,8 @@
                           IF animateshape%=1 THEN
                             oldframe%=frame%
                             PROCframesave(frame%)
+                            animatelencount%=animatelen%
+                            animategapcount%=0
                             PROCrectangle_buf(startx%,starty%,PX%,PY%,1-erase%)
                             frame%=oldframe%-1
                             PROCloadnextframe(1,0)
@@ -594,8 +600,15 @@
       REPEAT
         IF animategapcount%=0 THEN
           PROCpoint_buf(x1%,y1%,m%,frame%)
-          frame%=frame%+1
-          IF frame%>frame_max% THEN frame%=1
+
+          REM change frame if animate length reaches 0
+          animatelencount%-=1
+          IF animatelencount%=0 THEN
+            animatelencount%=animatelen%
+            animategapcount%=animategap%
+            frame%=frame%+1
+            IF frame%>frame_max% THEN frame%=1
+          ENDIF
         ELSE
           animategapcount%-=1
         ENDIF
@@ -1384,7 +1397,7 @@
       LOCAL S$
       a$=LEFT$(a$,40)
       IF LEN(a$)<40 THEN S$=STRING$(40-LEN(a$)," ")
-      PRINTTAB(x%,y%)a$;S$
+      PRINTTAB(x%,y%)a$;S$;
       ENDPROC
 
       REM INITIALISE THE SCREEN
@@ -1442,6 +1455,7 @@
         PROCprint40(0,8," N O P Q R S T U V W X Y Z")
         PROCprint40(0,9,"")
         PROCprint40(0,10,"TEXT:")
+        PROCprint40(0,24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
 
       ENDIF
 
