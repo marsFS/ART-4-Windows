@@ -1574,6 +1574,7 @@
       REM149 graphics magenta
       REM150 graphics cyan
       REM151 graphics white
+      VDU 23,223,224,128,192,128,128,0,0,0
       REM152 conceal
       REM153 contiguous graphics
       REM154 separated graphics
@@ -1604,6 +1605,7 @@
           C%=frame_buffer&(frame%,x%+y%*40)
           MOVE x%*32+4,957-(y%*40)
           CASE C% OF
+            WHEN 151 : VDU 223
             WHEN 157 : VDU 224
           ENDCASE
 
