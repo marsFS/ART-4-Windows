@@ -1,6 +1,6 @@
       MODE 7
 
-      version$="v0.04
+      version$="v0.04"
 
       REM *** TODO LIST ***
 
@@ -11,6 +11,10 @@
       REM *** LOAD SCREEN SORT BY NEWEST, NEEDS WORK!
 
       REM *** COPY AND PASTE
+
+      REM *** SCROLL OFF SCREEN E.G. NO WRAP
+
+      REM *** GET RID OF D MENU ITEM?
 
       REM *** IMPLEMENT ANIMATED CIRCLE
 
