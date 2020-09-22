@@ -1,6 +1,6 @@
       MODE 7
 
-      version$="v0.03"
+      version$="v0.04
 
       REM *** TODO LIST ***
 
@@ -208,6 +208,7 @@
 
                 REM hide shape menu if another menu item was clicked
                 IF TX%<>19 AND menuext%=1 THEN PROCmenurestore
+                IF toolsel%<>4 THEN shapesel%=-1
 
                 PROCdrawmenu
 
@@ -265,6 +266,7 @@
                     ENDCASE
 
                 ENDCASE
+
                 IF shapesel%>-1 THEN toolsel%=4:toolcursor%=19
 
                 PROCdrawmenu
@@ -537,7 +539,11 @@
           ENDIF
         ENDIF
         IF toolsel%=5 OR toolsel%=6 OR shapesel%>2 THEN
-          IF TX%>-1 AND TX%<40 AND TY%>-1 AND TY%<25 THEN VDU 31,TX%,TY%
+          IF TX%>-1 AND TX%<40 AND TY%>0 AND TY%<25 THEN
+            VDU 31,TX%,TY%
+          ELSE
+            VDU 31,toolcursor%,0
+          ENDIF
         ELSE
           VDU 31,toolcursor%,0
         ENDIF
@@ -900,10 +906,8 @@
 
       PRINTTAB(4,16)tb$;"SCROLL:  ";tc$;"SKIP : HORZ : VERT"
       A$=STR$(skip%)+" "
-      B$=STR$(scrollh%)
-      IF LEN(B$)<2 THEN B$=B$+" "
-      C$=STR$(scrollv%)
-      IF LEN(C$)<2 THEN C$=C$+" "
+      B$=LEFT$(STR$(scrollh%)+" ",2)
+      C$=LEFT$(STR$(scrollv%)+" ",2)
       PRINTTAB(13,17)tw$+"-"+ty$+A$+tw$+"+"+tw$+"-"+ty$+B$+tw$+"+ -"+ty$+C$+tw$+"+"
       PRINTTAB(4,19)gg$;CHR$(157);tb$;"DUPE FRAME  ";CHR$(156);
 
@@ -1553,6 +1557,7 @@
       REM change to mode 6 and overlay control codes on current screen
       DEF PROCcontrolcodes
 
+      showcodes%=0
       PROCframesave(frame%)
       OSCLI "SCREENSAVE """+@dir$+"M7_TMP.BMP"" 0,0,1280,1000"
       MODE 6
@@ -1663,7 +1668,7 @@
             PLOT 101,x%*32+18,933-(y%*40)
 
             MOVE x%*32+4,953-(y%*40)
-            GCOL 3,col%
+            GCOL 0,col%
             VDU p%
 
           ENDIF
