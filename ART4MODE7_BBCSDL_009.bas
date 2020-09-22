@@ -1,6 +1,6 @@
       MODE 7
 
-      version$="v0.02"
+      version$="v0.03"
 
       REM *** TODO LIST ***
 
@@ -22,7 +22,7 @@
 
       REM FOR 64 BIT COMPARISONS, ESC OFF FOR BACK ARROW ON SOME DEVICES
       REM *HEX 64
-      REM *ESC OFF
+      *ESC OFF
 
       REM INSTALL @lib$+"sortlib"
       REM INSTALL @lib$+"stringlib"
@@ -86,7 +86,9 @@
 
       REM TOOL VARS
       curcol%=7
+      oldcol%=7
       bakcol%=0
+      textfore%=0
       toolsel%=1
       shapesel%=-1
       toolcursor%=15
@@ -161,13 +163,13 @@
                 CASE TX% OF
                   WHEN 0 : PROCmenurestore: PROCcontrolcodes : REM display control codes
 
-                  WHEN 1,2: curcol%=1 : REM red
-                  WHEN 3,4: curcol%=2 : REM green
-                  WHEN 5,6: curcol%=3 : REM yellow
-                  WHEN 7,8: curcol%=4 : REM blue
-                  WHEN 9,10: curcol%=5 : REM magenta
-                  WHEN 11,12: curcol%=6 : REM cyan
-                  WHEN 13,14: curcol%=7 : REM white
+                  WHEN 1,2,3,4,5,6,7,8,9,10,11,12,13,14 : REM colour selector
+                    oldcol%=curcol%
+                    curcol%=(TX%+1) DIV 2
+
+                    IF curcol%=oldcol% THEN
+                      textfore%=(textfore%+1) AND 1
+                    ENDIF
 
                   WHEN 15: toolsel%=1:toolcursor%=TX% : REM paint
                   WHEN 16: toolsel%=2:toolcursor%=TX% : REM dither
@@ -208,6 +210,7 @@
                 IF TX%<>19 AND menuext%=1 THEN PROCmenurestore
 
                 PROCdrawmenu
+
               ENDIF
             ENDIF
 
@@ -470,11 +473,12 @@
                       IF animation% THEN PROCloadnextframe(1,1)
                     WHEN 6: REM FORGROUND COLOUR
                       PROCundosave
-                      IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144)
+
+                      IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
                       REPEAT
                         PROCREADMOUSE
                         IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                          IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144)
+                          IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
                           OLD_TX%=TX%
                           OLD_TY%=TY%
                         ENDIF
@@ -1487,9 +1491,11 @@
 
       REM PRINT PALETTE AND MENU
       DEF PROCdrawmenu
-      LOCAL A$,D$,E$,F$,R$,U$
+      LOCAL A$,D$,E$,F$,R$,U$,c%
+      c%=184-textfore%*13
+      REM 70 or 84
       FOR count%=1 TO 7
-        PRINTTAB(count%*2-2,0) CHR$(128+count%);CHR$(255+(count%=curcol%)*213);
+        PRINTTAB(count%*2-2,0) CHR$(128+count%);CHR$(255+(count%=curcol%)*c%);
       NEXT count%
 
       A$=CHR$(135-animation%*5)
@@ -1551,63 +1557,116 @@
       OSCLI "SCREENSAVE """+@dir$+"M7_TMP.BMP"" 0,0,1280,1000"
       MODE 6
       OSCLI "DISPLAY """+@dir$+"M7_TMP.BMP"" 0,0"
-      GCOL 3,15
-      VDU 19,15,-1,16,16,16
+      GCOL 3,8
+      REM VDU 19,15,-1,16,16,16
 
       REM control code special chars
 
-      REM129 alphanumeric red
-      REM130 alphanumeric green
-      REM131 alphanumeric yellow
-      REM132 alphanumeric blue
-      REM133 alphanumeric magenta
-      REM134 alphanumeric cyan
-      REM135 alphanumeric white
-      REM136 flash
-      REM137 steady
-      REM140 normal height
-      REM141 double height
-      REM145 graphics red
-      REM146 graphics green
-      REM147 graphics yellow
-      REM148 graphics blue
-      REM149 graphics magenta
-      REM150 graphics cyan
-      REM151 graphics white
-      VDU 23,223,224,128,192,128,128,0,0,0
-      REM152 conceal
-      REM153 contiguous graphics
-      REM154 separated graphics
-      REM156 black background
-      REM157 new background
-      VDU 23,224,224,144,224,144,224,0,0,0
-      REM158 hold graphics
-      REM159 release graphics
+      REM 129 alphanumeric red
+      REM 130 alphanumeric green
+      REM 131 alphanumeric yellow
+      REM 132 alphanumeric blue
+      REM 133 alphanumeric magenta
+      REM 134 alphanumeric cyan
+      REM 135 alphanumeric white
+      VDU 23,224,224,64,64,64,64,0,0,0
+      REM 136 flash
+      VDU 23,225,224,128,192,128,128,0,0,0
+      REM 137 steady
+      VDU 23,226,224,128,192,128,128,0,0,0
+      REM 140 normal height
+      VDU 23,227,192,160,160,160,192,0,0,0
+      REM 141 double height
+      VDU 23,228,192,160,160,160,192,0,0,0
+      REM 145 graphics red
+      REM 146 graphics green
+      REM 147 graphics yellow
+      REM 148 graphics blue
+      REM 149 graphics magenta
+      REM 150 graphics cyan
+      REM 151 graphics white
+      VDU 23,229,224,128,160,160,224,0,0,0
+      REM 152 conceal
+      REM 153 contiguous graphics
+      VDU 23,230,224,128,128,128,224,0,0,0
+      REM 154 separated graphics
+      VDU 23,231,224,128,128,128,224,0,0,0
+      REM 156 black background
+      VDU 23,232,224,144,224,144,224,0,0,0
+      REM 157 new background
+      VDU 23,233,224,144,224,144,224,0,0,0
+      REM 158 hold graphics
+      VDU 23,234,160,160,224,160,160,0,0,0
+      REM 159 release graphics
+      VDU 23,235,160,160,224,160,160,0,0,0
 
+      VDU 5
 
-
-      REM show grid
       FOR x%=0 TO 39
+
+        REM show grid
         IF x%>0 THEN
+          GCOL 3,8
           LINE x%*32,0,x%*32,999
           IF x%<25 THEN
             LINE 0,x%*40,1279,x%*40
           ENDIF
         ENDIF
-      NEXT
 
-
-      VDU 5
-
-      REM show codes
-      FOR x%=0 TO 39
+        REM show codes
         FOR y%=0 TO 23
           C%=frame_buffer&(frame%,x%+y%*40)
-          MOVE x%*32+4,957-(y%*40)
+          p%=0
           CASE C% OF
-            WHEN 151 : VDU 223
-            WHEN 157 : VDU 224
+            WHEN 129,130,131,132,133,134,135 : REM text codes
+              col%=15-(135-C%)
+              p%=224
+            WHEN 136 : REM flashing
+              col%=15
+              p%=225
+            WHEN 137 : REM non flashing
+              col%=9
+              p%=226
+            WHEN 140 : REM normal height
+              col%=9
+              p%=227
+            WHEN 141 : REM double height
+              col%=15
+              p%=228
+            WHEN 145,146,147,148,149,150,151 : REM graphic codes
+              col%=15-(151-C%)
+              p%=229
+            WHEN 153 : REM contiguous
+              col%=9
+              p%=230
+            WHEN 154 : REM separated
+              col%=15
+              p%=231
+            WHEN 156 : REM black background
+              col%=9
+              p%=232
+            WHEN 157 : REM new background
+              col%=15
+              p%=233
+            WHEN 158 : REM hold graphic
+              col%=15
+              p%=234
+            WHEN 159 : REM release
+              col%=9
+              p%=235
+
           ENDCASE
+
+          IF p% THEN
+            GCOL 0,0
+            MOVE x%*32+2,957-(y%*40)
+            PLOT 101,x%*32+18,933-(y%*40)
+
+            MOVE x%*32+4,953-(y%*40)
+            GCOL 3,col%
+            VDU p%
+
+          ENDIF
 
         NEXT
       NEXT
@@ -1621,6 +1680,7 @@
       PROCloadnextframe(1,1)
 
       ENDPROC
+
       REM ***********************************************************************
       REM LIB FUNCTIONS - imported instead of INSTALL
       REM ***********************************************************************
