@@ -366,10 +366,12 @@
                       IF animation% THEN PROCloadnextframe(1,1)
 
                     WHEN 7: REM copy / paste tool
-                      PROCframesave(frame%)
-                      PROCmenusave
 
                       IF copypaste%=0 THEN
+                        PROCframesave(frame%)
+                        PROCmenusave
+                        menuext%=98
+
                         startx%=TX%*2: starty%=TY%*3
                         OLD_PX%=TX%*2 : OLD_PY%=TY%*3
                         PROCpoint(startx%,starty%,2)
@@ -590,7 +592,7 @@
             oldcode%=newcode%
           ENDIF
         ENDIF
-        IF toolsel%=5 OR toolsel%=6 OR shapesel%>2 THEN
+        IF toolsel%=5 OR toolsel%=6 OR toolsel%=7 OR shapesel%>2 THEN
           IF TX%>-1 AND TX%<40 AND TY%>0 AND TY%<25 THEN
             VDU 31,TX%,TY%
           ELSE
