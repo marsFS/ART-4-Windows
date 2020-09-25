@@ -180,14 +180,20 @@
                     ENDIF
 
                   WHEN 15 : toolsel%=1:toolcursor%=TX% : REM paint
-                  WHEN 16 : REM dither
+                  WHEN 16 : REM dither & scale merged
                     IF toolsel%=2 THEN
-                      dither%=(dither%+1) MOD 5:toolsel%=2:toolcursor%=16 : REM dither scale
+                      dither%=(dither%+1) MOD 5:toolsel%=2:toolcursor%=16
                     ENDIF
                     toolcursor%=TX%
                     toolsel%=2
 
-                  WHEN 17 : toolsel%=7:toolcursor%=TX% : copypaste%=0 REM copy
+                  WHEN 17 : REM copy
+                    IF toolsel%=7 THEN
+                      copypaste%=(copypaste%+1) AND 1
+                    ELSE
+                      toolsel%=7:toolcursor%=TX%
+                    ENDIF
+
                   WHEN 18 : toolsel%=3:toolcursor%=TX% : REM fill
                   WHEN 19 : REM shape / special menu
                     IF menuext%<>1 THEN
