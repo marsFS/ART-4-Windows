@@ -156,6 +156,8 @@
       NEXT frame%
       frame%=1
 
+      PROCshowhelp
+
       REM =====================
       REM main loop starts here
       REPEAT
@@ -1247,6 +1249,17 @@
       LOCAL s%,X%,Y%
       IF x1%>x2% THEN SWAP(x1%,x2%)
       IF y1%>y2% THEN SWAP(y%,y2%)
+
+      IF x1%<0 THEN x1%=0
+      IF x1%>39 THEN x1%=39
+      IF y1%<1 THEN y1%=1
+      IF y1%>24 THEN y1%=24
+
+      IF x2%<0 THEN x2%=0
+      IF x2%>39 THEN x2%=39
+      IF y2%<1 THEN y2%=1
+      IF y2%>24 THEN y2%=24
+
       s%=0
 
       FOR X%=x1% TO x2%
@@ -1553,105 +1566,70 @@
       NEXT
       = a$
 
-      REM UPDATE COLOUR STRIP FOR BUFFER
-      DEF PROCGR_BUF(D%,F%,B%)
+      REM display a help screen
+      DEF PROCshowhelp
 
-      REM ADD GRAPHICS CODE TO LEFT SIDE OF CANVAS
-      FOR Y%=0 TO 23
-        IF B% THEN
-          frame_buffer&(D%,Y%*40)=144+B%
-          frame_buffer&(D%,Y%*40+1)=157
-          frame_buffer&(D%,Y%*40+2)=144+F%
-        ELSE
-          frame_buffer&(D%,Y%*40)=144+F%
-        ENDIF
-      NEXT
+      PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
 
-      ENDPROC
+      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
+      MODE 6
+      OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
 
-      REM print text at x,y and clear to end of line
-      DEF PROCprint40(y%,a$)
-      LOCAL S$
-      a$=LEFT$(a$,40)
-      IF LEN(a$)<40 THEN S$=STRING$(40-LEN(a$)," ")
-      PRINTTAB(0,y%)a$;S$;
-      ENDPROC
+      VDU 23,1,0;0;0;0; : REM Disable cursor
 
-      REM INITIALISE THE SCREEN
-      DEF PROCGR(F%,B%,C%)
+      REM control code help
+      GCOL 0,10
+      RECTANGLE 0,967,30,32
+      RECTANGLE FILL 8,56,16
+      LINE 16,967,16,64
+      PRINTTAB(1,23)"Show control codes";
 
-      REM CLS
-      IF C% THEN VDU 12
+      REM colour selector help
+      GCOL 0,11
+      RECTANGLE 32,967,420,32
+      RECTANGLE FILL 40,136,16
+      LINE 48,967,48,144
+      PRINTTAB(2,21)"Colour Select/Toggle 'T'ext 'G'raphic";
 
-      REM ADD GRAPHICS CODE TO LEFT SIDE OF CANVAS
-      FOR Y%=1 TO 24
-        VDU 31,0,Y%
-        IF B% THEN VDU 144+B%,157
-        VDU 144+F%
-      NEXT
+      REM paint tool
+      GCOL 0,10
+      RECTANGLE 478,967,30,32
+      RECTANGLE FILL 384,936,16
+      LINE 494,967,494,944
+      LINE 494,944,400,944
+      PRINTTAB(2,1)"Paint Tool";
 
-      ENDPROC
+      REM dither tool
+      GCOL 0,11
+      RECTANGLE 510,967,30,32
+      RECTANGLE FILL 416,856,16
+      LINE 518,967,518,864
+      LINE 518,864,432,864
+      PRINTTAB(2,3)"Dither Tool";
+      PRINTTAB(2,4)"Toggle 1..5";
 
-      REM PRINT PALETTE AND MENU
-      DEF PROCdrawmenu
-      LOCAL A$,D$,E$,F$,R$,U$,P$,c%
-      c%=184-textfore%*13
-      REM 70 or 84
-      FOR count%=1 TO 7
-        PRINTTAB(count%*2-2,0) CHR$(128+count%);CHR$(255+(count%=curcol%)*c%);
-      NEXT count%
-
-      A$=CHR$(135-animation%*5)
-      D$=STR$(dither%+1)
-      E$=CHR$(135-erase%*5)
-      R$=CHR$(130+(redo_count&(frame%)=0))
-      U$=CHR$(130+(undo_count&(frame%)=0))
-      F$=STR$(frame%)
-      P$=CHR$(67+copypaste%*13)
-      PRINTTAB(14,0)tw$;"P";D$;P$;"FS";E$;"E";U$;"U";R$;"R";tw$;"CBF LS";A$;"A";tw$;F$;"<>P"
-
-      REM PRINTTAB(0,1)STR$(undo_count&(frame%));"  ";STR$(undo_index%(frame%));"  "
-      REM PRINTTAB(0,2)STR$(redo_count&(frame%));"  ";STR$(redo_index%(frame%));"  "
+      REM copy / paste tool
+      GCOL 0,10
+      RECTANGLE 544,967,30,32
+      RECTANGLE FILL 384,736,16
+      LINE 560,967,560,744
+      LINE 560,744,400,744
+      PRINTTAB(2,6)"Copy/Paste";
+      PRINTTAB(2,7)"C - Copy Region";
+      PRINTTAB(2,8)"P - Paste";
 
 
-      REM SHAPE MENU
-      IF menuext%=1 THEN
-        D$=CHR$(135-animateshape%*5)
-        A$=STR$(animategap%)
-        F$=STR$(animatelen%)
-        A$="LRO"+D$+"A"+tc$+"GAP:"+tw$+"-"+ty$+A$+tw$+"+"+tc$+"LEN:"+tw$+"-"+ty$+F$+tw$+"+"
-
-        PROCprint40(1,A$)
-        PROCprint40(2,"")
-
-        D$=CHR$(129+showcodes%)
-        A$="136"+CHR$(136)+CHR$(255)+CHR$(137)+CHR$(154)+"154"+gw$+CHR$(255)+CHR$(153)+tw$+"158 "+CHR$(255)+" "+tw$+"141 "+CHR$(255)+"  PRINT  "+D$+"SHOW"
-        B$=tb$+"FLSH   SEPR   HOLD   DBLH   TEXT  "+D$+"CODE"
-        PROCprint40(3,A$)
-        PROCprint40(4,B$)
-
-        PROCprint40(5,"")
-        IF caps% THEN
-          PROCprint40(6,"  A B C D E F G H I J K L M N O P Q R")
-          PROCprint40(8,"  S T U V W X Y Z 1 2 3 4 5 6 7 8 9 0")
-        ELSE
-          PROCprint40(6,"  a b c d e f g h i j k l m n o p q r")
-          PROCprint40(8,"  s t u v w x y z 1 2 3 4 5 6 7 8 9 0")
-        ENDIF
-        PROCprint40(7,"")
-        PROCprint40(9,"")
-        PROCprint40(10,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
-        PROCprint40(11,"")
-        PROCprint40(12,"  [ ] ; { } \ | : ' "" < > / ? "+tc$+"<CAPS>" )
-
-        PROCprint40(13,"")
-        PROCprint40(14,"TEXT:"+tg$+text$)
-        PRINTTAB(36,14)tr$;"< X";
-        PROCprint40(15,"")
-        PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
-
-      ENDIF
-
+      REPEAT
+        PROCREADMOUSE
+        WAIT 2
+        REM PRINTTAB(36,1)LEFT$(STR$(MX%)+"   ",4)
+        REM PRINTTAB(36,2)LEFT$(STR$(MY%)+"   ",4)
+      UNTIL MB%=4
+      PROCWAITMOUSE(0)
+      MODE 7
+      frame%-=1
+      PROCloadnextframe(1,1)
+      VDU 23,1,1;0;0;0; : REM Enable cursor
       ENDPROC
 
       REM change to mode 6 and overlay control codes on current screen
@@ -1659,11 +1637,10 @@
 
       showcodes%=0
       PROCframesave(frame%)
-      OSCLI "SCREENSAVE """+@dir$+"M7_TMP.BMP"" 0,0,1280,1000"
+      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
       MODE 6
-      OSCLI "DISPLAY """+@dir$+"M7_TMP.BMP"" 0,0"
+      OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
       GCOL 3,8
-      REM VDU 19,15,-1,16,16,16
 
       REM control code special chars
 
@@ -1785,6 +1762,109 @@
       PROCloadnextframe(1,1)
 
       ENDPROC
+
+
+      REM UPDATE COLOUR STRIP FOR BUFFER
+      DEF PROCGR_BUF(D%,F%,B%)
+
+      REM ADD GRAPHICS CODE TO LEFT SIDE OF CANVAS
+      FOR Y%=0 TO 23
+        IF B% THEN
+          frame_buffer&(D%,Y%*40)=144+B%
+          frame_buffer&(D%,Y%*40+1)=157
+          frame_buffer&(D%,Y%*40+2)=144+F%
+        ELSE
+          frame_buffer&(D%,Y%*40)=144+F%
+        ENDIF
+      NEXT
+
+      ENDPROC
+
+      REM print text at x,y and clear to end of line
+      DEF PROCprint40(y%,a$)
+      LOCAL S$
+      a$=LEFT$(a$,40)
+      IF LEN(a$)<40 THEN S$=STRING$(40-LEN(a$)," ")
+      PRINTTAB(0,y%)a$;S$;
+      ENDPROC
+
+      REM INITIALISE THE SCREEN
+      DEF PROCGR(F%,B%,C%)
+
+      REM CLS
+      IF C% THEN VDU 12
+
+      REM ADD GRAPHICS CODE TO LEFT SIDE OF CANVAS
+      FOR Y%=1 TO 24
+        VDU 31,0,Y%
+        IF B% THEN VDU 144+B%,157
+        VDU 144+F%
+      NEXT
+
+      ENDPROC
+
+      REM PRINT PALETTE AND MENU
+      DEF PROCdrawmenu
+      LOCAL A$,D$,E$,F$,R$,U$,P$,c%
+      c%=184-textfore%*13
+      REM 70 or 84
+      FOR count%=1 TO 7
+        PRINTTAB(count%*2-2,0) CHR$(128+count%);CHR$(255+(count%=curcol%)*c%);
+      NEXT count%
+
+      A$=CHR$(135-animation%*5)
+      D$=STR$(dither%+1)
+      E$=CHR$(135-erase%*5)
+      R$=CHR$(130+(redo_count&(frame%)=0))
+      U$=CHR$(130+(undo_count&(frame%)=0))
+      F$=STR$(frame%)
+      P$=CHR$(67+copypaste%*13)
+      PRINTTAB(14,0)tw$;"P";D$;P$;"FS";E$;"E";U$;"U";R$;"R";tw$;"CBF LS";A$;"A";tw$;F$;"<>P"
+
+      REM PRINTTAB(0,1)STR$(undo_count&(frame%));"  ";STR$(undo_index%(frame%));"  "
+      REM PRINTTAB(0,2)STR$(redo_count&(frame%));"  ";STR$(redo_index%(frame%));"  "
+
+
+      REM SHAPE MENU
+      IF menuext%=1 THEN
+        D$=CHR$(135-animateshape%*5)
+        A$=STR$(animategap%)
+        F$=STR$(animatelen%)
+        A$="LRO"+D$+"A"+tc$+"GAP:"+tw$+"-"+ty$+A$+tw$+"+"+tc$+"LEN:"+tw$+"-"+ty$+F$+tw$+"+"
+
+        PROCprint40(1,A$)
+        PROCprint40(2,"")
+
+        D$=CHR$(129+showcodes%)
+        A$="136"+CHR$(136)+CHR$(255)+CHR$(137)+CHR$(154)+"154"+gw$+CHR$(255)+CHR$(153)+tw$+"158 "+CHR$(255)+" "+tw$+"141 "+CHR$(255)+"  PRINT  "+D$+"SHOW"
+        B$=tb$+"FLSH   SEPR   HOLD   DBLH   TEXT  "+D$+"CODE"
+        PROCprint40(3,A$)
+        PROCprint40(4,B$)
+
+        PROCprint40(5,"")
+        IF caps% THEN
+          PROCprint40(6,"  A B C D E F G H I J K L M N O P Q R")
+          PROCprint40(8,"  S T U V W X Y Z 1 2 3 4 5 6 7 8 9 0")
+        ELSE
+          PROCprint40(6,"  a b c d e f g h i j k l m n o p q r")
+          PROCprint40(8,"  s t u v w x y z 1 2 3 4 5 6 7 8 9 0")
+        ENDIF
+        PROCprint40(7,"")
+        PROCprint40(9,"")
+        PROCprint40(10,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
+        PROCprint40(11,"")
+        PROCprint40(12,"  [ ] ; { } \ | : ' "" < > / ? "+tc$+"<CAPS>" )
+
+        PROCprint40(13,"")
+        PROCprint40(14,"TEXT:"+tg$+text$)
+        PRINTTAB(36,14)tr$;"< X";
+        PROCprint40(15,"")
+        PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
+
+      ENDIF
+
+      ENDPROC
+
 
       REM ***********************************************************************
       REM LIB FUNCTIONS - imported instead of INSTALL
