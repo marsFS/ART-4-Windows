@@ -1247,8 +1247,8 @@
       REM copy region of current frame to copypaste buffer
       DEF PROCcopyregion(x1%,y1%,x2%,y2%)
       LOCAL s%,X%,Y%
-      IF x1%>x2% THEN SWAP(x1%,x2%)
-      IF y1%>y2% THEN SWAP(y%,y2%)
+      IF x1%>x2% THEN SWAP x1%,x2%
+      IF y1%>y2% THEN SWAP y1%,y2%
 
       IF x1%<0 THEN x1%=0
       IF x1%>39 THEN x1%=39
