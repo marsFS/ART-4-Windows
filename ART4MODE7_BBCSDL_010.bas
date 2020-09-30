@@ -269,15 +269,17 @@
                       showcodes%=(showcodes%+1) AND 1
                     ENDIF
                   WHEN 6,8,10,12 : REM alphabet selector
-                    IF TY%=12 AND TX%>30 AND TX%<39 THEN
+                    IF TY%=12 AND TX%>33 AND TX%<37 THEN
                       caps%=(caps%+1) AND 1
                     ELSE
-                      C%=GET(TX%,TY%)
-                      IF C%<>32 THEN
-                        text$=text$+CHR$(C%)
-                        text$=LEFT$(text$,30)
+                      IF TY%=12 AND TX%>28 AND TX%<33 THEN
+                        text$=text$+CHR$(32)
+                      ELSE
+                        C%=GET(TX%,TY%)
+                        IF C%<>32 THEN text$=text$+CHR$(C%)
                       ENDIF
                     ENDIF
+                    text$=LEFT$(text$,30)
                     shapesel%=7
                   WHEN 14 : REM text controls
                     CASE TX% OF
@@ -1853,7 +1855,7 @@
         PROCprint40(9,"")
         PROCprint40(10,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
         PROCprint40(11,"")
-        PROCprint40(12,"  [ ] ; { } \ | : ' "" < > / ? "+tc$+"<CAPS>" )
+        PROCprint40(12,"  [ ] ; { } \ | : ' "" < > / ?"+tc$+"SPC CAP" )
 
         PROCprint40(13,"")
         PROCprint40(14,"TEXT:"+tg$+text$)
