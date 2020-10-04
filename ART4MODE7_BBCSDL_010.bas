@@ -10,8 +10,6 @@
 
       REM *** LOAD SCREEN SORT BY NEWEST, NEEDS WORK!
 
-      REM *** COPY AND PASTE (IMPLEMENTED - NEEDS TESTING)
-
       REM *** SCROLL OFF SCREEN E.G. NO WRAP
 
       REM *** IMPLEMENT ANIMATED CIRCLE
@@ -260,6 +258,12 @@
                       WHEN 26:  REM ANIMATED LEN INCREMENT
                         animatelen%+=1
                         IF animatelen%>5 THEN animatelen%=5
+                      WHEN 36,37,38,39 : REM showhelp
+                        MODE7
+                        menuext%=0
+                        PROCdrawmenu
+                        PROCshowhelp
+                        menuext%=1
                     ENDCASE
 
                   WHEN 3,4 : REM control code selector
@@ -1581,51 +1585,137 @@
 
       REM control code help
       GCOL 0,10
-      RECTANGLE 0,967,30,32
-      RECTANGLE FILL 8,56,16
-      LINE 16,967,16,64
+      PROChelpbox(0,0,1,10)
+      PROChelpdot(0,23,10)
+      PROChelpvline(0,23,10)
       PRINTTAB(1,23)"Show control codes";
 
       REM colour selector help
       GCOL 0,11
-      RECTANGLE 32,967,420,32
-      RECTANGLE FILL 40,136,16
-      LINE 48,967,48,144
+      PROChelpbox(1,0,13,11)
+      PROChelpdot(1,21,11)
+      PROChelpvline(1,21,11)
       PRINTTAB(2,21)"Colour Select/Toggle 'T'ext 'G'raphic";
 
       REM paint tool
       GCOL 0,10
-      RECTANGLE 478,967,30,32
-      RECTANGLE FILL 384,936,16
-      LINE 494,967,494,944
-      LINE 494,944,400,944
+      PROChelpbox(15,0,1,10)
+      PROChelpdot(12,1,10)
+      PROChelpvline(15,1,10)
+      PROChelphline(12,1,3,10)
+      REM LINE 494,944,400,944
       PRINTTAB(2,1)"Paint Tool";
 
       REM dither tool
       GCOL 0,11
-      RECTANGLE 510,967,30,32
-      RECTANGLE FILL 416,856,16
-      LINE 518,967,518,864
-      LINE 518,864,432,864
+      PROChelpbox(16,0,1,11)
+      PROChelpdot(13,3,11)
+      PROChelpvline(16,3,11)
+      PROChelphline(13,3,3,11)
       PRINTTAB(2,3)"Dither Tool";
       PRINTTAB(2,4)"Toggle 1..5";
 
       REM copy / paste tool
       GCOL 0,10
-      RECTANGLE 544,967,30,32
-      RECTANGLE FILL 384,736,16
-      LINE 560,967,560,744
-      LINE 560,744,400,744
+      PROChelpbox(17,0,1,10)
+      PROChelpdot(12,6,10)
+      PROChelpvline(17,6,10)
+      PROChelphline(12,6,5,10)
       PRINTTAB(2,6)"Copy/Paste";
       PRINTTAB(2,7)"C - Copy Region";
       PRINTTAB(2,8)"P - Paste";
 
+      REM copy / paste tool
+      GCOL 0,11
+      PROChelpbox(18,0,1,11)
+      PROChelpdot(11,10,11)
+      PROChelpvline(18,10,11)
+      PROChelphline(11,10,7,11)
+      PRINTTAB(2,10)"Fill Tool";
+
+      REM special sub menu
+      GCOL 0,10
+      PROChelpbox(19,0,1,10)
+      PROChelpdot(18,12,10)
+      PROChelpvline(19,12,10)
+      PROChelphline(18,12,1,10)
+      PRINTTAB(2,12)"Special Sub Menu";
+
+      REM erase toggle
+      PROChelpbox(21,0,1,11)
+      PROChelpdot(19,14,11)
+      PROChelpvline(21,14,11)
+      PROChelphline(19,14,2,11)
+      PRINTTAB(2,14)"Draw Erase Toggle";
+
+      REM play animate
+      PROChelpbox(39,0,1,10)
+      PROChelpdot(39,19,10)
+      PROChelpvline(39,19,10)
+      PRINTTAB(25,19)"Play Animation";
+
+      REM current frame
+      PROChelpbox(36,0,3,11)
+      PROChelpdot(38,17,11)
+      PROChelpvline(38,17,11)
+      PRINTTAB(25,17)"Current Frame";
+
+      REM animate frame advance
+      PROChelpbox(34,0,1,10)
+      PROChelpdot(37,14,10)
+      PROChelpvline(34,1,10)
+      PROChelpvline2(37,1,13,10)
+      PROChelphline(34,1,3,10)
+      PRINTTAB(23,14)"Animate Toggle";
+      PRINTTAB(23,15)"Advance On Draw";
+
+      REM save
+      PROChelpbox(32,0,1,11)
+      PROChelpdot(32,2,11)
+      PROChelpvline(32,2,11)
+      PRINTTAB(33,2)"Save";
+
+      REM load
+      PROChelpbox(31,0,1,10)
+      PROChelpdot(31,3,10)
+      PROChelpvline(31,3,10)
+      PRINTTAB(32,3)"Load";
+
+      REM foreground col
+      PROChelpbox(29,0,1,11)
+      PROChelpdot(29,5,11)
+      PROChelpvline(29,5,11)
+      PRINTTAB(30,5)"Txt/Gph";
+      PRINTTAB(30,6)"Codes";
+
+      REM new background
+      PROChelpbox(28,0,1,10)
+      PROChelpdot(28,8,10)
+      PROChelpvline(28,8,10)
+      PRINTTAB(29,8)"Gph+New";
+      PRINTTAB(29,9)"Bckgrnd";
+
+      REM clearscreen / dupscreen
+      PROChelpbox(27,0,1,11)
+      PROChelpdot(27,11,11)
+      PROChelpvline(27,11,11)
+      PRINTTAB(28,11)"Clr Scrn";
+      PRINTTAB(28,12)"Dupe Scrn";
+
+      REM undo / redo
+      PROChelpbox(23,0,3,10)
+      PROChelpdot(22,2,10)
+      PROChelpvline(23,1,10)
+      PROChelpvline2(22,1,1,10)
+      PROChelphline(22,1,1,10)
+      PRINTTAB(23,2)"Undo";
+      PRINTTAB(23,3)"Redo";
 
       REPEAT
         PROCREADMOUSE
         WAIT 2
-        REM PRINTTAB(36,1)LEFT$(STR$(MX%)+"   ",4)
-        REM PRINTTAB(36,2)LEFT$(STR$(MY%)+"   ",4)
+        REM        PRINTTAB(4,18)LEFT$(STR$(TX%)+"   ",4)
+        REM PRINTTAB(4,19)LEFT$(STR$(TY%)+"   ",4)
       UNTIL MB%=4
       PROCWAITMOUSE(0)
       MODE 7
@@ -1633,6 +1723,34 @@
       PROCloadnextframe(1,1)
       VDU 23,1,1;0;0;0; : REM Enable cursor
       ENDPROC
+
+      REM help screen connectors
+      DEF PROChelpbox(cx%,cy%,cw%,col%)
+      GCOL 0,col%
+      RECTANGLE cx%*32,(24-cy%)*40+4,cw%*32-2,34
+
+      ENDPROC
+
+      DEF PROChelpdot(cx%,cy%,col%)
+      GCOL 0,col%
+      RECTANGLE FILL cx%*32+8,(24-cy%)*40+16,16
+      ENDPROC
+
+      DEF PROChelpvline(cx%,cy%,col%)
+      GCOL 0,col%
+      LINE cx%*32+16,964,cx%*32+16,(24-cy%)*40+24
+      ENDPROC
+
+      DEF PROChelpvline2(cx%,cy%,cl%,col%)
+      GCOL 0,col%
+      LINE cx%*32+16,(24-cy%)*40+24,cx%*32+16,(24-(cy%+cl%))*40+24
+      ENDPROC
+
+      DEF PROChelphline(cx%,cy%,cw%,col%)
+      GCOL 0,col%
+      LINE cx%*32+16,(24-cy%)*40+24,(cx%+cw%)*32+16,(24-cy%)*40+24
+      ENDPROC
+
 
       REM change to mode 6 and overlay control codes on current screen
       DEF PROCcontrolcodes
@@ -1836,6 +1954,7 @@
 
         PROCprint40(1,A$)
         PROCprint40(2,"")
+        PRINTTAB(35,1)tm$;"HELP"
 
         D$=CHR$(129+showcodes%)
         A$="136"+CHR$(136)+CHR$(255)+CHR$(137)+CHR$(154)+"154"+gw$+CHR$(255)+CHR$(153)+tw$+"158 "+CHR$(255)+" "+tw$+"141 "+CHR$(255)+"  PRINT  "+D$+"SHOW"
