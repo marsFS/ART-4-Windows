@@ -1,6 +1,6 @@
       MODE 7
 
-      version$="v0.05"
+      version$="v0.06"
 
       REM *** TODO LIST ***
 
@@ -9,6 +9,8 @@
       REM *** INVESTIGATE LOCAL VERSIONS OF LIBRARIES TO MAKE PROGRAM CROSS BASIC COMPATIBLE (DONE?? Need Soruk to Test)
 
       REM *** LOAD SCREEN SORT BY NEWEST, NEEDS WORK!
+
+      REM *** LOAD SCREEN LOAD LAST SAVED IMAGE SET
 
       REM *** SCROLL OFF SCREEN E.G. NO WRAP
 
@@ -113,6 +115,7 @@
       session%=0
       curdir$=@dir$
       cursave$=@dir$
+      lastsave$=""
       text$=""
       caps%=1
       showcodes%=0
@@ -1362,16 +1365,17 @@
 
       PROCWAITMOUSE(0)
       PROCmenusave : menuext%=99
-      FOR L%=6 TO 18
+      FOR L%=4 TO 20
         PRINTTAB(0,L%)SPC(40);
       NEXT
 
 
-      PRINTTAB(2,6)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
-      FOR L%=7 TO 17
+      PRINTTAB(2,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
+      FOR L%=5 TO 19
         PRINTTAB(2,L%)gw$;CHR$(234);STRING$(30," ");gw$;CHR$(181);
       NEXT
-      PRINTTAB(2,18)gw$;CHR$(170);STRING$(31,CHR$(172));CHR$(165);
+      PRINTTAB(2,19)gw$;CHR$(170);STRING$(31,CHR$(172));CHR$(165);
+      PRINTTAB(5,18)tb$;CHR$(157);tc$;"LOAD  ";CHR$(156);tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
 
       N% = FN_dirscan2(n$(), t&(), "dir *.*",".bin")
       F%=0
@@ -1382,8 +1386,8 @@
       INDEX%=1
       INDEXOLD%=1
 
-      FOR I%=INDEX% TO INDEX%+10
-        IF I%<N%+1 THEN PRINTTAB(6,6+I%)CHR$(c%(t&(I%)));LEFT$(n$(I%),24);
+      FOR I%=INDEX% TO INDEX%+11
+        IF I%<N%+1 THEN PRINTTAB(6,4+I%)CHR$(c%(t&(I%)));LEFT$(n$(I%),24);
       NEXT
 
       REPEAT
@@ -1392,22 +1396,21 @@
         REM DETECT FIRST TOUCH OR MOVEMENT WHEN TOUCHING
         IF MB%=4 THEN
           IF MY%<>OLD_MY% THEN INDEX%+=SGN(MY%-OLD_MY%)
-          IF INDEX%>N%-10 THEN INDEX%=N%-10
+          IF INDEX%>N%-11 THEN INDEX%=N%-11
           IF INDEX%<1 THEN INDEX%=1
           IF SELY%=-1 THEN SELY%=MY%
-
         ENDIF
 
         REM DETECT TOUCH RELEASE
         IF MB%=0 THEN
           IF SELY%=MY% THEN
-            S%=TY%-7
-            IF S%>-1 AND S%<11 THEN SEL%=S%+INDEX%
+            S%=TY%-5
+            IF S%>-1 AND S%<12 THEN SEL%=S%+INDEX%
             IF SEL%<1 THEN SEL%=1
             IF SEL%>N% THEN SEL%=N%
 
             IF t&(SEL%)=2 THEN
-              F%=SEL%
+              REM F%=SEL%
             ELSE
               REM change folder
               ON ERROR LOCAL IF FALSE THEN
@@ -1425,25 +1428,31 @@
                 SELY%=-1
                 INDEX%=1
                 INDEXOLD%=-1
-                FOR I%=INDEX% TO INDEX%+10
-                  PRINTTAB(6,6+I%)SPC(28);
+                FOR I%=INDEX% TO INDEX%+12
+                  PRINTTAB(6,4+I%)SPC(28);
                 NEXT
 
               ENDIF
             ENDIF
 
-            IF TX%<6 OR TX%>32 OR TY%<7 OR TY%>17 THEN F%=-1
+            IF TX%<6 OR TX%>32 OR TY%<5 OR TY%>19 THEN F%=-1
+
+            IF TY%=18 THEN
+              IF TX%>5 AND TX%<14 THEN F%=SEL%
+              IF TX%>15 AND TX%<34 THEN F%=-2
+            ENDIF
+
           ENDIF
           SELY%=-1
         ENDIF
 
         REM IF SCROLLING DETECTED UPDATE FILE LIST AND SELECTED FILE INDEX
         IF INDEX%<>INDEXOLD% OR SELOLD%<>SEL% THEN
-          FOR I%=0 TO 10
+          FOR I%=0 TO 11
             K%=I%+INDEX%
             IF K%<N%+1 THEN
-              PRINTTAB(4,I%+7)SPC(28)
-              VDU 31,4,I%+7
+              PRINTTAB(4,I%+5)SPC(28)
+              VDU 31,4,I%+5
               IF SEL%=K% THEN
                 VDU 132,157
               ELSE
@@ -1466,12 +1475,24 @@
 
       PROCmenurestore
 
-      IF F%>0 THEN
-        IF INSTR(n$(SEL%),"M7_") THEN
+      IF F%=-2 THEN
+        REM read last session file
+        f%=OPENIN(@dir$+"telepaint_pref.ini")
+        IF f% THEN
+          INPUT#f%,F$
+          CLOSE#f%
+          F$=F$+"_"
+        ELSE
+          F%=-1
+        ENDIF
+      ENDIF
 
-          F$=LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
+      IF F%<>-1 THEN
+        IF INSTR(n$(SEL%),"M7_") OR F%=-2 THEN
+
+          IF F%>0 THEN F$=curdir$+LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
           FOR frame%=1 TO frame_max%
-            PROCloadbinaryfile(curdir$+F$ + STR$(frame%)+".BIN")
+            PROCloadbinaryfile(F$ + STR$(frame%)+".BIN")
             PROCframesave(frame%)
             REM WAIT 10
           NEXT
@@ -1483,6 +1504,9 @@
           ENDIF
         ENDIF
       ENDIF
+
+
+
       ENDPROC
 
 
@@ -1510,7 +1534,14 @@
         cursave$=cursave$+TMP$+"/"
       ENDIF
 
-      REM SAVE FRAMES
+      REM update last session file
+      f%=OPENOUT(@dir$+"telepaint_pref.ini")
+      IF f% THEN
+        PRINT#f%,cursave$+"M7_" + D$
+        CLOSE#f%
+      ENDIF
+
+      REM save frames
       frame%=frame_max%
       FOR I%=1 TO frame_max%
         PROCloadnextframe(1,0)
