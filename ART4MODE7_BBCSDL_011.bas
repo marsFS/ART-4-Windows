@@ -1,6 +1,6 @@
       MODE 7
 
-      version$="v0.06"
+      version$="v0.07"
 
       REM *** TODO LIST ***
 
@@ -135,7 +135,9 @@
       VDU 23,1,0;0;0;0; : REM Disable cursor
 
       PRINTTAB(1,1)"Welcome to";tm$;"Telepaint ";version$;
-      PRINTTAB(0,5)tc$;"SELECT MAX FRAMES (2-40)";tw$;"-";ty$;" 8";tw$;"+"
+      PRINTTAB(0,5)ty$;"SELECT MAX FRAMES (2-40)";tw$;"-";tc$;" 8";tw$;"+"
+
+      PRINTTAB(8,14)gr$;CHR$(157);ty$;"  IMPORT IMAGE    ";CHR$(156)
       PRINTTAB(8,17)gm$;CHR$(157);ty$;"  DISPLAY HELP    ";CHR$(156)
       PRINTTAB(8,20)gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
 
@@ -147,13 +149,22 @@
 
         PROCREADMOUSE
         IF MB%=4 THEN
-          IF TY%=5 THEN
-            IF TX%=26 AND frame_max%>2 THEN frame_max%-=1
-            IF TX%=31 AND frame_max%<40 THEN frame_max%+=1
-            WAIT 10
-          ENDIF
-          IF TY%=20 AND TX%>8 AND TX%<29 THEN frame_old%=-1
-          IF TY%=17 AND TX%>8 AND TX%<29 THEN frame_old%=-2
+          CASE TY% OF
+            WHEN 5 : REM change max frames var
+              IF TX%=26 AND frame_max%>2 THEN frame_max%-=1
+              IF TX%=31 AND frame_max%<40 THEN frame_max%+=1
+              WAIT 10
+
+            WHEN 14 : REM import image dialog
+              IF TX%>8 AND TX%<29 THEN frame_old%=-3
+
+            WHEN 17 : REM display help screen
+              IF TX%>8 AND TX%<29 THEN frame_old%=-2
+
+            WHEN 20 : REM launch telepaint
+              IF TX%>8 AND TX%<29 THEN frame_old%=-1
+
+          ENDCASE
         ELSE
           WAIT 10
         ENDIF
@@ -194,6 +205,8 @@
       frame%=1
 
       IF frame_old%=-2 THEN PROCshowhelp
+
+      IF frame_old%=-3 THEN PROCimportimage
 
       REM =====================
       REM main loop starts here
@@ -252,7 +265,7 @@
                   WHEN 28 : toolsel%=5:toolcursor%=TX% : REM background colour
                   WHEN 29 : toolsel%=6:toolcursor%=TX% : REM foreground colour
 
-                  WHEN 31 : PROCmenurestore:PROCloadfile : REM load file dialog
+                  WHEN 31 : PROCmenurestore:PROCloadfile(0) : REM load file dialog - 0 load bin file
                   WHEN 32 : PROCmenurestore:PROCsavefile : REM save frames to file
 
                   WHEN 34 : animation%=(animation%+1) AND 1 : REM toggle frame animation advance tool
@@ -1272,7 +1285,7 @@
 
       ENDPROC
 
-      REM SAVE REDO SCREEN
+      REM save redo screen
       DEF PROCredosave
       LOCAL U%
 
@@ -1287,7 +1300,7 @@
 
       ENDPROC
 
-      REM RESTORE REDO SCREEN
+      REM restore redo screen
       DEF PROCredorestore
       LOCAL U%
 
@@ -1339,7 +1352,7 @@
 
       ENDPROC
 
-      REM MENU BUFFER UNDO SCREEN
+      REM paste copypaste buffer yo current frame
       DEF PROCpasteregion(x1%,y1%)
       LOCAL s%,X%,Y%
 
@@ -1359,7 +1372,7 @@
       ENDPROC
 
 
-      REM MENU BUFFER SAVE SCREEN
+      REM menu buffer save frame
       DEF PROCmenusave
       LOCAL U%
       FOR U%=0 TO 959
@@ -1368,7 +1381,7 @@
 
       ENDPROC
 
-      REM MENU BUFFER UNDO SCREEN
+      REM menu buffer restore frame
       DEF PROCmenurestore
       LOCAL U%
 
@@ -1380,31 +1393,34 @@
       ENDIF
       ENDPROC
 
-
-      REM SAVE BINARY FILE
+      REM save binary file
       DEF PROCsavebinaryfile(F$)
+      LOCAL f%,u%
       f%=OPENOUT(F$)
-      FOR U%=0 TO 999
-        BPUT#f%,GET(U% MOD 40,U% DIV 40)
+      FOR u%=0 TO 999
+        BPUT#f%,GET(u% MOD 40,u% DIV 40)
       NEXT
       CLOSE#f%
       ENDPROC
 
-      REM LOAD BINARY FILE
+      REM load binary file
       DEF PROCloadbinaryfile(F$)
+      LOCAL f%,u%,char%
       f%=OPENIN(F$)
 
-      FOR U%=0 TO 999
-        char%=BGET#f%
-        VDU 31,U% MOD 40,U% DIV 40,char%
-      NEXT
-      CLOSE#f%
+      IF f% THEN
+        FOR u%=0 TO 999
+          char%=BGET#f%
+          VDU 31,u% MOD 40,u% DIV 40,char%
+        NEXT
+        CLOSE#f%
+      ENDIF
       ENDPROC
 
-      REM MODIFIED DIRSCAN TO INCLUDE TYPE ARRAY SO DIRS CAN BE MADE DIFFERENT COLOUR
-      REM LOADFILE
-      DEF PROCloadfile
-      LOCAL N%
+      REM loadfile - modified dirscan to include type array so files list can be displayed for mode 7
+      REM loadtype determines the type of load / import function
+      DEF PROCloadfile(loadtype%)
+      LOCAL I%,N%,L%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%
 
       REM n$ holds file and dir list of current folder
       REM t& holds type list for current folder, 0=special, 1=dir, 2=file
@@ -1426,14 +1442,28 @@
       NEXT
 
 
-      PRINTTAB(2,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
+
+
       FOR L%=5 TO 19
         PRINTTAB(2,L%)gw$;CHR$(234);STRING$(30," ");gw$;CHR$(181);
       NEXT
       PRINTTAB(2,19)gw$;CHR$(170);STRING$(31,CHR$(172));CHR$(165);
-      PRINTTAB(5,18)tb$;CHR$(157);tc$;"LOAD  ";CHR$(156);tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
+      PRINTTAB(5,18)tb$;CHR$(157);tc$;"LOAD  ";CHR$(156);
 
-      N% = FN_dirscan2(n$(), t&(), "dir *.*",".bin")
+      CASE loadtype% OF
+        WHEN 0 : REM bin files
+          filetype$=".bin"
+          PRINTTAB(2,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
+          PRINTTAB(15,18)tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
+
+        WHEN 1 : REM import bmp
+          filetype$=".bmp"
+          PRINTTAB(2,4)gw$;CHR$(232);STRING$(9,CHR$(172));tg$;"IMPORT FILE";gw$;STRING$(9,CHR$(172));CHR$(180);
+          PRINTTAB(15,18)CHR$(156);
+
+      ENDCASE
+
+      N% = FN_dirscan2(n$(), t&(), "dir *.*", filetype$)
       F%=0
       S%=0
       SEL%=0
@@ -1478,7 +1508,7 @@
                 S% = 3
               ENDIF : RESTORE ERROR
               IF S%=0 THEN
-                N% = FN_dirscan2(n$(), t&(), "dir *.*",".bin")
+                N% = FN_dirscan2(n$(), t&(), "dir *.*",filetype$)
                 SEL%=0
                 SELOLD%=0
                 SELY%=-1
@@ -1495,7 +1525,7 @@
 
             IF TY%=18 THEN
               IF TX%>5 AND TX%<14 THEN F%=SEL%
-              IF TX%>15 AND TX%<34 THEN F%=-2
+              IF TX%>15 AND TX%<34 AND loadtype%=0 THEN F%=-2
             ENDIF
 
           ENDIF
@@ -1514,7 +1544,7 @@
               ELSE
                 VDU 32,32
               ENDIF
-              PRINTCHR$(c%(t&(K%)));n$(K%);
+              PRINTCHR$(c%(t&(K%)));LEFT$(n$(K%),24);
               IF SEL%=K% THEN VDU 32,32,156
             ENDIF
           NEXT
@@ -1529,39 +1559,52 @@
         WAIT 2
       UNTIL F%<>0
 
-      PROCmenurestore
+      CASE loadtype% OF
+        WHEN 0 : REM load bin
+          PROCmenurestore
 
-      IF F%=-2 THEN
-        REM read last session file
-        f%=OPENIN(@dir$+"telepaint_pref.ini")
-        IF f% THEN
-          INPUT#f%,F$
-          CLOSE#f%
-          F$=F$+"_"
-        ELSE
-          F%=-1
-        ENDIF
-      ENDIF
-
-      IF F%<>-1 THEN
-        IF INSTR(n$(SEL%),"M7_") OR F%=-2 THEN
-
-          IF F%>0 THEN F$=curdir$+LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
-          FOR frame%=1 TO frame_max%
-            PROCloadbinaryfile(F$ + STR$(frame%)+".BIN")
-            PROCframesave(frame%)
-            REM WAIT 10
-          NEXT
-          PROCloadnextframe(1,0)
-        ELSE
-          IF RIGHT$(FNUPPER(n$(SEL%)),3)="BIN" THEN
-            PROCloadbinaryfile(curdir$+n$(SEL%))
-            PROCframesave(frame%)
+          IF F%=-2 THEN
+            REM read last session file
+            fh%=OPENIN(@dir$+"telepaint_pref.ini")
+            IF fh% THEN
+              INPUT#fh%,F$
+              CLOSE#fh%
+              F$=F$+"_"
+            ELSE
+              F%=-1
+            ENDIF
           ENDIF
-        ENDIF
-      ENDIF
 
+          IF F%<>-1 THEN
+            IF INSTR(n$(SEL%),"M7_") OR F%=-2 THEN
 
+              IF F%>0 THEN F$=curdir$+LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
+              FOR frame%=1 TO frame_max%
+                PROCloadbinaryfile(F$ + STR$(frame%)+".BIN")
+                PROCframesave(frame%)
+                REM WAIT 10
+              NEXT
+              PROCloadnextframe(1,0)
+            ELSE
+              IF RIGHT$(FNUPPER(n$(SEL%)),3)="BIN" THEN
+                PROCloadbinaryfile(curdir$+n$(SEL%))
+                PROCframesave(frame%)
+              ENDIF
+            ENDIF
+          ENDIF
+
+        WHEN 1 : REM import bmp
+          MODE 6
+
+          IF F%=-1 THEN
+            PRINTTAB(0,0)"NO FILE LOADED"
+          ELSE
+
+            OSCLI "DISPLAY """+curdir$+n$(SEL%)+""" 0,0,1280,1000"
+
+          ENDIF
+
+      ENDCASE
 
       ENDPROC
 
@@ -1626,7 +1669,156 @@
 
       ENDPROC
 
-      REM ANIMATE ALL FRAMES IN SEQUENCE FROM 1 TO FRAME_MAX%
+      REM import picture to one or more frames
+      DEF PROCimportimage
+
+      menuext%=96
+      done%=0
+
+      PROCloadfile(1)
+
+      PROCWAITMOUSE(0)
+
+      VDU 23,1,0;0;0;0; : REM Disable cursor
+
+      startx%=-1
+      starty%=-1
+      OLDMX%=MX%
+      OLDMY%=MY%
+
+      PROCprint40(0,"Select Frame: "+RIGHT$("0"+STR$(frame%),2))
+
+      REPEAT
+        PROCREADMOUSE
+
+        REM start a new selection
+        IF MB%=4 THEN
+          startx%=MX%
+          starty%=MY%
+          OLDMX%=MX%
+          OLDMY%=MY%
+          GCOL 3,15
+          RECTANGLE startx%,starty%,MX%-startx%,MY%-starty%
+
+          REPEAT
+            PROCREADMOUSE
+            IF OLDMX%<>MX% OR OLDMY%<>MY% THEN
+              GCOL 3,15
+              RECTANGLE startx%,starty%,OLDMX%-startx%,OLDMY%-starty%
+              RECTANGLE startx%,starty%,MX%-startx%,MY%-starty%
+
+              OLDMX%=MX%
+              OLDMY%=MY%
+            ENDIF
+
+          UNTIL MB%=0
+          RECTANGLE startx%,starty%,MX%-startx%,MY%-starty%
+
+          REM process selection
+          x1%=startx%
+          y1%=starty%
+          x2%=MX%
+          y2%=MY%
+
+          IF x1%>x2% THEN SWAP x1%,x2%
+          IF y1%>y2% THEN SWAP y1%,y2%
+
+          sizex%=x2%-x1%
+          sizey%=y2%-y1%
+
+          IF sizex%>sizey% THEN
+            stepx=sizex%/78
+            stepr=sizex%/sizey%
+            stepy=sizey%/72*stepr
+          ELSE
+            stepy=sizey%/72
+            stepr=sizey%/sizex%
+            stepx=sizex%/78*stepr
+          ENDIF
+          threshold=stepx*stepy/2
+
+          REM PRINTTAB(0,0)"stepx: ";RIGHT$("000000000"+STR$(stepx),10)
+          REM PRINTTAB(0,1)"stepy: ";RIGHT$("000000000"+STR$(stepy),10)
+          REM PRINTTAB(0,2)"stepr: ";RIGHT$("000000000"+STR$(stepr),10)
+
+          REM          A=GET
+
+          PROCprint40(0,"Processing selection...")
+
+          GCOL 0,9
+          px%=0
+          FOR X=x1% TO x2% STEP stepx
+            py%=74
+            FOR Y=y1% TO y2% STEP stepy
+
+              REM average colour for each region
+              avg%=0
+              FOR PX=X TO X+stepx
+                FOR PY=Y TO Y+stepy
+                  IF POINT(PX,PY)<>0 THEN avg%+=1
+                NEXT
+              NEXT
+
+              IF avg%>=threshold THEN
+                PROCpoint_buf(px%+2, py%, 1,frame%)
+                REM PLOT 69,px%+2, py%+3
+              ENDIF
+
+              py%-=1
+              REM PRINTTAB(0,0)"px: "+RIGHT$("000"+STR$(px%),4)
+              REM PRINTTAB(0,1)"py: "+RIGHT$("000"+STR$(py%),4)
+
+              REM A=GET
+
+            NEXT
+            px%+=1
+          NEXT
+
+          PROCprint40(0,"Complete! Process next frame?  Y   N")
+          GCOL 3,10
+          RECTANGLE FILL 948,960,108,40
+
+          GCOL 3,9
+          RECTANGLE FILL 1088,960,108,40
+
+
+          PROCWAITMOUSE(4)
+          PROCWAITMOUSE(0)
+
+          IF TY%=0 AND TX%>29 AND TX%<33 THEN
+
+            REM reset selection
+            startx%=-1
+            IF frame%<frame_max% THEN
+              frame%+=1
+              PROCprint40(0,"Select Frame: "+RIGHT$("0"+STR$(frame%),2))
+            ELSE
+              done%=1
+            ENDIF
+
+          ELSE
+            done%=1
+
+          ENDIF
+
+        ELSE
+          WAIT 2
+        ENDIF
+
+      UNTIL done%=1
+
+      PROCWAITMOUSE(0)
+      MODE 7
+      frame%=0
+      PROCloadnextframe(1,0)
+      menuext%=0
+
+      VDU 23,1,1;0;0;0; : REM Enable cursor
+
+      ENDPROC
+
+
+      REM animate all frames in sequence from 1 to frame_max%
       DEF PROCplay
 
       PROCframesave(frame%)
