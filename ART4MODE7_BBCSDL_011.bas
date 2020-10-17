@@ -1849,13 +1849,11 @@
 
                 YS%=y1%-gridsy%*Y%
                 YE%=YS%+gridsy%
-                PRINTTAB(0,0)"stepx: ";RIGHT$("000000000"+STR$(stepx),10)
-                PRINTTAB(0,1)"stepy: ";RIGHT$("000000000"+STR$(stepy),10)
-                PRINTTAB(0,2)"stepr: ";RIGHT$("000000000"+STR$(stepr),10)
-                PRINTTAB(0,3)"xs: ";RIGHT$("000"+STR$(XS%),4);" xe: ";RIGHT$("000"+STR$(XE%),4)
-                PRINTTAB(0,4)"ys: ";RIGHT$("000"+STR$(YS%),4);" ye: ";RIGHT$("000"+STR$(YE%),4)
-
-
+                REMPRINTTAB(0,0)"stepx: ";RIGHT$("000000000"+STR$(stepx),10)
+                REMPRINTTAB(0,1)"stepy: ";RIGHT$("000000000"+STR$(stepy),10)
+                REMPRINTTAB(0,2)"stepr: ";RIGHT$("000000000"+STR$(stepr),10)
+                REMPRINTTAB(0,3)"xs: ";RIGHT$("000"+STR$(XS%),4);" xe: ";RIGHT$("000"+STR$(XE%),4)
+                REMPRINTTAB(0,4)"ys: ";RIGHT$("000"+STR$(YS%),4);" ye: ";RIGHT$("000"+STR$(YE%),4)
 
                 PROCprint40(0,"Processing selection, Frame: "+STR$(frame%))
                 REM A=GET
