@@ -1,6 +1,6 @@
       MODE 7
 
-      version$="v0.07"
+      version$="v0.08"
 
       REM *** TODO LIST ***
 
@@ -99,6 +99,8 @@
       text$=""
       caps%=1
       showcodes%=0
+      gridx%=10
+      gridy%=2
 
       REM colour string constants
       tr$=CHR$(129) : REM alphanumeric red
@@ -128,7 +130,7 @@
       scode&(6)=141 : REM double height text
       scode&(7)=140 : REM normal height text
 
-      REM select max frames
+      REM loading screen options
       menuext%=97
       frame_max%=8
       frame_old%=0
@@ -172,8 +174,6 @@
       PROCWAITMOUSE(0)
       menuext%=0
 
-      VDU 23,1,1;0;0;0; : REM Enable cursor
-
       REM frame buffer
       DIM frame_buffer&(frame_max%-1,959)
 
@@ -207,6 +207,8 @@
       IF frame_old%=-2 THEN PROCshowhelp
 
       IF frame_old%=-3 THEN PROCimportimage
+
+      VDU 23,1,1;0;0;0; : REM Enable cursor
 
       REM =====================
       REM main loop starts here
@@ -1420,7 +1422,7 @@
       REM loadfile - modified dirscan to include type array so files list can be displayed for mode 7
       REM loadtype determines the type of load / import function
       DEF PROCloadfile(loadtype%)
-      LOCAL I%,N%,L%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%
+      LOCAL I%,N%,L%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%,MAXY%,MACT%
 
       REM n$ holds file and dir list of current folder
       REM t& holds type list for current folder, 0=special, 1=dir, 2=file
@@ -1442,8 +1444,6 @@
       NEXT
 
 
-
-
       FOR L%=5 TO 19
         PRINTTAB(2,L%)gw$;CHR$(234);STRING$(30," ");gw$;CHR$(181);
       NEXT
@@ -1455,11 +1455,18 @@
           filetype$=".bin"
           PRINTTAB(2,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
           PRINTTAB(15,18)tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
+          MAXY%=19
 
         WHEN 1 : REM import bmp
           filetype$=".bmp"
           PRINTTAB(2,4)gw$;CHR$(232);STRING$(9,CHR$(172));tg$;"IMPORT FILE";gw$;STRING$(9,CHR$(172));CHR$(180);
           PRINTTAB(15,18)CHR$(156);
+          PRINTTAB(1,21)tg$;"(*)";tw$;"SINGLE BOX CAPTURE"
+          PRINTTAB(1,22)tg$;"( )";tw$;"GRID";tc$;"HOR";tw$;"-";ty$;"10";tw$;"+ ";tc$;"VER";tw$;"-";ty$;"02";tw$"+"
+          MAXY%=23
+          GT%=0
+          GX%=10
+          GY%=2
 
       ENDCASE
 
@@ -1471,6 +1478,7 @@
       SELY%=-1
       INDEX%=1
       INDEXOLD%=1
+      MACT%=-1
 
       FOR I%=INDEX% TO INDEX%+11
         IF I%<N%+1 THEN PRINTTAB(6,4+I%)CHR$(c%(t&(I%)));LEFT$(n$(I%),24);
@@ -1479,57 +1487,92 @@
       REPEAT
         PROCREADMOUSE
 
-        REM DETECT FIRST TOUCH OR MOVEMENT WHEN TOUCHING
+        REM detect first touch and movement
         IF MB%=4 THEN
-          IF MY%<>OLD_MY% THEN INDEX%+=SGN(MY%-OLD_MY%)
-          IF INDEX%>N%-11 THEN INDEX%=N%-11
-          IF INDEX%<1 THEN INDEX%=1
-          IF SELY%=-1 THEN SELY%=MY%
+          IF MACT%=-1 THEN MACT%=TY%
+
+          IF MACT%>4 AND MACT%<17 THEN
+            IF MY%<>OLD_MY% THEN INDEX%+=SGN(MY%-OLD_MY%)
+            IF INDEX%>N%-11 THEN INDEX%=N%-11
+            IF INDEX%<1 THEN INDEX%=1
+            IF SELY%=-1 THEN SELY%=MY%
+          ELSE
+            IF TY%=22 AND loadtype%=1 THEN
+              CASE TX% OF
+                WHEN 15 : IF GX%>1 THEN GX%-=1
+
+                WHEN 20 : IF GX%<20 THEN GX%+=1
+
+                WHEN 27 : IF GY%>1 THEN GY%-=1
+
+                WHEN 32 : IF GY%<20 THEN GY%+=1
+              ENDCASE
+              PRINTTAB(17,22)RIGHT$("0"+STR$(GX%),2)
+              PRINTTAB(29,22)RIGHT$("0"+STR$(GY%),2)
+              WAIT 20
+            ENDIF
+          ENDIF
+
         ENDIF
 
-        REM DETECT TOUCH RELEASE
-        IF MB%=0 THEN
-          IF SELY%=MY% THEN
+        REM detect touch release
+        IF MB%=0 AND MACT%<>-1 THEN
+          IF SELY%=MY% AND MACT%>4 AND MACT%<17 THEN
             S%=TY%-5
-            IF S%>-1 AND S%<12 THEN SEL%=S%+INDEX%
-            IF SEL%<1 THEN SEL%=1
-            IF SEL%>N% THEN SEL%=N%
+            IF S%>-1 AND S%<12 THEN
+              SEL%=S%+INDEX%
+              IF SEL%<1 THEN SEL%=1
+              IF SEL%>N% THEN SEL%=N%
 
-            IF t&(SEL%)=2 THEN
-              REM F%=SEL%
-            ELSE
-              REM change folder
-              ON ERROR LOCAL IF FALSE THEN
-                S% = 0
-                a$=n$(SEL%)
-                IF ASC(a$)=&40 a$=EVAL(a$)
-                OSCLI "cd """ + a$ + """"
+              IF t&(SEL%)=2 THEN
+                REM F%=SEL%
               ELSE
-                S% = 3
-              ENDIF : RESTORE ERROR
-              IF S%=0 THEN
-                N% = FN_dirscan2(n$(), t&(), "dir *.*",filetype$)
-                SEL%=0
-                SELOLD%=0
-                SELY%=-1
-                INDEX%=1
-                INDEXOLD%=-1
-                FOR I%=INDEX% TO INDEX%+12
-                  PRINTTAB(6,4+I%)SPC(28);
-                NEXT
+                REM change folder
+                ON ERROR LOCAL IF FALSE THEN
+                  S% = 0
+                  a$=n$(SEL%)
+                  IF ASC(a$)=&40 a$=EVAL(a$)
+                  OSCLI "cd """ + a$ + """"
+                ELSE
+                  S% = 3
+                ENDIF : RESTORE ERROR
+                IF S%=0 THEN
+                  N% = FN_dirscan2(n$(), t&(), "dir *.*",filetype$)
+                  SEL%=0
+                  SELOLD%=0
+                  SELY%=-1
+                  INDEX%=1
+                  INDEXOLD%=-1
+                  FOR I%=INDEX% TO INDEX%+12
+                    PRINTTAB(6,4+I%)SPC(28);
+                  NEXT
 
+                ENDIF
               ENDIF
             ENDIF
+          ENDIF
 
-            IF TX%<6 OR TX%>32 OR TY%<5 OR TY%>19 THEN F%=-1
+          REM check for button and control clicks
+          IF TX%<2 OR TX%>32 OR TY%<5 OR TY%>MAXY% THEN F%=-1
 
-            IF TY%=18 THEN
-              IF TX%>5 AND TX%<14 THEN F%=SEL%
-              IF TX%>15 AND TX%<34 AND loadtype%=0 THEN F%=-2
-            ENDIF
+          REM load and cancel buttons
+          IF TY%=18 AND MACT%=18 THEN
+            IF TX%>5 AND TX%<14 THEN F%=SEL%
+            IF TX%>15 AND TX%<34 AND loadtype%=0 THEN F%=-2
+          ENDIF
+
+          REM grid size controls
+          IF loadtype%=1 AND (MACT%=21 OR MACT%=22) THEN
+            IF TY%=21 AND TX%>1 AND TX%<5 THEN GT%=0
+            IF TY%=22 AND TX%>1 AND TX%<5 THEN GT%=1
+
+            PRINTTAB(3,21+GT%)"*"
+            PRINTTAB(3,22-GT%)" "
 
           ENDIF
+
           SELY%=-1
+          MACT%=-1
         ENDIF
 
         REM IF SCROLLING DETECTED UPDATE FILE LIST AND SELECTED FILE INDEX
@@ -1595,12 +1638,18 @@
 
         WHEN 1 : REM import bmp
           MODE 6
+          VDU 23,1,0;0;0;0; : REM Disable cursor
 
           IF F%=-1 THEN
+            COLOUR 9
             PRINTTAB(0,0)"NO FILE LOADED"
+            menuext%=94
           ELSE
 
             OSCLI "DISPLAY """+curdir$+n$(SEL%)+""" 0,0,1280,1000"
+            menuext%=95+GT%
+            OLD_TX%=GX%
+            OLD_TY%=GY%
 
           ENDIF
 
@@ -1672,148 +1721,231 @@
       REM import picture to one or more frames
       DEF PROCimportimage
 
+      LOCAL GX%,GY%
+
       menuext%=96
       done%=0
 
       PROCloadfile(1)
 
+      REM after loadfile menuext% returns: No file: 94, single image: 95, grid: 96
+
       PROCWAITMOUSE(0)
 
-      VDU 23,1,0;0;0;0; : REM Disable cursor
+      IF menuext%=94 THEN
+        GX%=0
+        REPEAT
+          PROCREADMOUSE
+          WAIT 5
+          GX%+=1
+        UNTIL GX%>100 OR MB%<>0
+      ELSE
 
-      startx%=-1
-      starty%=-1
-      OLDMX%=MX%
-      OLDMY%=MY%
+        GX%=1
+        GY%=1
 
-      PROCprint40(0,"Select Frame: "+RIGHT$("0"+STR$(frame%),2))
-
-      REPEAT
-        PROCREADMOUSE
-
-        REM start a new selection
-        IF MB%=4 THEN
-          startx%=MX%
-          starty%=MY%
-          OLDMX%=MX%
-          OLDMY%=MY%
-          GCOL 3,15
-          RECTANGLE startx%,starty%,MX%-startx%,MY%-starty%
-
-          REPEAT
-            PROCREADMOUSE
-            IF OLDMX%<>MX% OR OLDMY%<>MY% THEN
-              GCOL 3,15
-              RECTANGLE startx%,starty%,OLDMX%-startx%,OLDMY%-starty%
-              RECTANGLE startx%,starty%,MX%-startx%,MY%-starty%
-
-              OLDMX%=MX%
-              OLDMY%=MY%
-            ENDIF
-
-          UNTIL MB%=0
-          RECTANGLE startx%,starty%,MX%-startx%,MY%-starty%
-
-          REM process selection
-          x1%=startx%
-          y1%=starty%
-          x2%=MX%
-          y2%=MY%
-
-          IF x1%>x2% THEN SWAP x1%,x2%
-          IF y1%>y2% THEN SWAP y1%,y2%
-
-          sizex%=x2%-x1%
-          sizey%=y2%-y1%
-
-          IF sizex%>sizey% THEN
-            stepx=sizex%/78
-            stepr=sizex%/sizey%
-            stepy=sizey%/72*stepr
-          ELSE
-            stepy=sizey%/72
-            stepr=sizey%/sizex%
-            stepx=sizex%/78*stepr
-          ENDIF
-          threshold=stepx*stepy/2
-
-          REM PRINTTAB(0,0)"stepx: ";RIGHT$("000000000"+STR$(stepx),10)
-          REM PRINTTAB(0,1)"stepy: ";RIGHT$("000000000"+STR$(stepy),10)
-          REM PRINTTAB(0,2)"stepr: ";RIGHT$("000000000"+STR$(stepr),10)
-
-          REM          A=GET
-
-          PROCprint40(0,"Processing selection...")
-
-          GCOL 0,9
-          px%=0
-          FOR X=x1% TO x2% STEP stepx
-            py%=74
-            FOR Y=y1% TO y2% STEP stepy
-
-              REM average colour for each region
-              avg%=0
-              FOR PX=X TO X+stepx
-                FOR PY=Y TO Y+stepy
-                  IF POINT(PX,PY)<>0 THEN avg%+=1
-                NEXT
-              NEXT
-
-              IF avg%>=threshold THEN
-                PROCpoint_buf(px%+2, py%, 1,frame%)
-                REM PLOT 69,px%+2, py%+3
-              ENDIF
-
-              py%-=1
-              REM PRINTTAB(0,0)"px: "+RIGHT$("000"+STR$(px%),4)
-              REM PRINTTAB(0,1)"py: "+RIGHT$("000"+STR$(py%),4)
-
-              REM A=GET
-
-            NEXT
-            px%+=1
-          NEXT
-
-          PROCprint40(0,"Complete! Process next frame?  Y   N")
-          GCOL 3,10
-          RECTANGLE FILL 948,960,108,40
-
-          GCOL 3,9
-          RECTANGLE FILL 1088,960,108,40
-
-
-          PROCWAITMOUSE(4)
-          PROCWAITMOUSE(0)
-
-          IF TY%=0 AND TX%>29 AND TX%<33 THEN
-
-            REM reset selection
-            startx%=-1
-            IF frame%<frame_max% THEN
-              frame%+=1
-              PROCprint40(0,"Select Frame: "+RIGHT$("0"+STR$(frame%),2))
-            ELSE
-              done%=1
-            ENDIF
-
-          ELSE
-            done%=1
-
-          ENDIF
-
-        ELSE
-          WAIT 2
+        IF menuext%=96 THEN
+          GX%=OLD_TX%
+          GY%=OLD_TY%
         ENDIF
 
-      UNTIL done%=1
+        startx%=-1
+        starty%=-1
+        OLDMX%=MX%
+        OLDMY%=MY%
 
+        PROCprint40(0,"Select Frame: "+RIGHT$("0"+STR$(frame%),2))
+
+        REPEAT
+          PROCREADMOUSE
+
+          MX%=(MX% DIV 2)*2
+          MY%=(MY% DIV 2)*2
+          REM start a new selection
+          IF MB%=4 THEN
+            startx%=MX%
+            starty%=MY%
+            OLDMX%=MX%
+            OLDMY%=MY%
+            gridsx%=(MX%-startx%)/GX%
+            gridsy%=(MY%-starty%)/GY%
+
+            GCOL 3,15
+            FOR X%=0 TO GX%
+              LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
+            NEXT
+            FOR Y%=0 TO GY%
+              LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
+            NEXT
+
+            REPEAT
+              PROCREADMOUSE
+              IF OLDMX%<>MX% OR OLDMY%<>MY% THEN
+                GCOL 3,15
+                FOR X%=0 TO GX%
+                  LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
+                NEXT
+                FOR Y%=0 TO GY%
+                  LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
+                NEXT
+
+                gridsx%=(MX%-startx%)/GX%
+                gridsy%=(MY%-starty%)/GY%
+
+                FOR X%=0 TO GX%
+                  LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
+                NEXT
+                FOR Y%=0 TO GY%
+                  LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
+                NEXT
+
+                OLDMX%=MX%
+                OLDMY%=MY%
+              ENDIF
+
+              REMPRINTTAB(0,3)"xs: ";RIGHT$("000"+STR$(startx%),4);" xe: ";RIGHT$("000"+STR$(gridsx%),4)
+              REMPRINTTAB(0,4)"ys: ";RIGHT$("000"+STR$(starty%),4);" ye: ";RIGHT$("000"+STR$(gridsy%),4)
+
+
+            UNTIL MB%=0
+            FOR X%=0 TO GX%
+              LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
+            NEXT
+            FOR Y%=0 TO GY%
+              LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
+            NEXT
+
+            REM process selection(s)
+            x1%=startx%
+            y1%=starty%
+            x2%=MX%
+            y2%=MY%
+
+            IF x1%>x2% THEN SWAP x1%,x2%
+            IF y1%<y2% THEN SWAP y1%,y2%
+
+            gridsx%=ABS(gridsx%)
+            gridsy%=ABS(gridsy%)
+
+            startx%=x1%
+
+            IF gridsx%>gridsy% THEN
+              stepx=gridsx%/78
+              stepr=gridsx%/gridsy%
+              stepy=gridsy%/72*stepr
+            ELSE
+              stepy=gridsy%/72
+              stepr=gridsy%/gridsx%
+              stepx=gridsx%/78*stepr
+            ENDIF
+            threshold=stepx*stepy/4
+
+
+            FOR Y%=1 TO GY%
+              FOR X%=0 TO GX%-1
+
+                XS%=x1%+gridsx%*X%
+                XE%=XS%+gridsx%
+
+                YS%=y1%-gridsy%*Y%
+                YE%=YS%+gridsy%
+                PRINTTAB(0,0)"stepx: ";RIGHT$("000000000"+STR$(stepx),10)
+                PRINTTAB(0,1)"stepy: ";RIGHT$("000000000"+STR$(stepy),10)
+                PRINTTAB(0,2)"stepr: ";RIGHT$("000000000"+STR$(stepr),10)
+                PRINTTAB(0,3)"xs: ";RIGHT$("000"+STR$(XS%),4);" xe: ";RIGHT$("000"+STR$(XE%),4)
+                PRINTTAB(0,4)"ys: ";RIGHT$("000"+STR$(YS%),4);" ye: ";RIGHT$("000"+STR$(YE%),4)
+
+
+
+                PROCprint40(0,"Processing selection, Frame: "+STR$(frame%))
+                REM A=GET
+
+                px%=0
+                FOR X=XS% TO XE% STEP stepx
+                  py%=74
+                  FOR Y=YS% TO YE% STEP stepy
+
+                    REM average colour for each region
+                    avg%=0
+                    FOR PX=X TO X+stepx STEP 2
+                      FOR PY=Y TO Y+stepy STEP 2
+                        IF POINT(PX,PY)<>0 THEN avg%+=1
+                        IF avg%>=threshold THEN EXIT FOR
+                      NEXT
+                      IF avg%>=threshold THEN EXIT FOR
+                    NEXT
+
+                    IF avg%>=threshold THEN
+                      PROCpoint_buf(px%+2, py%, 1,frame%)
+                      REM PLOT 69,px%+2, py%+3
+                    ENDIF
+
+                    py%-=1
+                    REM PRINTTAB(0,0)"px: "+RIGHT$("000"+STR$(px%),4)
+                    REM PRINTTAB(0,1)"py: "+RIGHT$("000"+STR$(py%),4)
+
+                    REM A=GET
+
+                  NEXT
+                  px%+=1
+                NEXT
+
+                IF menuext%=96 THEN
+                  IF frame%<frame_max% THEN
+                    frame%+=1
+                  ELSE
+                    done%=1
+                    EXIT FOR
+                  ENDIF
+                ENDIF
+              NEXT
+              IF menuext%=96 THEN
+                x1%=startx%
+                IF done%=1 THEN EXIT FOR
+              ENDIF
+            NEXT
+
+            IF menuext%=95 THEN
+              PROCprint40(0,"Complete! Process next frame?  Y   N")
+              GCOL 3,10
+              RECTANGLE FILL 948,960,108,40
+
+              GCOL 3,9
+              RECTANGLE FILL 1076,960,108,40
+
+              PROCWAITMOUSE(4)
+              PROCWAITMOUSE(0)
+
+              IF TY%=0 AND TX%>29 AND TX%<33 THEN
+
+                REM reset selection
+                startx%=-1
+                IF frame%<frame_max% THEN
+                  frame%+=1
+                  PROCprint40(0,"Select Frame: "+RIGHT$("0"+STR$(frame%),2))
+                ELSE
+                  done%=1
+                ENDIF
+
+              ELSE
+                done%=1
+
+              ENDIF
+            ENDIF
+
+          ELSE
+            WAIT 2
+          ENDIF
+
+        UNTIL done%=1
+
+      ENDIF
       PROCWAITMOUSE(0)
       MODE 7
       frame%=0
       PROCloadnextframe(1,0)
       menuext%=0
 
-      VDU 23,1,1;0;0;0; : REM Enable cursor
 
       ENDPROC
 
