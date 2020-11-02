@@ -1,6 +1,6 @@
       MODE 7
 
-      version$="v0.09"
+      version$="v0.10"
 
       REM *** TODO LIST ***
 
@@ -76,6 +76,10 @@
       copysize%=0
       copyx%=0
       copyy%=0
+      copylockx%=-1
+      copylocky%=-1
+      copylockxt%=0
+      copylockyt%=0
       shapesel%=-1
       toolcursor%=15
       animateshape%=0
@@ -382,6 +386,15 @@
                       WHEN 11,12,13: shapesel%=9 : REM graphic code whole column
 
                     ENDCASE
+
+                  WHEN 10
+                    CASE TX% OF
+                      WHEN 1,2,3: copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
+
+                      WHEN 11,12,13: copylockyt%=(copylockyt%+1) AND 1 :REM lock vertical paste pos
+
+                    ENDCASE
+
 
                   WHEN 11
                     CASE TX% OF
@@ -1456,6 +1469,9 @@
       copyy%=y2%-y1%
       copysize%=s%
 
+      copylockx%=x1%
+    1 copylocky%=y1%
+
       ENDPROC
 
       REM paste copypaste buffer yo current frame
@@ -1463,6 +1479,10 @@
       LOCAL s%,X%,Y%
 
       s%=0
+
+      IF copylockxt% THEN x1%=copylockx%
+      IF copylockyt% THEN y1%=copylocky%
+
       IF copysize%>0 THEN
         PROCundosave
         FOR X%=x1% TO x1%+copyx%
@@ -2465,6 +2485,8 @@
         D$=CHR$(32+animateshape%*10)
         A$=STR$(animategap%)
         F$=STR$(animatelen%)
+        R$=CHR$(32+copylockxt%*10)
+        U$=CHR$(32+copylockyt%*10)
 
         FOR Y%=1 TO 23
           PROCprint40(Y%,"")
@@ -2477,6 +2499,7 @@
         PROCprint40(6,tg$+"( )"+tw$+"FLSH (136)  "+tg$+"( )"+tw$+"DBLH (141)")
         PROCprint40(7,tg$+"( )"+tw$+"SEPR (154)  "+tg$+"( )"+tw$+"HOLD (158)")
         PROCprint40(9,tg$+"( )"+tw$+"FORE "+tg$+"( )"+tw$+"BACK"+tb$+"(ENTIRE COLUMN)")
+        PROCprint40(10,tg$+"("+R$+")"+tw$+"HORZ "+tg$+"("+U$+")"+tw$+"VERT"+tb$+"(LOCK PASTE POS)")
         PROCprint40(11,tg$+"( )"+tw$+"TEXT")
         D$=CHR$(129+showcodes%)
 
