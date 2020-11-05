@@ -87,6 +87,7 @@
       animategapcount%=0
       animatelen%=1
       animatelencount%=0
+      framedupe%=1
       scrollh%=0
       scrollv%=0
       erase%=0
@@ -1136,12 +1137,12 @@
 
       PROCWAITMOUSE(0)
 
-      FOR L%=4 TO 20
+      FOR L%=4 TO 22
         PRINTTAB(0,L%)SPC(40);
       NEXT
 
       PRINTTAB(1,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"CLEARSCREEN";gw$;STRING$(10,CHR$(172));CHR$(180);
-      FOR L%=5 TO 20
+      FOR L%=5 TO 21
         PRINTTAB(1,L%)gw$;CHR$(234);STRING$(32," ");gw$;CHR$(181);
       NEXT
 
@@ -1155,10 +1156,17 @@
       A$=STR$(skip%)+" "
       B$=LEFT$(STR$(scrollh%)+" ",2)
       C$=LEFT$(STR$(scrollv%)+" ",2)
-      PRINTTAB(13,17)tw$+"-"+ty$+A$+tw$+"+"+tw$+"-"+ty$+B$+tw$+"+ -"+ty$+C$+tw$+"+"
-      PRINTTAB(4,19)gg$;CHR$(157);tb$;"DUPE FRAME  ";CHR$(156);gr$;CHR$(157);ty$;" CANCEL   ";CHR$(156);
+      PRINTTAB(13,17)tw$;"-";ty$;A$;tw$;"+ -";ty$;B$;tw$;"+ -";ty$;C$;tw$+"+"
 
-      PRINTTAB(1,20)gw$;CHR$(170);STRING$(33,CHR$(172));CHR$(165);
+      A$=LEFT$(STR$(framedupe%)+" ",2)
+      B$=RIGHT$(" "+STR$(frame_max% DIV framedupe%),2)+"/"+STR$(frame_max%)
+      PRINTTAB(4,19)tc$;"FRAMES: ";tw$;"-";ty$;A$;tw$+"+";tb$;"COPIES:";ty$;B$
+
+      REM      PRINTTAB(13,19)tw$+"-"+ty$+A$+tw$+"+"
+
+      PRINTTAB(4,21)gg$;CHR$(157);tb$;"DUPE FRAME  ";CHR$(156);gr$;CHR$(157);ty$;" CANCEL   ";CHR$(156);
+
+      PRINTTAB(1,22)gw$;CHR$(170);STRING$(33,CHR$(172));CHR$(165);
 
       PROCupdateCS
 
@@ -1168,6 +1176,7 @@
       h_old%=scrollh%
       v_old%=scrollv%
       skip_old%=skip%
+      framedupe_old%=framedupe%
       REPEAT
         PROCREADMOUSE
         IF MB%=4 THEN
@@ -1193,6 +1202,7 @@
             WHEN 14
               IF TX%>5 AND TX%<19 THEN done%=1 : REM select all frame clearscreen
               IF TX%>22 AND TX%<34 THEN done%=2 : REM select cur frame clearscreen
+
             WHEN 17
               CASE TX% OF
                 WHEN 14 : REM HORIZONTAL DECREMENT
@@ -1214,10 +1224,27 @@
                   scrollv%+=1
                   IF scrollv%>3 THEN scrollv%=3
               ENDCASE
+
             WHEN 19
+              CASE TX% OF
+                WHEN 14 : REM frame count decrement
+                  IF framedupe%>1 THEN framedupe%-=1
+                WHEN 19 : REM frame count increment
+                  IF framedupe%<(frame_max% DIV 2) THEN framedupe%+=1
+              ENDCASE
+              IF framedupe_old%<>framedupe% THEN
+                A$=LEFT$(STR$(framedupe%)+" ",2)
+                B$=RIGHT$(" "+STR$(frame_max% DIV framedupe%),2)
+                PRINTTAB(16,19)A$;
+                PRINTTAB(29,19)B$;
+                framedupe_old%=framedupe%
+              ENDIF
+
+
+            WHEN 21
               IF TX%>5 AND TX%<20 THEN done%=3 : REM SELECT DUPE SCREEN AND FINISH
               IF TX%>23 AND TX%<34 THEN done%=-1 : REM CANCEL SCLEARSCREEN DIALOG
-            WHEN 21,22,23,24 : done%=-1 : REM CANCEL DIALOG
+            WHEN 23,24 : done%=-1 : REM CANCEL DIALOG
 
           ENDCASE
           IF col_old%<>curcol% OR bak_old%<>bakcol% THEN
@@ -1227,22 +1254,21 @@
 
           ENDIF
           IF skip_old%<>skip% THEN
-            A$=STR$(skip%)+" "
+            A$=LEFT$(STR$(skip%)+" ",2)
             PRINTTAB(16,17)A$;
             skip_old%=skip%
           ENDIF
           IF h_old%<>scrollh% THEN
-            A$=STR$(scrollh%)
-            IF LEN(A$)<2 THEN A$=A$+" "
+            A$=LEFT$(STR$(scrollh%)+" ",2)
             PRINTTAB(23,17)A$;
             h_old%=scrollh%
           ENDIF
           IF v_old%<>scrollv% THEN
-            A$=STR$(scrollv%)
-            IF LEN(A$)<2 THEN A$=A$+" "
+            A$=LEFT$(STR$(scrollv%)+" ",2)
             PRINTTAB(30,17)A$;
             v_old%=scrollv%
           ENDIF
+
 
         ENDIF
       UNTIL done%
@@ -1287,24 +1313,32 @@
           PROCloadnextframe(1,0)
           hindex%=scrollh%
           vindex%=scrollv%
-          FOR frame%=2 TO frame_max%
-            IF scrollh%<>0 OR scrollv%<>0 THEN
-              PROCcopyframe(1,frame%,hindex%,vindex%,skip%)
+          IF framedupe%=1 THEN
+            FOR frame%=2 TO frame_max%
+              IF scrollh%<>0 OR scrollv%<>0 THEN
+                PROCcopyframe(1,frame%,hindex%,vindex%,skip%)
 
-              hindex%+=scrollh%
-              IF hindex%>39 THEN hindex%=hindex%-40
-              IF hindex%<0 THEN hindex%=40+hindex%
+                hindex%+=scrollh%
+                IF hindex%>39 THEN hindex%=hindex%-40
+                IF hindex%<0 THEN hindex%=40+hindex%
 
-              vindex%+=scrollv%
-              IF vindex%>23 THEN vindex%=vindex%-24
-              IF vindex%<0 THEN vindex%=24+vindex%
+                vindex%+=scrollv%
+                IF vindex%>23 THEN vindex%=vindex%-24
+                IF vindex%<0 THEN vindex%=24+vindex%
 
-            ELSE
-              PROCframesave(frame%)
-            ENDIF
-          NEXT frame%
-          frame%=1
-
+              ELSE
+                PROCframesave(frame%)
+              ENDIF
+            NEXT frame%
+            frame%=1
+          ELSE
+            C%=frame_max% DIV framedupe%
+            FOR F%=1 TO framedupe%
+              FOR T%=1 TO C%-1
+                PROCcopyframe(F%,F%+framedupe%*T%,0,0,skip%)
+              NEXT
+            NEXT
+          ENDIF
       ENDCASE
       REMPROCloadnextframe(1,0)
 
