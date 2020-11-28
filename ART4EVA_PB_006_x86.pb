@@ -1,14 +1,14 @@
 ﻿;
 ; ------------------------------------------------------------
 ;
-;   ART 4 Exagear - Suits 800x600 screens (576 actual vertical - 24 for menu)
+;   ART 4 Eva - Suits 800x600 screens ( - 24 for menu)
 ;
-;    (c) Fourthstone
+;    (c) Fourthstone 2020
 ;
 ; ------------------------------------------------------------
 ;
 
-; TODO 16/07/2018
+; TODO 29/11/2020
 
 ;* Directional Gradient Fills
 
@@ -16,12 +16,20 @@
 
 ;* Spray brush - would be nice To be able To alter the flow And maybe more paint centred in the middle / less around the edges
 
-;* Cut n paste would be very interesting.......
+;* Cut n paste would be very interesting....... implemented experimentally partially working
 
 ;* Zoom tool? Could be very useful this one......
 
 ;* Tracing layer with variable transparency, ability to load a graphic file and scale as an overlay tracing guide
 ;  Partially implemented, need to experiment with it at different layer etc.
+
+;* Circle and Rectangle placement needs fixing, currently draws slightly shifted from guide
+
+;* Add size indicator for brush size
+
+;* Add ms indicator for flashing slide
+
+;* Implement line connecter tool
 
 ; png file support
 UsePNGImageEncoder()
@@ -2839,17 +2847,17 @@ Repeat
                             Select tCur
                               Case #tooldraw
                                 Select dSel
-                                    Case #toolBrushSPR
-                                  setP(mx,my)
-                                  dBrushSPR(px,py,dWid,0,0)
-                                  
-                                Case #toolBrushRND
-                                  dAir=0
-                                  
-                              Case #toolBrushPaste ; copy and paste finalise
-                                setP(mx,my)
-                                dBrushPaste(px,py,0)
-                                 
+                                  Case #toolBrushSPR
+                                    setP(mx,my)
+                                    dBrushSPR(px,py,dWid,0,0)
+                                    
+                                  Case #toolBrushRND
+                                    dAir=0
+                                    
+                                  Case #toolBrushPaste ; copy and paste finalise
+                                    setP(mx,my)
+                                    dBrushPaste(px,py,0)
+                                    
                                 EndSelect
 
                               Case #toolLine ; line tool completion
@@ -2926,7 +2934,11 @@ Repeat
                               
                                 SCRNcopy\w=x2-x1
                                 SCRNcopy\h=y2-y1
-                                  
+                                
+                                addToggle(tCur,0,0)
+                                tCur=#tooldraw
+                                dSel=#toolBrushPaste
+                                addToggle(tCur,tTog,0)
                                 
                             EndSelect
                             
@@ -3574,10 +3586,12 @@ Repeat
           
          
           ; draw cross hair if mouse not in range of visible overlays
-          If showGrid=0
-            
-            DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
-            If rangeApp(#GA_MainCanvas)
+          If rangeApp(#GA_MainCanvas)
+            If showGrid=0
+              
+              DrawingMode(#PB_2DDrawing_Outlined|#PB_2DDrawing_XOr)          
+              
+              
               
               Select oCrossHair
                 Case 0 ; thin
@@ -3628,27 +3642,24 @@ Repeat
                     Else
                       Circle(dx,dy,10,bp(2))
                     EndIf
-                    
-                    
                 EndSelect
               EndIf
               
-            EndIf
-            
-            ; draw sprite
-            If tcur=#toolDraw
-              Select dSel
-                Case #toolBrushSPR
-                  setP(mx,my)
-                  DrawingMode(#PB_2DDrawing_Default)
-                  dBrushSPR(px,py,dWid,0,1)
-                Case #toolBrushPaste
-                  setP(mx,my)
-                  DrawingMode(#PB_2DDrawing_Default)
-                  dBrushPaste(px,py,1)
-              EndSelect
+              ; draw sprite or paste if in range
+              If tcur=#toolDraw
+                Select dSel
+                  Case #toolBrushSPR
+                    setP(mx,my)
+                    DrawingMode(#PB_2DDrawing_Default)
+                    dBrushSPR(px,py,dWid,0,1)
+                  Case #toolBrushPaste
+                    setP(mx,my)
+                    DrawingMode(#PB_2DDrawing_Default)
+                    dBrushPaste(px,py,1)
+                EndSelect
+              EndIf                
               
-            EndIf                  
+            EndIf
             
             
             ; draw shape guides
@@ -3676,13 +3687,15 @@ Repeat
               Case #ToolCopyPaste ; copy paste outline
                 Box(sx,sy,dx-sx,dy-sy,bp(7))
             EndSelect
+            
+            ; show pixel coords
+            DrawingFont(FontID(tFont1))
+            setP(mx,my)
+            DrawText(560,500,"X: " + Str(px),bp(8))
+            DrawText(600,500,"Y: " + Str(py),bp(8))
+            
           EndIf
               
-          ; show pixel coords
-          DrawingFont(FontID(tFont1))
-          setP(mx,my)
-          DrawText(560,500,"X: " + Str(px),bp(8))
-          DrawText(600,500,"Y: " + Str(py),bp(8))
           
           ; handle popups on main canvas
           Select mact
@@ -4147,9 +4160,9 @@ DataSection
   
 EndDataSection
 
-; IDE Options = PureBasic 5.62 (Windows - x86)
-; CursorPosition = 221
-; FirstLine = 218
+; IDE Options = PureBasic 5.73 LTS (Windows - x86)
+; CursorPosition = 3588
+; FirstLine = 3644
 ; Folding = ----------
 ; EnableXP
 ; UseIcon = Art-icon.ico
