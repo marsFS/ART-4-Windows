@@ -1,6 +1,3 @@
-      MODE 7
-
-      version$="v0.10"
 
       REM *** TODO LIST ***
 
@@ -12,22 +9,25 @@
 
       REM *** SCROLL OFF SCREEN E.G. NO WRAP
 
-      REM *** IMPLEMENT ANIMATED CIRCLE
+      REM *** SCROLL FRAMES LAYER, HOW WOULD THIS INTERACT WITH DRAW FRAMES?
+
+      REM *** IMPLEMENT ANIMATED CIRCLE (REDO CIRCLE ROUTINE)
 
       REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE (partially done)
 
-      REM *** MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
-
       REM *** TODO LIST ***
 
-      REM FOR 64 BIT COMPARISONS, ESC OFF FOR BACK ARROW ON SOME DEVICES
-      REM *HEX 64
-      *ESC OFF
+      REM *** HELP SCREEN: MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
 
-      REM INSTALL @lib$+"sortlib"
-      REM INSTALL @lib$+"stringlib"
-      REM INSTALL @lib$+"dlglib"
-      REM INSTALL @lib$+"filedlg"
+      MODE 7
+
+      version$="v0.11"
+
+      REM FOR 64 BIT COMPARISONS
+      REM *HEX 64
+
+      REM ESC OFF FOR BACK ARROW ON SOME DEVICES
+      *ESC OFF
 
       MOUSE ON 3
 
@@ -1142,9 +1142,9 @@
       NEXT
 
       PRINTTAB(1,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"CLEARSCREEN";gw$;STRING$(10,CHR$(172));CHR$(180);
-      FOR L%=5 TO 21
-        PRINTTAB(1,L%)gw$;CHR$(234);STRING$(32," ");gw$;CHR$(181);
-      NEXT
+      REM FOR L%=5 TO 21
+      REM PRINTTAB(1,L%)gw$;CHR$(234);STRING$(32," ");gw$;CHR$(181);
+      REM NEXT
 
 
       PRINTTAB(4,12)tb$;"OPTION:  ";tc$;"CLS:";tg$;"Y";tc$;" FIX:";tg$;"Y";
@@ -1164,9 +1164,11 @@
 
       REM      PRINTTAB(13,19)tw$+"-"+ty$+A$+tw$+"+"
 
-      PRINTTAB(4,21)gg$;CHR$(157);tb$;"DUPE FRAME  ";CHR$(156);gr$;CHR$(157);ty$;" CANCEL   ";CHR$(156);
+      PRINTTAB(4,21)gg$;CHR$(157);tb$;"DUPE FRAME  ";CHR$(156);gr$;CHR$(157);ty$;" CANCEL    ";CHR$(156);
 
-      PRINTTAB(1,22)gw$;CHR$(170);STRING$(33,CHR$(172));CHR$(165);
+      REM      PRINTTAB(1,22)gw$;CHR$(170);STRING$(33,CHR$(172));CHR$(165);
+      PRINTTAB(4,22)tr$;STRING$(29,"-")
+      PRINTTAB(4,23)gg$;CHR$(157);tb$;" CUSTOM 1   ";CHR$(156);gg$;CHR$(157);tb$;" CUSTOM 2  ";CHR$(156)
 
       PROCupdateCS
 
@@ -1244,7 +1246,9 @@
             WHEN 21
               IF TX%>5 AND TX%<20 THEN done%=3 : REM SELECT DUPE SCREEN AND FINISH
               IF TX%>23 AND TX%<34 THEN done%=-1 : REM CANCEL SCLEARSCREEN DIALOG
-            WHEN 23,24 : done%=-1 : REM CANCEL DIALOG
+            WHEN 23
+              IF TX%>5 AND TX%<20 THEN done%=4 : REM CUSTOM PROCEDURE 1
+              IF TX%>23 AND TX%<34 THEN done%=5 : REM CUSTOM PROCEDURE 2
 
           ENDCASE
           IF col_old%<>curcol% OR bak_old%<>bakcol% THEN
@@ -1339,6 +1343,16 @@
               NEXT
             NEXT
           ENDIF
+        WHEN 4: REM CALL CUSTOM PROCEDURE 1
+          PROCundosave
+          PROCCUSTOMPROC1
+          PROCframesave(frame%)
+
+        WHEN 5: REM CALL CUSTOM PROCEDURE 2
+          PROCundosave
+          PROCCUSTOMPROC2
+          PROCframesave(frame%)
+
       ENDCASE
       REMPROCloadnextframe(1,0)
 
@@ -1580,7 +1594,7 @@
       REM loadfile - modified dirscan to include type array so files list can be displayed for mode 7
       REM loadtype determines the type of load / import function
       DEF PROCloadfile(loadtype%)
-      LOCAL I%,N%,L%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%,MAXY%,MACT%
+      LOCAL I%,N%,L%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%,MACT%,maxy%,opt1%,opt2%
 
       REM n$ holds file and dir list of current folder
       REM t& holds type list for current folder, 0=special, 1=dir, 2=file
@@ -1597,15 +1611,15 @@
 
       PROCWAITMOUSE(0)
       PROCmenusave : menuext%=99
-      FOR L%=4 TO 20
-        PRINTTAB(0,L%)SPC(40);
+      maxy%=22-loadtype%*3
+      FOR L%=4 TO maxy%
+        PROCprint40(L%,"")
       NEXT
 
-
-      FOR L%=5 TO 19
+      FOR L%=5 TO maxy%-1
         PRINTTAB(2,L%)gw$;CHR$(234);STRING$(30," ");gw$;CHR$(181);
       NEXT
-      PRINTTAB(2,19)gw$;CHR$(170);STRING$(31,CHR$(172));CHR$(165);
+      PRINTTAB(2,maxy%)gw$;CHR$(170);STRING$(31,CHR$(172));CHR$(165);
       PRINTTAB(5,18)tb$;CHR$(157);tc$;"LOAD  ";CHR$(156);
 
       CASE loadtype% OF
@@ -1613,7 +1627,8 @@
           filetype$=".bin"
           PRINTTAB(2,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
           PRINTTAB(15,18)tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
-          MAXY%=19
+          PRINTTAB(4,20)tg$;"(*)";tw$;"ALL FRMS ";tg$;"( )";tw$;"SINGLE FRM";
+          PRINTTAB(4,21)tg$;"(*)";tw$;"CLS ";tg$;"( )";tw$;"BACK ";tg$;"( )";tw$;"FORE";
 
         WHEN 1 : REM import bmp
           filetype$=".bmp"
@@ -1621,7 +1636,6 @@
           PRINTTAB(15,18)CHR$(156);
           PRINTTAB(1,21)tg$;"(*)";tw$;"SINGLE BOX CAPTURE"
           PRINTTAB(1,22)tg$;"( )";tw$;"GRID";tc$;"HOR";tw$;"-";ty$;"10";tw$;"+ ";tc$;"VER";tw$;"-";ty$;"02";tw$"+"
-          MAXY%=23
           GT%=0
           GX%=10
           GY%=2
@@ -1675,7 +1689,7 @@
 
         REM detect touch release
         IF MB%=0 AND MACT%<>-1 THEN
-          IF SELY%=MY% AND MACT%>4 AND MACT%<17 THEN
+          IF SELY%=MY% AND MACT%>4 AND MACT%<17 AND TX%>3 AND TX%<36 THEN
             S%=TY%-5
             IF S%>-1 AND S%<12 THEN
               SEL%=S%+INDEX%
@@ -1711,7 +1725,7 @@
           ENDIF
 
           REM check for button and control clicks
-          IF TX%<2 OR TX%>32 OR TY%<5 OR TY%>MAXY% THEN F%=-1
+          IF TY%<1 THEN F%=-1
 
           REM load and cancel buttons
           IF TY%=18 AND MACT%=18 THEN
@@ -1719,16 +1733,43 @@
             IF TX%>15 AND TX%<34 AND loadtype%=0 THEN F%=-2
           ENDIF
 
-          REM grid size controls
-          IF loadtype%=1 AND (MACT%=21 OR MACT%=22) THEN
-            IF TY%=21 AND TX%>1 AND TX%<5 THEN GT%=0
-            IF TY%=22 AND TX%>1 AND TX%<5 THEN GT%=1
+          CASE loadtype% OF
+            WHEN 0 :
+              REM load frame options
+              IF TY%=20 AND MACT%=20 THEN
+                CASE TX% OF
+                  WHEN 5,6,7 : opt1%=0
+                  WHEN 19,20,21 : opt1%=1
+                ENDCASE
+                PRINTTAB(6,20)CHR$(42-opt1%*10)
+                PRINTTAB(20,20)CHR$(32+opt1%*10)
+              ENDIF
 
-            PRINTTAB(3,21+GT%)"*"
-            PRINTTAB(3,22-GT%)" "
+              REM load merge options
+              IF TY%=21 AND MACT%=21 THEN
+                CASE TX% OF
+                  WHEN 5,6,7 : opt2%=0
+                  WHEN 14,15,16 : opt2%=1
+                  WHEN 24,25,26 : opt2%=2
+                ENDCASE
+                PRINTTAB(6,21)CHR$(32-(opt2%=0)*10)
+                PRINTTAB(15,21)CHR$(32-(opt2%=1)*10)
+                PRINTTAB(25,21)CHR$(32-(opt2%=2)*10)
+              ENDIF
 
-          ENDIF
+            WHEN 1 :
 
+              REM grid size controls
+              IF MACT%=21 OR MACT%=22 THEN
+                IF TY%=21 AND TX%>1 AND TX%<5 THEN GT%=0
+                IF TY%=22 AND TX%>1 AND TX%<5 THEN GT%=1
+
+                PRINTTAB(3,21+GT%)"*"
+                PRINTTAB(3,22-GT%)" "
+
+              ENDIF
+
+          ENDCASE
           SELY%=-1
           MACT%=-1
         ENDIF
@@ -2775,3 +2816,26 @@
       DATA "EB09FFC6448D1C324189F14539D80F8737FEFFFFD1EA0F8527FEFFFF4883C418"
       DATA "5B5E5F5D415C415D415E415FC3"
       DATA ""
+
+      REM =======================================================================
+
+      REM USER CUSTOMIZABLE PROCEDURE1
+      DEF PROCCUSTOMPROC1
+
+      REM E.G. YOUR CODE
+      FOR X%=2 TO 78
+        PROCpoint(X%,20+SIN(X%/8)*8,1)
+      NEXT
+
+      ENDPROC
+
+      REM USER CUSTOMIZABLE PROCEDURE1
+      DEF PROCCUSTOMPROC2
+
+      REM E.G. YOUR CODE
+      FOR X%=2 TO 78
+        PROCpoint(X%,40+COS(X%/8)*8,1)
+      NEXT
+
+      ENDPROC
+
