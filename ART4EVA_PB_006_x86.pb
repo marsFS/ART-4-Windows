@@ -25,9 +25,9 @@
 
 ;* Circle and Rectangle placement needs fixing, currently draws slightly shifted from guide
 
-;* Add size indicator for brush size
+;* Add size indicator for brush size, added as test
 
-;* Add ms indicator for flashing slide
+;* Add ms indicator for flashing slide, added as test
 
 ;* Implement line connecter tool
 
@@ -1090,7 +1090,8 @@ Procedure updateFlashSpeed(t)
   LineXY(MA()\lx+2,MA()\ly+12,MA()\rx-2,MA()\ly+12,bp(7))
   Box(MA()\lx+x,MA()\ly+2,6,MA()\h-4,bp(7))
   Box(MA()\lx+x+2,MA()\ly+4,2,MA()\h-8,bp(8))
-  ;DrawText(MA()\lx+4,MA()\ly+112,Right("00"+StrU(fSpeed),4)+"ms",bp(7))
+  DrawingFont(FontID(tFont1))
+  DrawText(MA()\lx+28,MA()\ly+6,Right("00"+StrU(fSpeed),4)+"ms",bp(8))
 EndProcedure
 
 ; draw flash colour picker menu
@@ -2417,11 +2418,12 @@ If StartDrawing(CanvasOutput(#GA_TSButtons))
   Circle(MA()\lx+33,MA()\ly+33,7,bp(6))
   Circle(MA()\lx+33,MA()\ly+13,5,bp(6))
   Circle(MA()\lx+6,MA()\ly+dWid*4+6,4,bp(7))
-  
-  DrawText(MA()\lx+4,MA()\ly-36,"Brush",bp(7))
-  DrawText(MA()\lx+8,MA()\ly-20,"Size",bp(7))
+  DrawingFont(FontID(tFont1)) 
+  DrawText(MA()\lx-2,MA()\ly-36,"BrushSize",bp(7))
+  DrawText(MA()\lx+4,MA()\ly-20,"09 x 17",bp(7))
   
   selectMA(#MA_SelectedPat)
+  DrawingFont(#PB_Default)
   DrawText(MA()\lx,MA()\ly-20,"Pat",bp(7))
   drawBox(MA()\lx,MA()\ly,MA()\rx,MA()\ry,bp(7))
   
@@ -2444,7 +2446,6 @@ toolToggle(tCur,tTog,0)   ; standard
 toolToggle(#toolTransparent,2,0)      ; transparency
 
 ;toolToggle(dSel,6,0)                  ; draw style  
-
 
 
 If StartDrawing(ScreenOutput())
@@ -3240,6 +3241,9 @@ Repeat
                           Circle(MA()\lx+6,MA()\ly+dWid*4+6,4,bp(i*7))
                           dWid=s
                         Next
+                        
+                        DrawingFont(FontID(tFont1))
+                        DrawText(MA()\lx+4,MA()\ly-20,Right("0"+Str(dWid+1),2)+" x "+Right("0"+Str(dWid*2+1),2),bp(7))
                         StopDrawing()
                       EndIf
                     EndIf 
@@ -3740,7 +3744,7 @@ Repeat
           ;drawBox(4,4,636,104,bp(7))
           ;DrawText(20,20,"ART for EXA (c) FourthStone")
           ;DrawText(20,40,"What's needed here is a fancy title, dimensions 636 x 100 (hint hint) ;-)")
-          DrawImage(ImageID(imgHelpAbout),4,4)
+          DrawImage(ImageID(imgHelpAbout),2,2)
           
           ; help panel
           drawbox(500,128,636,264,bp(8))
@@ -4161,8 +4165,7 @@ DataSection
 EndDataSection
 
 ; IDE Options = PureBasic 5.73 LTS (Windows - x86)
-; CursorPosition = 3588
-; FirstLine = 3644
+; CursorPosition = 29
 ; Folding = ----------
 ; EnableXP
 ; UseIcon = Art-icon.ico
