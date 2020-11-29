@@ -1,0 +1,47 @@
+Begginers guide to Art4Eva
+
+General:
+The primary colour is used in the pattern selector, a second colour can be selected which is used for all other pixels in the selected pattern.
+
+The top row are editable patterns, the edit screen is accessible with the 'A' icon next to the pattern selector icon.
+
+All patterns are drawn to the screen at fixed offsets unless SPR draw mode is selected. The fixed offset allows for patterns to merge together in a predictable way.
+
+Patterns are mirrored so that patterns on the left of the palette are offset duplicates of patterns on the right.
+
+When 'T' Transparency is highlighted, most black pixels in patterns will not be draw so that patterns can merge with existing drawn pixels. This was done to allow black patterns to still be drawn.
+
+When black is selected as the primary colour, the black pixels are not transparent, the bottom row however has grey pixels which are drawn transparent.
+
+Most drawing tools use the drawing tools options, more detail about each 'Brush' below.
+
+Gradients are filled in direction of dragging, change starting point to get a different effect.
+
+The Fill tool uses the current pattern to fill an enclosed shape.
+
+The Replace tool changes a single colour for the entire picture.
+
+Brush Size is determined by slider.
+
+Layers are drawn from 1-5 so that 5 overwrites 4 which overwrites 3 etc. Backgrounds should be drawn on layer 1 and forground objects in higher layers.
+
+Layers can be toggled on and off, care should be taken when a layer is toggled off as drawing can still be done even though it is not shown.
+
+A tracing layer can be used, open options, select Trace, turn on Layer G, then load a PNG file which will be overlayed transparently, slider in options can adjust transparency.
+
+Draw Tool options:
+* Paste - Paste a previously copied region
+* SPR - Paint current pattern at cursor instead of the fixed pattern offset
+* AirBrush - Random dots of current pattern painted over time
+* 2x - Current pattern painted apart at double the default space
+* Animated brush - Use alternating flashing colours when drawing with pen, line, circle and rectangle
+* Round Brush for current pattern
+* Square Brush for current pattern
+
+Flashing Colour Animation Tools:
+* Some very cool animation effects can be drawn using the flashing colours / animated brush.
+* First colour selector changes the flashing colour 'off' colour.
+* Second colour selector is the animated 'on' colour
+* '...' buttons: Animate Toggle, Cyclic mode, Reverse Mode, Export Animation
+* Slider controls flashing colour / animation speed
+* Once animate colours are selected and animate is toggled 'on' drawing can continue and will be animated in real time.
