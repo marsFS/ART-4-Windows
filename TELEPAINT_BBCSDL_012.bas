@@ -63,9 +63,13 @@
       REM TEXT & PIXEL COORDS FOR CURRENT MOUSE READ LOCATION
       TX%=0
       TY%=0
-      TEXTX%=0
       PX%=0
       PY%=0
+
+      REM TEXT INPUT COORDS
+      TEXTX%=0
+      OTX%=0
+      OTY%=0
 
       REM TOOL VARS
       curcol%=7
@@ -756,12 +760,31 @@
           IF INKEY(-26) THEN PROCWAITNOKEY(-26) : PROCloadnextframe(-1,1) : REM SAVE CURRENT FRAME AND LOAD PREVIOUS FRAME
           IF INKEY(-122) THEN PROCWAITNOKEY(-122) : PROCloadnextframe(1,1) : REM SAVE CURRENT FRAME AND LOAD NEXT FRAME
 
+          REM TEXT AT CURSOR HANDLER, IF MOUSE IS MOVED, NEW TEXT POS IS SET
           K%=INKEY(0)
-
-          IF K%>1 THEN
-            PROCundosave
-            VDU 31,TEXTX%,TY%,K%
-            IF TEXTX%<39 THEN TEXTX%+=1
+          IF K%>1 AND TY%>0 THEN
+            REM SAVE UNDO ONLY FOR CURRENT 'LINE' OF TEXT
+            IF TX%<>OTX% OR TY%<>OTY% THEN
+              OTX%=TX%
+              OTY%=TY%
+              PROCundosave
+            ENDIF
+            REM HANDLE BACKSPACE
+            IF K%=8 THEN
+              IF TEXTX%>TX% THEN
+                REM IF AT END OF LINE CHECK LAST CHAR IF SPACE ALREADY
+                IF TEXTX%=39 AND GET(TEXTX%,TY%)<>32 THEN
+                  VDU 31,TEXTX%,TY%,32
+                ELSE
+                  TEXTX%-=1
+                  VDU 31,TEXTX%,TY%,32
+                ENDIF
+              ENDIF
+            ELSE
+              REM ADD CHAR AND INCREASE TEXT POS
+              VDU 31,TEXTX%,TY%,K%
+              IF TEXTX%<39 THEN TEXTX%+=1
+            ENDIF
           ENDIF
 
           WAIT 2
