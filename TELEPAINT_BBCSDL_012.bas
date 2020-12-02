@@ -21,7 +21,7 @@
 
       MODE 7
 
-      version$="v0.11"
+      version$="v0.12"
 
       REM FOR 64 BIT COMPARISONS
       REM *HEX 64
@@ -63,6 +63,7 @@
       REM TEXT & PIXEL COORDS FOR CURRENT MOUSE READ LOCATION
       TX%=0
       TY%=0
+      TEXTX%=0
       PX%=0
       PY%=0
 
@@ -243,6 +244,7 @@
         PROCREADMOUSE
 
         IF MX%<>OLD_MX% OR MY%<>OLD_MY% OR MB% THEN
+          TEXTX%=TX%
           IF TY%=0 THEN
             REM click unside menu area
             IF MB%=4 THEN
@@ -754,7 +756,16 @@
           IF INKEY(-26) THEN PROCWAITNOKEY(-26) : PROCloadnextframe(-1,1) : REM SAVE CURRENT FRAME AND LOAD PREVIOUS FRAME
           IF INKEY(-122) THEN PROCWAITNOKEY(-122) : PROCloadnextframe(1,1) : REM SAVE CURRENT FRAME AND LOAD NEXT FRAME
 
+          K%=INKEY(0)
+
+          IF K%>1 THEN
+            PROCundosave
+            VDU 31,TEXTX%,TY%,K%
+            IF TEXTX%<39 THEN TEXTX%+=1
+          ENDIF
+
           WAIT 2
+
         ENDIF
 
         REM show mouse tracking details for debug
