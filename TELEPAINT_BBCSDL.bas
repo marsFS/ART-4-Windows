@@ -1702,10 +1702,10 @@
 
           IF MACT%>4 AND MACT%<17 THEN
             IF TX%>4 AND TX%<34 THEN
-              IF MY%<>OLD_MY% THEN INDEX%+=SGN(MY%-OLD_MY%)
+              IF TY%<>OLD_TY% THEN INDEX%-=SGN(TY%-OLD_TY%)
               IF INDEX%>N%-11 THEN INDEX%=N%-11
               IF INDEX%<1 THEN INDEX%=1
-              IF SELY%=-1 THEN SELY%=MY%
+              IF SELY%=-1 THEN SELY%=TY%
             ENDIF
           ELSE
             IF TY%=22 AND loadtype%=1 THEN
@@ -1730,7 +1730,7 @@
         IF MB%=0 AND MACT%<>-1 THEN
           IF MACT%=5 AND TX%=35 AND INDEX%>1 THEN INDEX%-=1
           IF MACT%=16 AND TX%=35 AND INDEX%<N%-11 THEN INDEX%+=1
-          IF SELY%=MY% AND MACT%>4 AND MACT%<17 AND TX%>3 AND TX%<36 THEN
+          IF SELY%=TY% AND MACT%>4 AND MACT%<17 AND TX%>3 AND TX%<36 THEN
             S%=TY%-5
             IF S%>-1 AND S%<12 THEN
               SEL%=S%+INDEX%
@@ -1837,7 +1837,7 @@
 
         REM PRINTTAB(0,1)STR$(SEL%)
 
-        OLD_MY%=MY%
+        OLD_TY%=TY%
 
         WAIT 2
       UNTIL F%<>0
