@@ -15,15 +15,22 @@
 
       REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE (partially done)
 
+      REM *** SPRITE MODE, EDIT SPRITES AND COPY TO FRAMES
+
+      REM *** MENU DESIGN IN DIFFERENT MODE FOR MORE FLEXIBILITY
+
       REM *** TODO LIST ***
 
       REM *** HELP SCREEN: MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
+
+      REM ALLOCATE 10MB FOR BUFFERS
+      HIMEM = PAGE+10485760
 
       INSTALL @lib$+"sortlib"
 
       MODE 7
 
-      version$="v0.13"
+      version$="v0.14"
 
       REM FOR 64 BIT COMPARISONS
       REM *HEX 64
@@ -165,43 +172,52 @@
 
       REM loading screen options
       menuext%=97
+      frame_limit%=100
       frame_max%=8
       frame_old%=0
       VDU 23,1,0;0;0;0; : REM Disable cursor
 
-      PRINTTAB(1,1)"Welcome to";tm$;"Telepaint ";version$;
-      PRINTTAB(0,5)ty$;"SELECT MAX FRAMES (2-40)";tw$;"-";tc$;" 8";tw$;"+"
+      PRINTTAB(3,2)CHR$(141);gr$;CHR$(157);ty$;"= = T E L E P A I N T = =  ";CHR$(156)
+      PRINTTAB(3,3)CHR$(141);gy$;CHR$(157);tr$;"= = T E L E P A I N T = =  ";CHR$(156)
 
-      PRINTTAB(8,14)gr$;CHR$(157);ty$;"  IMPORT IMAGE    ";CHR$(156)
-      PRINTTAB(8,17)gm$;CHR$(157);ty$;"  DISPLAY HELP    ";CHR$(156)
-      PRINTTAB(8,20)gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
+      PRINTTAB(8,6)gg$;CHR$(157);tb$;"  IMPORT IMAGE    ";CHR$(156)
+      PRINTTAB(8,9)gg$;CHR$(157);tb$;"  DISPLAY HELP    ";CHR$(156)
+      PRINTTAB(7,12)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
+      PRINTTAB(7,13)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
+
+      PRINTTAB(0,20)ty$;"MAX FRAMES (2-";STR$(frame_limit%);")";tw$;"< -";tc$;"  8";tw$;"+ >"
+
+      PRINTTAB(0,24)tb$;"Telepaint ";version$;
 
       REPEAT
         IF frame_max%<>frame_old% THEN
-          PRINTTAB(28,5)RIGHT$(" "+STR$(frame_max%),2)
+          PRINTTAB(24,20)RIGHT$("  "+STR$(frame_max%),3)
           frame_old%=frame_max%
         ENDIF
 
         PROCREADMOUSE
         IF MB%=4 THEN
           CASE TY% OF
-            WHEN 5 : REM change max frames var
-              IF TX%=26 AND frame_max%>2 THEN frame_max%-=1
-              IF TX%=31 AND frame_max%<40 THEN frame_max%+=1
+            WHEN 20 : REM change max frames var
+              IF TX%=20 THEN frame_max%=2
+              IF TX%=22 AND frame_max%>2 THEN frame_max%-=1
+              IF TX%=28 AND frame_max%<frame_limit% THEN frame_max%+=1
+              IF TX%=30 frame_max%=frame_limit%
               WAIT 10
 
-            WHEN 14 : REM import image dialog
+            WHEN 6 : REM import image dialog
               IF TX%>8 AND TX%<29 THEN frame_old%=-3
 
-            WHEN 17 : REM display help screen
+            WHEN 9 : REM display help screen
               IF TX%>8 AND TX%<29 THEN frame_old%=-2
 
-            WHEN 20 : REM launch telepaint
+            WHEN 12,13 : REM launch telepaint
               IF TX%>8 AND TX%<29 THEN frame_old%=-1
 
           ENDCASE
         ELSE
           WAIT 10
+          REM PRINTTAB(30,24);STR$(TX%);",";STR$(TY%);"  ";
         ENDIF
       UNTIL frame_old%<0
       PROCWAITMOUSE(0)
@@ -1143,7 +1159,7 @@
       PRINTTAB(5,5)"FORE  ";CHR$(234);SPC(17);CHR$(181);
       PRINTTAB(5,7)"BACK  ";CHR$(234);SPC(17);CHR$(181);
 
-      IF bakcol%=0 THEN PRINTTAB(13,8)"B"
+      IF bakcol%=0 THEN PRINTTAB(13,7)"B"
 
       FOR I%=1 TO 7
         PRINTTAB(12+I%*2,5)CHR$(144+I%);CHR$(255+(I%=curcol%)*185);
