@@ -799,9 +799,11 @@
                 ENDIF
               ENDIF
             ELSE
-              REM ADD CHAR AND INCREASE TEXT POS
-              VDU 31,TEXTX%,TY%,K%
-              IF TEXTX%<39 THEN TEXTX%+=1
+              IF K%<>136 AND K%<>137 THEN
+                REM ADD CHAR AND INCREASE TEXT POS
+                VDU 31,TEXTX%,TY%,K%
+                IF TEXTX%<39 THEN TEXTX%+=1
+              ENDIF
             ENDIF
           ENDIF
 
