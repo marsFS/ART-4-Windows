@@ -1,7 +1,7 @@
 
       REM *** TODO LIST ***
 
-      REM *** INKEY(-256) MATRIX BRANYDY &4D (INCLUDE OTHERS)
+      REM *** INKEY(-256) MATRIX BRANYDY &4D (INCLUDE OTHERS?)
 
       REM *** INVESTIGATE LOCAL VERSIONS OF LIBRARIES TO MAKE PROGRAM CROSS BASIC COMPATIBLE (DONE?? Need Soruk to Test)
 
@@ -30,7 +30,7 @@
 
       MODE 7
 
-      version$="v0.14"
+      version$="v0.15"
 
       REM FOR 64 BIT COMPARISONS
       REM *HEX 64
@@ -175,6 +175,11 @@
       frame_limit%=100
       frame_max%=8
       frame_old%=0
+      sprite_limit%=16
+      sprite_max%=8
+      sprite_old%=0
+      sprite_cur%=0
+
       VDU 23,1,0;0;0;0; : REM Disable cursor
 
       PRINTTAB(3,2)CHR$(141);gr$;CHR$(157);ty$;"= = T E L E P A I N T = =  ";CHR$(156)
@@ -185,25 +190,25 @@
       PRINTTAB(7,12)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
       PRINTTAB(7,13)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
 
-      PRINTTAB(0,20)ty$;"MAX FRAMES (2-";STR$(frame_limit%);")";tw$;"< -";tc$;"  8";tw$;"+ >"
+      PRINTTAB(0,18)ty$;"MAX FRAMES (2-";STR$(frame_limit%);")";tw$;"< -";tc$;"  8";tw$;"+ >"
+      PRINTTAB(0,20)ty$;"MAX SPRITES (1-";STR$(sprite_limit%);")";tw$;"< -";tc$;"  8";tw$;"+ >"
 
       PRINTTAB(0,24)tb$;"Telepaint ";version$;
 
       REPEAT
         IF frame_max%<>frame_old% THEN
-          PRINTTAB(24,20)RIGHT$("  "+STR$(frame_max%),3)
+          PRINTTAB(24,18)RIGHT$("  "+STR$(frame_max%),3)
           frame_old%=frame_max%
+        ENDIF
+
+        IF sprite_max%<>sprite_old% THEN
+          PRINTTAB(24,20)RIGHT$("  "+STR$(sprite_max%),3)
+          sprite_old%=sprite_max%
         ENDIF
 
         PROCREADMOUSE
         IF MB%=4 THEN
           CASE TY% OF
-            WHEN 20 : REM change max frames var
-              IF TX%=20 THEN frame_max%=2
-              IF TX%=22 AND frame_max%>2 THEN frame_max%-=1
-              IF TX%=28 AND frame_max%<frame_limit% THEN frame_max%+=1
-              IF TX%=30 frame_max%=frame_limit%
-              WAIT 10
 
             WHEN 6 : REM import image dialog
               IF TX%>8 AND TX%<29 THEN frame_old%=-3
@@ -213,6 +218,21 @@
 
             WHEN 12,13 : REM launch telepaint
               IF TX%>8 AND TX%<29 THEN frame_old%=-1
+
+            WHEN 18 : REM change max frames var
+              IF TX%=20 THEN frame_max%=2
+              IF TX%=22 AND frame_max%>2 THEN frame_max%-=1
+              IF TX%=28 AND frame_max%<frame_limit% THEN frame_max%+=1
+              IF TX%=30 frame_max%=frame_limit%
+              WAIT 10
+
+            WHEN 20 : REM change max sprites var
+              IF TX%=20 THEN sprite_max%=1
+              IF TX%=22 AND sprite_max%>1 THEN sprite_max%-=1
+              IF TX%=28 AND sprite_max%<sprite_limit% THEN sprite_max%+=1
+              IF TX%=30 sprite_max%=sprite_limit%
+              WAIT 10
+
 
           ENDCASE
         ELSE
@@ -225,6 +245,10 @@
 
       REM frame buffer
       DIM frame_buffer&(frame_max%-1,959)
+
+      REM sprite buffer
+      DIM sprite_buffer&(sprite_max%-1,959)
+      DIM spr{(sprite_max%-1) x%,y%,w%,h%}
 
       REM undo buffer
       undo_max%=19
@@ -261,6 +285,8 @@
 
       REM =====================
       REM main loop starts here
+      REM      ON ERROR PRINTTAB(0,2)"LINE: "STR$(ERL);:END
+
       REPEAT
 
         PROCREADMOUSE
@@ -339,439 +365,506 @@
               ENDIF
             ENDIF
           ELSE
-            REM handle special / sub menu
-            IF menuext%=1 AND TY%<23 THEN
-              IF MB%=4 THEN
-                PROCWAITMOUSE(0)
-                CASE TY% OF
-                  WHEN 1
-                    CASE TX% OF
-                      WHEN 36,37,38,39 : REM showhelp
-                        MODE7
-                        menuext%=0
-                        PROCdrawmenu
-                        PROCshowhelp
-                        menuext%=1
-                    ENDCASE
 
-                  WHEN 2
-                    CASE TX% OF
-                      WHEN 1,2,3: shapesel%=0 : REM line
+            CASE menuext% OF
+              WHEN 1 : REM handle special / sub menu
 
-                      WHEN 15,16,17: animateshape%=(animateshape%+1) AND 1 : REM animated shape toggle
+                IF MB%=4 THEN
+                  PROCWAITMOUSE(0)
+                  CASE TY% OF
+                    WHEN 1
+                      CASE TX% OF
+                        WHEN 36,37,38,39 : REM showhelp
+                          MODE7
+                          menuext%=0
+                          PROCdrawmenu
+                          PROCshowhelp
+                          menuext%=1
+                      ENDCASE
 
-                    ENDCASE
+                    WHEN 2
+                      CASE TX% OF
+                        WHEN 1,2,3: shapesel%=0 : REM line
 
-                  WHEN 3
-                    CASE TX% OF
-                      WHEN 1,2,3: shapesel%=1 : REM rectangle
+                        WHEN 15,16,17: animateshape%=(animateshape%+1) AND 1 : REM animated shape toggle
 
-                      WHEN 24:  REM animated gap decrement
-                        animategap%-=1
-                        IF animategap%<0 THEN animategap%=0
-                      WHEN 28:  REM animated gap increment
-                        animategap%+=1
-                        IF animategap%>5 THEN animategap%=5
+                      ENDCASE
 
-                    ENDCASE
+                    WHEN 3
+                      CASE TX% OF
+                        WHEN 1,2,3: shapesel%=1 : REM rectangle
 
-                  WHEN 4
-                    CASE TX% OF
-                      WHEN 1,2,3: shapesel%=2 : REM circle
+                        WHEN 24:  REM animated gap decrement
+                          animategap%-=1
+                          IF animategap%<0 THEN animategap%=0
+                        WHEN 28:  REM animated gap increment
+                          animategap%+=1
+                          IF animategap%>5 THEN animategap%=5
 
-                      WHEN 24:  REM animated len decrement
-                        animatelen%-=1
-                        IF animatelen%<1 THEN animatelen%=1
-                      WHEN 28:  REM animated len increment
-                        animatelen%+=1
-                        IF animatelen%>5 THEN animatelen%=5
+                      ENDCASE
 
-                    ENDCASE
+                    WHEN 4
+                      CASE TX% OF
+                        WHEN 1,2,3: shapesel%=2 : REM circle
 
-                  WHEN 6
-                    CASE TX% OF
-                      WHEN 1,2,3: shapesel%=3 : REM flashing code
+                        WHEN 24:  REM animated len decrement
+                          animatelen%-=1
+                          IF animatelen%<1 THEN animatelen%=1
+                        WHEN 28:  REM animated len increment
+                          animatelen%+=1
+                          IF animatelen%>5 THEN animatelen%=5
 
-                      WHEN 18,19,20: shapesel%=6 : REM double height code
+                      ENDCASE
 
-                    ENDCASE
+                    WHEN 6
+                      CASE TX% OF
+                        WHEN 1,2,3: shapesel%=3 : REM flashing code
 
-                  WHEN 7
-                    CASE TX% OF
-                      WHEN 1,2,3: shapesel%=4 : REM separated code
+                        WHEN 18,19,20: shapesel%=6 : REM double height code
 
-                      WHEN 18,19,20: shapesel%=5 : REM hold code
+                      ENDCASE
 
-                    ENDCASE
+                    WHEN 7
+                      CASE TX% OF
+                        WHEN 1,2,3: shapesel%=4 : REM separated code
 
-                  WHEN 9
-                    CASE TX% OF
-                      WHEN 1,2,3: shapesel%=8 : REM text code whole column
+                        WHEN 18,19,20: shapesel%=5 : REM hold code
 
-                      WHEN 11,12,13: shapesel%=9 : REM graphic code whole column
+                      ENDCASE
 
-                    ENDCASE
+                    WHEN 9
+                      CASE TX% OF
+                        WHEN 1,2,3: shapesel%=8 : REM text code whole column
 
-                  WHEN 10
-                    CASE TX% OF
-                      WHEN 1,2,3: copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
+                        WHEN 11,12,13: shapesel%=9 : REM graphic code whole column
 
-                      WHEN 11,12,13: copylockyt%=(copylockyt%+1) AND 1 :REM lock vertical paste pos
+                      ENDCASE
 
-                    ENDCASE
+                    WHEN 10
+                      CASE TX% OF
+                        WHEN 1,2,3: copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
+
+                        WHEN 11,12,13: copylockyt%=(copylockyt%+1) AND 1 :REM lock vertical paste pos
+
+                      ENDCASE
 
 
-                  WHEN 11
-                    CASE TX% OF
-                      WHEN 1,2,3: shapesel%=7 : REM text tool
+                    WHEN 11
+                      CASE TX% OF
+                        WHEN 1,2,3: shapesel%=7 : REM text tool
 
-                    ENDCASE
+                      ENDCASE
 
-                  WHEN 12,13,14,15,16,17,18,19 : REM alphabet selector
-                    IF TY%=18 AND TX%>33 AND TX%<37 THEN
-                      caps%=(caps%+1) AND 1
-                    ELSE
-                      IF TY%=18 AND TX%>28 AND TX%<33 THEN
-                        text$=text$+CHR$(32)
+                    WHEN 12,13,14,15,16,17,18,19 : REM alphabet selector
+                      IF TY%=18 AND TX%>33 AND TX%<37 THEN
+                        caps%=(caps%+1) AND 1
                       ELSE
-                        C%=GET(TX%,TY%)
-                        IF C%<>32 THEN text$=text$+CHR$(C%)
+                        IF TY%=18 AND TX%>28 AND TX%<33 THEN
+                          text$=text$+CHR$(32)
+                        ELSE
+                          C%=GET(TX%,TY%)
+                          IF C%<>32 THEN text$=text$+CHR$(C%)
+                        ENDIF
                       ENDIF
-                    ENDIF
-                    text$=LEFT$(text$,30)
-                    shapesel%=7
+                      text$=LEFT$(text$,30)
+                      shapesel%=7
 
-                  WHEN 20 : REM text controls
-                    CASE TX% OF
-                      WHEN 37 : REM backspace
-                        IF text$<>"" THEN text$=LEFT$(text$,LEN(text$)-1)
-                      WHEN 39 : REM clear text
-                        text$=""
-                    ENDCASE
+                    WHEN 20 : REM text controls
+                      CASE TX% OF
+                        WHEN 37 : REM backspace
+                          IF text$<>"" THEN text$=LEFT$(text$,LEN(text$)-1)
+                        WHEN 39 : REM clear text
+                          text$=""
+                      ENDCASE
 
-                    REM showcodes%=(showcodes%+1) AND 1
+                      REM showcodes%=(showcodes%+1) AND 1
 
-                  WHEN 22 : REM close button
-                    PROCmenurestore
+                    WHEN 22 : REM SPRITE AND CLOSE BUTTTONS
+                      PROCmenurestore
+                      IF TX%>6 AND TX%<18 THEN
+                        menuext%=2
+                        PROCspritemenu(1)
 
-                ENDCASE
+                      ENDIF
+                      REM   WHEN 24..32 : REM CLOSE
+
+                  ENDCASE
+                ENDIF
+
+                REM ENDCASE
 
                 IF shapesel%>-1 THEN toolsel%=4:toolcursor%=19
 
                 PROCdrawmenu
-              ENDIF
+                REM ENDIF
 
+              WHEN 2 : REM SPRITE EDITOR
 
-            ELSE
+                REM CLICK INSIDE DRAWING AREA
+                CASE MB% OF
 
-              REM IF toolsel%=5 OR toolsel%=6 THEN
-              REM A$=STR$(GET(TX%,TY%) AND 255)
-              REM IF LEN(A$)<3 THEN A$=STRING$(3-LEN(A$)," ")+A$
-              REM VDU 23,1,0;0;0;0; : REM Disable cursor
-              REM PRINTTAB(37,0)A$;
-              REM VDU 23,1,1;0;0;0; : REM Enable cursor
-              REM ENDIF
+                  WHEN 1:
+                    REM PLACE HOLDER FOR RIGHT MOUSE
 
-              REM CLICK INSIDE DRAWING AREA
-              CASE MB% OF
+                  WHEN 2:
+                    REM PLACE HOLDER FOR MIDDLE MOUSE
 
-                WHEN 1:
-                  REM PLACE HOLDER FOR RIGHT MOUSE
+                  WHEN 4:
+                    REM LEFT MOUSE CLICK OR TOUCH SCREEN CLICK
+                    REM IF menuext%>0 THEN PROCmenurestore
 
-                WHEN 2:
-                  REM PLACE HOLDER FOR MIDDLE MOUSE
+                    CASE toolsel% OF
+                      WHEN 1: REM PAINT TOOL
+                        REM PROCundosave
+                        IF PX%>19 AND PX%<60 AND PY%>20 AND PY%<57 THEN
+                          PROCpoint(PX%,PY%,1)
+                          REPEAT
+                            PROCREADMOUSE
+                            IF PX%>19 AND PX%<60 AND PY%>20 AND PY%<57 THEN
 
-                WHEN 4:
-                  REM LEFT MOUSE CLICK OR TOUCH SCREEN CLICK
-                  IF menuext%>0 THEN PROCmenurestore
-
-                  CASE toolsel% OF
-                    WHEN 1: REM PAINT TOOL
-                      PROCundosave
-                      PROCpoint(PX%,PY%,1)
-                      REPEAT
-                        PROCREADMOUSE
-                        IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN PROCpoint(PX%,PY%,1-erase%)
-                        OLD_PX%=PX%
-                        OLD_PY%=PY%
-                      UNTIL MB%=0
-                      IF animation% THEN PROCloadnextframe(1,1)
-
-                    WHEN 2: REM DITHER TOOL
-                      PROCundosave
-
-                      CASE dither% OF
-                        WHEN 0,1,2,3
-                          D%=2^(dither%)
-                          DA%=2
-                          IF dither%=2 THEN DA%=4
-                          IF dither%=3 THEN DA%=8
-
-                          X%=(PX% DIV DA%)*DA%
-                          Y%=(PY% DIV DA%)*DA%
-
-                          PROCpoint(X%,Y%,1-erase%)
-                          PROCpoint(X%+D%,Y%+D%,1-erase%)
-                        WHEN 4
-                          IF TX%>0 AND TX%<40 AND TY%>0 AND TY%<25 THEN
-                            char%=255-erase%*95 : REM SOLID BLOCK #255
-                            VDU 31,TX%,TY%,char%
+                              IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN PROCpoint(PX%,PY%,1-erase%)
+                              OLD_PX%=PX%
+                              OLD_PY%=PY%
+                            UNTIL MB%=0
+                            REM IF animation% THEN PROCloadnextframe(1,1)
                           ENDIF
-                      ENDCASE
-                      REPEAT
-                        PROCREADMOUSE
-                        IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
-                          CASE dither% OF
-                            WHEN 0,1,2,3
-                              X%=(PX% DIV DA%)*DA%
-                              Y%=(PY% DIV DA%)*DA%
-
-                              PROCpoint(X%,Y%,1-erase%)
-                              PROCpoint(X%+D%,Y%+D%,1-erase%)
-                            WHEN 4
-                              IF TX%>0 AND TX%<40 AND TY%>0 AND TY%<25 THEN
-                                char%=255-erase%*95 : REM SOLID BLOCK #255
-                                VDU 31,TX%,TY%,char%
-                              ENDIF
-                          ENDCASE
                         ENDIF
-                        OLD_PX%=PX%
-                        OLD_PY%=PY%
-                      UNTIL MB%=0
-                      IF animation% THEN PROCloadnextframe(1,1)
+                    ENDCASE
 
-                    WHEN 7: REM copy / paste tool
+                    CASE TX% OF
+                      WHEN 33,34,35,36,37 : REM SPRITE TOOLS
+                        PROCWAITMOUSE(0)
+                        CASE TY% OF
+                          WHEN 8 : REM SPRITE NEXT
+                            sprite_cur%+=1
+                            IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
 
-                      IF copypaste%=0 THEN
-                        PROCframesave(frame%)
-                        PROCmenusave
-                        menuext%=98
+                          WHEN 10 : REM SPRITE PREV
+                            sprite_cur%-=1
+                            IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
 
-                        startx%=TX%*2: starty%=TY%*3
-                        OLD_PX%=TX%*2 : OLD_PY%=TY%*3
-                        PROCpoint(startx%,starty%,2)
+                        ENDCASE
+                        IF sprite_cur%<>sprite_old% THEN
+                          PROCspritemenu(0)
+                          sprite_old%=sprite_cur%
+                        ENDIF
 
+                    ENDCASE
+
+
+
+                ENDCASE
+
+
+              OTHERWISE : REM MAIN DRAWING CANVAS
+
+                REM IF toolsel%=5 OR toolsel%=6 THEN
+                REM A$=STR$(GET(TX%,TY%) AND 255)
+                REM IF LEN(A$)<3 THEN A$=STRING$(3-LEN(A$)," ")+A$
+                REM VDU 23,1,0;0;0;0; : REM Disable cursor
+                REM PRINTTAB(37,0)A$;
+                REM VDU 23,1,1;0;0;0; : REM Enable cursor
+                REM ENDIF
+
+                REM CLICK INSIDE DRAWING AREA
+                CASE MB% OF
+
+                  WHEN 1:
+                    REM PLACE HOLDER FOR RIGHT MOUSE
+
+                  WHEN 2:
+                    REM PLACE HOLDER FOR MIDDLE MOUSE
+
+                  WHEN 4:
+                    REM LEFT MOUSE CLICK OR TOUCH SCREEN CLICK
+                    IF menuext%>0 THEN PROCmenurestore
+
+                    CASE toolsel% OF
+                      WHEN 1: REM PAINT TOOL
+                        PROCundosave
+                        PROCpoint(PX%,PY%,1)
                         REPEAT
                           PROCREADMOUSE
-                          IF TX%*2+1<>OLD_PX% OR TY%*3+2<>OLD_PY% THEN
-                            PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
-                            PROCrectangle(startx%,starty%,TX%*2+1,TY%*3+2,2)
-                            OLD_PX%=TX%*2+1
-                            OLD_PY%=TY%*3+2
-                          ENDIF
+                          IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN PROCpoint(PX%,PY%,1-erase%)
+                          OLD_PX%=PX%
+                          OLD_PY%=PY%
                         UNTIL MB%=0
-                        PROCrectangle(startx%,starty%,TX%*2+1,TY%*3+2,2)
+                        IF animation% THEN PROCloadnextframe(1,1)
 
-                        copypaste%=1
-                        PROCmenurestore
+                      WHEN 2: REM DITHER TOOL
+                        PROCundosave
 
-                        PROCcopyregion(startx%/2,starty%/3,TX%,TY%)
+                        CASE dither% OF
+                          WHEN 0,1,2,3
+                            D%=2^(dither%)
+                            DA%=2
+                            IF dither%=2 THEN DA%=4
+                            IF dither%=3 THEN DA%=8
 
-                        PROCdrawmenu
+                            X%=(PX% DIV DA%)*DA%
+                            Y%=(PY% DIV DA%)*DA%
 
-                      ELSE
+                            PROCpoint(X%,Y%,1-erase%)
+                            PROCpoint(X%+D%,Y%+D%,1-erase%)
+                          WHEN 4
+                            IF TX%>0 AND TX%<40 AND TY%>0 AND TY%<25 THEN
+                              char%=255-erase%*95 : REM SOLID BLOCK #255
+                              VDU 31,TX%,TY%,char%
+                            ENDIF
+                        ENDCASE
+                        REPEAT
+                          PROCREADMOUSE
+                          IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+                            CASE dither% OF
+                              WHEN 0,1,2,3
+                                X%=(PX% DIV DA%)*DA%
+                                Y%=(PY% DIV DA%)*DA%
+
+                                PROCpoint(X%,Y%,1-erase%)
+                                PROCpoint(X%+D%,Y%+D%,1-erase%)
+                              WHEN 4
+                                IF TX%>0 AND TX%<40 AND TY%>0 AND TY%<25 THEN
+                                  char%=255-erase%*95 : REM SOLID BLOCK #255
+                                  VDU 31,TX%,TY%,char%
+                                ENDIF
+                            ENDCASE
+                          ENDIF
+                          OLD_PX%=PX%
+                          OLD_PY%=PY%
+                        UNTIL MB%=0
+                        IF animation% THEN PROCloadnextframe(1,1)
+
+                      WHEN 7: REM copy / paste tool
+
+                        IF copypaste%=0 THEN
+                          PROCframesave(frame%)
+                          PROCmenusave
+                          menuext%=98
+
+                          startx%=TX%*2: starty%=TY%*3
+                          OLD_PX%=TX%*2 : OLD_PY%=TY%*3
+                          PROCpoint(startx%,starty%,2)
+
+                          REPEAT
+                            PROCREADMOUSE
+                            IF TX%*2+1<>OLD_PX% OR TY%*3+2<>OLD_PY% THEN
+                              PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
+                              PROCrectangle(startx%,starty%,TX%*2+1,TY%*3+2,2)
+                              OLD_PX%=TX%*2+1
+                              OLD_PY%=TY%*3+2
+                            ENDIF
+                          UNTIL MB%=0
+                          PROCrectangle(startx%,starty%,TX%*2+1,TY%*3+2,2)
+
+                          copypaste%=1
+                          PROCmenurestore
+
+                          PROCcopyregion(startx%/2,starty%/3,TX%,TY%)
+
+                          PROCdrawmenu
+
+                        ELSE
+                          REPEAT
+                            PROCREADMOUSE
+                            WAIT 2
+                          UNTIL MB%=0
+                          PROCpasteregion(TX%,TY%)
+
+                        ENDIF
+
+                        IF animation% THEN PROCloadnextframe(1,1)
+
+                      WHEN 3: REM FILL TOOL
+                        PROCundosave
+                        PROCfloodfill(PX%,PY%)
                         REPEAT
                           PROCREADMOUSE
                           WAIT 2
                         UNTIL MB%=0
-                        PROCpasteregion(TX%,TY%)
+                        IF animation% THEN PROCloadnextframe(1,1)
 
-                      ENDIF
+                      WHEN 4: REM shape / special tools
+                        CASE shapesel% OF
+                          WHEN 0: REM line tool
+                            PROCundosave
+                            startx%=PX%: starty%=PY%
+                            OLD_PX%=PX% : OLD_PY%=PY%
+                            PROCpoint(startx%,starty%,2)
 
-                      IF animation% THEN PROCloadnextframe(1,1)
+                            REPEAT
+                              PROCREADMOUSE
+                              IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+                                PROCbresenham(startx%,starty%,OLD_PX%,OLD_PY%,2)
+                                PROCbresenham(startx%,starty%,PX%,PY%,2)
+                                OLD_PX%=PX%
+                                OLD_PY%=PY%
+                              ENDIF
+                            UNTIL MB%=0
 
-                    WHEN 3: REM FILL TOOL
-                      PROCundosave
-                      PROCfloodfill(PX%,PY%)
-                      REPEAT
-                        PROCREADMOUSE
-                        WAIT 2
-                      UNTIL MB%=0
-                      IF animation% THEN PROCloadnextframe(1,1)
-
-                    WHEN 4: REM shape / special tools
-                      CASE shapesel% OF
-                        WHEN 0: REM line tool
-                          PROCundosave
-                          startx%=PX%: starty%=PY%
-                          OLD_PX%=PX% : OLD_PY%=PY%
-                          PROCpoint(startx%,starty%,2)
-
-                          REPEAT
-                            PROCREADMOUSE
-                            IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
-                              PROCbresenham(startx%,starty%,OLD_PX%,OLD_PY%,2)
-                              PROCbresenham(startx%,starty%,PX%,PY%,2)
-                              OLD_PX%=PX%
-                              OLD_PY%=PY%
-                            ENDIF
-                          UNTIL MB%=0
-
-                          PROCbresenham(startx%,starty%,PX%,PY%,2)
-                          IF animateshape% THEN
-                            oldframe%=frame%
-                            PROCframesave(frame%)
-                            animatelencount%=animatelen%
-                            animategapcount%=0
-                            PROCbresenham_buf(startx%,starty%,PX%,PY%,1-erase%)
-                            frame%=oldframe%-1
-                            PROCloadnextframe(1,0)
-                          ELSE
-                            PROCbresenham(startx%,starty%,PX%,PY%,1-erase%)
-                            IF animation% THEN PROCloadnextframe(1,1)
-                          ENDIF
-
-                        WHEN 1: REM rectangle tool
-                          PROCundosave
-                          startx%=PX%: starty%=PY%
-                          OLD_PX%=PX% : OLD_PY%=PY%
-                          PROCpoint(startx%,starty%,2)
-
-                          REPEAT
-                            PROCREADMOUSE
-                            IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
-                              PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
-                              PROCrectangle(startx%,starty%,PX%,PY%,2)
-                              OLD_PX%=PX%
-                              OLD_PY%=PY%
-                            ENDIF
-                          UNTIL MB%=0
-                          PROCrectangle(startx%,starty%,PX%,PY%,2)
-                          IF animateshape%=1 THEN
-                            oldframe%=frame%
-                            PROCframesave(frame%)
-                            animatelencount%=animatelen%
-                            animategapcount%=0
-                            PROCrectangle_buf(startx%,starty%,PX%,PY%,1-erase%)
-                            frame%=oldframe%-1
-                            PROCloadnextframe(1,0)
-                          ELSE
-                            PROCrectangle(startx%,starty%,PX%,PY%,1-erase%)
-                            IF animation% THEN PROCloadnextframe(1,1)
-                          ENDIF
-
-                        WHEN 2: REM circle
-                          PROCundosave
-                          startx%=PX%: starty%=PY%
-                          OLD_PX%=PX% : OLD_PY%=PY%
-                          REM PROCpoint(startx%,starty%,2)
-
-                          REPEAT
-                            PROCREADMOUSE
-                            IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
-                              PROCcircle(startx%,starty%,startx%-OLD_PX%,2)
-                              PROCcircle(startx%,starty%,startx%-PX%,2)
-                              OLD_PX%=PX%
-                              OLD_PY%=PY%
-                            ENDIF
-                          UNTIL MB%=0
-                          PROCcircle(startx%,starty%,startx%-PX%,1-erase%)
-                          IF animation% THEN PROCloadnextframe(1,1)
-
-                        WHEN 3,4,5,6 : REM special control codes
-                          PROCundosave
-                          IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
-                          REPEAT
-                            PROCREADMOUSE
-                            IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                              IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25  VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
-                            ENDIF
-                            OLD_TX%=TX%
-                            OLD_TY%=TY%
-                          UNTIL MB%=0
-                          IF animation% THEN PROCloadnextframe(1,1)
-
-                        WHEN 7: REM text print tool
-                          PROCundosave
-                          PROCWAITMOUSE(0)
-                          A$=LEFT$(text$,40-TX%)
-                          PRINTTAB(TX%,TY%)A$;
-                          IF animation% THEN PROCloadnextframe(1,1)
-
-                        WHEN 8: REM foreground entire column
-                          PROCundosave
-                          REPEAT
-                            PROCREADMOUSE
-                          UNTIL MB%=4
-                          PROCWAITMOUSE(0)
-
-                          FOR Y%=1 TO 24
-                            IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
-                              VDU 31,TX%,Y%,(curcol%+144-textfore%*16)
+                            PROCbresenham(startx%,starty%,PX%,PY%,2)
+                            IF animateshape% THEN
+                              oldframe%=frame%
+                              PROCframesave(frame%)
+                              animatelencount%=animatelen%
+                              animategapcount%=0
+                              PROCbresenham_buf(startx%,starty%,PX%,PY%,1-erase%)
+                              frame%=oldframe%-1
+                              PROCloadnextframe(1,0)
                             ELSE
-                              EXIT FOR
+                              PROCbresenham(startx%,starty%,PX%,PY%,1-erase%)
+                              IF animation% THEN PROCloadnextframe(1,1)
                             ENDIF
-                          NEXT
-                          IF animation% THEN PROCloadnextframe(1,1)
 
-                        WHEN 9: REM backgroung entire column
-                          PROCundosave
-                          REPEAT
-                            PROCREADMOUSE
-                          UNTIL MB%=4
-                          PROCWAITMOUSE(0)
+                          WHEN 1: REM rectangle tool
+                            PROCundosave
+                            startx%=PX%: starty%=PY%
+                            OLD_PX%=PX% : OLD_PY%=PY%
+                            PROCpoint(startx%,starty%,2)
 
-                          FOR Y%=1 TO 24
+                            REPEAT
+                              PROCREADMOUSE
+                              IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+                                PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
+                                PROCrectangle(startx%,starty%,PX%,PY%,2)
+                                OLD_PX%=PX%
+                                OLD_PY%=PY%
+                              ENDIF
+                            UNTIL MB%=0
+                            PROCrectangle(startx%,starty%,PX%,PY%,2)
+                            IF animateshape%=1 THEN
+                              oldframe%=frame%
+                              PROCframesave(frame%)
+                              animatelencount%=animatelen%
+                              animategapcount%=0
+                              PROCrectangle_buf(startx%,starty%,PX%,PY%,1-erase%)
+                              frame%=oldframe%-1
+                              PROCloadnextframe(1,0)
+                            ELSE
+                              PROCrectangle(startx%,starty%,PX%,PY%,1-erase%)
+                              IF animation% THEN PROCloadnextframe(1,1)
+                            ENDIF
+
+                          WHEN 2: REM circle
+                            PROCundosave
+                            startx%=PX%: starty%=PY%
+                            OLD_PX%=PX% : OLD_PY%=PY%
+                            REM PROCpoint(startx%,starty%,2)
+
+                            REPEAT
+                              PROCREADMOUSE
+                              IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+                                PROCcircle(startx%,starty%,startx%-OLD_PX%,2)
+                                PROCcircle(startx%,starty%,startx%-PX%,2)
+                                OLD_PX%=PX%
+                                OLD_PY%=PY%
+                              ENDIF
+                            UNTIL MB%=0
+                            PROCcircle(startx%,starty%,startx%-PX%,1-erase%)
+                            IF animation% THEN PROCloadnextframe(1,1)
+
+                          WHEN 3,4,5,6 : REM special control codes
+                            PROCundosave
+                            IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
+                            REPEAT
+                              PROCREADMOUSE
+                              IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                                IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
+                              ENDIF
+                              OLD_TX%=TX%
+                              OLD_TY%=TY%
+                            UNTIL MB%=0
+                            IF animation% THEN PROCloadnextframe(1,1)
+
+                          WHEN 7: REM text print tool
+                            PROCundosave
+                            PROCWAITMOUSE(0)
+                            A$=LEFT$(text$,40-TX%)
+                            PRINTTAB(TX%,TY%)A$;
+                            IF animation% THEN PROCloadnextframe(1,1)
+
+                          WHEN 8: REM foreground entire column
+                            PROCundosave
+                            REPEAT
+                              PROCREADMOUSE
+                            UNTIL MB%=4
+                            PROCWAITMOUSE(0)
+
+                            FOR Y%=1 TO 24
+                              IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
+                                VDU 31,TX%,Y%,(curcol%+144-textfore%*16)
+                              ELSE
+                                EXIT FOR
+                              ENDIF
+                            NEXT
+                            IF animation% THEN PROCloadnextframe(1,1)
+
+                          WHEN 9: REM backgroung entire column
+                            PROCundosave
+                            REPEAT
+                              PROCREADMOUSE
+                            UNTIL MB%=4
+                            PROCWAITMOUSE(0)
+
+                            FOR Y%=1 TO 24
+                              IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
+                                IF erase% THEN
+                                  VDU 31,TX%,Y%,156
+                                ELSE
+                                  VDU 31,TX%,Y%,(curcol%+144),157
+                                ENDIF
+                              ELSE
+                                EXIT FOR
+                              ENDIF
+                            NEXT
+                            IF animation% THEN PROCloadnextframe(1,1)
+
+                        ENDCASE
+
+                      WHEN 5: REM background colour
+                        PROCundosave
+                        IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
+                          IF erase% THEN
+                            VDU 31,TX%,TY%,156
+                          ELSE
+                            VDU 31,TX%,TY%,(curcol%+144),157
+                          ENDIF
+                        ENDIF
+                        REPEAT
+                          PROCREADMOUSE
+                          IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
                             IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
                               IF erase% THEN
-                                VDU 31,TX%,Y%,156
+                                VDU 31,TX%,TY%,156
                               ELSE
-                                VDU 31,TX%,Y%,(curcol%+144),157
+                                VDU 31,TX%,TY%,(curcol%+144),157
                               ENDIF
-                            ELSE
-                              EXIT FOR
-                            ENDIF
-                          NEXT
-                          IF animation% THEN PROCloadnextframe(1,1)
-
-                      ENDCASE
-
-                    WHEN 5: REM background colour
-                      PROCundosave
-                      IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
-                        IF erase% THEN
-                          VDU 31,TX%,TY%,156
-                        ELSE
-                          VDU 31,TX%,TY%,(curcol%+144),157
-                        ENDIF
-                      ENDIF
-                      REPEAT
-                        PROCREADMOUSE
-                        IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                          IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
-                            IF erase% THEN
-                              VDU 31,TX%,TY%,156
-                            ELSE
-                              VDU 31,TX%,TY%,(curcol%+144),157
                             ENDIF
                           ENDIF
-                        ENDIF
-                        OLD_TX%=TX%
-                        OLD_TY%=TY%
-                      UNTIL MB%=0
-                      IF animation% THEN PROCloadnextframe(1,1)
-
-                    WHEN 6: REM foreground colour
-                      PROCundosave
-
-                      IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
-                      REPEAT
-                        PROCREADMOUSE
-                        IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                          IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
                           OLD_TX%=TX%
                           OLD_TY%=TY%
-                        ENDIF
-                      UNTIL MB%=0
-                      IF animation% THEN PROCloadnextframe(1,1)
+                        UNTIL MB%=0
+                        IF animation% THEN PROCloadnextframe(1,1)
+
+                      WHEN 6: REM foreground colour
+                        PROCundosave
+
+                        IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                        REPEAT
+                          PROCREADMOUSE
+                          IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                            IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                            OLD_TX%=TX%
+                            OLD_TY%=TY%
+                          ENDIF
+                        UNTIL MB%=0
+                        IF animation% THEN PROCloadnextframe(1,1)
 
 
-                  ENDCASE
+                    ENDCASE  : REM toolsel%
 
+                ENDCASE : REM mb%
 
-              ENDCASE
-
-            ENDIF
+            ENDCASE : REM menuext%
           ENDIF
 
         ELSE
@@ -813,8 +906,8 @@
 
         REM show mouse tracking details for debug
         REM PRINTTAB(0,1)SPC(40)
-        REM PRINTTAB(0,1)"MX:";STR$(MX%);" MY:";STR$(MY%);" TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%)
-
+        REM        PRINTTAB(0,1)"MX:";STR$(MX%);" MY:";STR$(MY%);" TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%)
+        REM PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%);" ME:";STR$(menuext%);
         REM REMEMBER MOUSE POSITION
         OLD_MX%=MX%
         OLD_MY%=MY%
@@ -1571,7 +1664,7 @@
       copysize%=s%
 
       copylockx%=x1%
-    1 copylocky%=y1%
+      copylocky%=y1%
 
       ENDPROC
 
@@ -2477,9 +2570,8 @@
         IF x%>0 THEN
           GCOL 3,8
           LINE x%*32,0,x%*32,999
-          IF x%<25 THEN
-            LINE 0,x%*40,1279,x%*40
-          ENDIF
+          IF x%<25 THEN LINE 0,x%*40,1279,x%*40
+
         ENDIF
 
         REM show codes
@@ -2550,6 +2642,47 @@
 
       ENDPROC
 
+      REM DRAW SPRITE EDITOR SCREEN
+      DEF PROCspritemenu(R%)
+
+      REM REDRAW EVERYTHING
+      IF R%=1 THEN
+        FOR Y%=1 TO 24
+          PROCprint40(Y%,"")
+        NEXT
+
+        PROCGR(7,0,0)
+
+        PRINTTAB(9,2)CHR$(141);tb$;CHR$(157);ty$;"SPRITE EDITOR  ";CHR$(156);
+        PRINTTAB(9,3)CHR$(141);tb$;CHR$(157);ty$;"SPRITE EDITOR  ";CHR$(156);
+
+        PRINTTAB(9,6)STRING$(22,CHR$(163));
+        PRINTTAB(9,19)STRING$(22,CHR$(240));
+
+        FOR Y%=7 TO 18
+          PRINTTAB(8,Y%)CHR$(181);
+          PRINTTAB(31,Y%)CHR$(234);
+        NEXT
+        VDU 31,8,6,182
+        VDU 31,8,19,229
+        VDU 31,31,6,233
+        VDU 31,31,19,186
+
+        PRINTTAB(32,8)tb$;CHR$(157);tc$;">  ";CHR$(156);gw$
+        PRINTTAB(32,10)tb$;CHR$(157);tc$;"<  ";CHR$(156);gw$
+
+      ENDIF
+
+      REM REFRESH DYNAMIC AREAS
+      PRINTTAB(32,6)tr$;CHR$(157);ty$;RIGHT$(" "+STR$(sprite_cur%+1),2)+" ";CHR$(156);
+
+      FOR X%=0 TO 39
+        FOR Y%=0 TO 35
+          PROCpoint(X%+20,Y%+21,0) : REM sprite_buffer&(sprite_cur%,X%+Y%*40))
+        NEXT
+      NEXT
+
+      ENDPROC
 
       REM UPDATE COLOUR STRIP FOR BUFFER
       DEF PROCGR_BUF(D%,F%,B%)
@@ -2615,49 +2748,55 @@
       REM PRINTTAB(0,2)STR$(redo_count&(frame%-1));"  ";STR$(redo_index%(frame%-1));"  "
 
       REM shape and special sub menu
-      IF menuext%=1 THEN
-        D$=CHR$(32+animateshape%*10)
-        A$=STR$(animategap%)
-        F$=STR$(animatelen%)
-        R$=CHR$(32+copylockxt%*10)
-        U$=CHR$(32+copylockyt%*10)
+      CASE menuext% OF
+        WHEN 1 : REM SPECIAL MENU
 
-        FOR Y%=1 TO 23
-          PROCprint40(Y%,"")
-        NEXT
+          D$=CHR$(32+animateshape%*10)
+          A$=STR$(animategap%)
+          F$=STR$(animatelen%)
+          R$=CHR$(32+copylockxt%*10)
+          U$=CHR$(32+copylockyt%*10)
 
-        PRINTTAB(35,1)tm$;"HELP"
-        PROCprint40(2,tg$+"( )"+tw$+"LINE     "+tg$+"("+D$+")"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
-        PROCprint40(3,tg$+"( )"+tw$+"RECT         "+tc$+"GAP:"+tw$+"-"+ty$+A$+tw$+"+")
-        PROCprint40(4,tg$+"( )"+tw$+"CIRC         "+tc$+"LEN:"+tw$+"-"+ty$+F$+tw$+"+")
-        PROCprint40(6,tg$+"( )"+tw$+"FLSH (136)  "+tg$+"( )"+tw$+"DBLH (141)")
-        PROCprint40(7,tg$+"( )"+tw$+"SEPR (154)  "+tg$+"( )"+tw$+"HOLD (158)")
-        PROCprint40(9,tg$+"( )"+tw$+"FORE "+tg$+"( )"+tw$+"BACK"+tb$+"(ENTIRE COLUMN)")
-        PROCprint40(10,tg$+"("+R$+")"+tw$+"HORZ "+tg$+"("+U$+")"+tw$+"VERT"+tb$+"(LOCK PASTE POS)")
-        PROCprint40(11,tg$+"( )"+tw$+"TEXT")
-        D$=CHR$(129+showcodes%)
+          FOR Y%=1 TO 23
+            PROCprint40(Y%,"")
+          NEXT
 
-        IF shapesel%>-1 AND shapesel%<10 THEN
-          PRINTTAB(sopt{(shapesel%)}.x%,sopt{(shapesel%)}.y%)"*"
-        ENDIF
+          PRINTTAB(35,1)tm$;"HELP"
+          PROCprint40(2,tg$+"( )"+tw$+"LINE     "+tg$+"("+D$+")"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
+          PROCprint40(3,tg$+"( )"+tw$+"RECT         "+tc$+"GAP:"+tw$+"-"+ty$+A$+tw$+"+")
+          PROCprint40(4,tg$+"( )"+tw$+"CIRC         "+tc$+"LEN:"+tw$+"-"+ty$+F$+tw$+"+")
+          PROCprint40(6,tg$+"( )"+tw$+"FLSH (136)  "+tg$+"( )"+tw$+"DBLH (141)")
+          PROCprint40(7,tg$+"( )"+tw$+"SEPR (154)  "+tg$+"( )"+tw$+"HOLD (158)")
+          PROCprint40(9,tg$+"( )"+tw$+"FORE "+tg$+"( )"+tw$+"BACK"+tb$+"(ENTIRE COLUMN)")
+          PROCprint40(10,tg$+"("+R$+")"+tw$+"HORZ "+tg$+"("+U$+")"+tw$+"VERT"+tb$+"(LOCK PASTE POS)")
+          PROCprint40(11,tg$+"( )"+tw$+"TEXT")
+          D$=CHR$(129+showcodes%)
 
-        IF caps% THEN
-          PROCprint40(12,"  A B C D E F G H I J K L M N O P Q R")
-          PROCprint40(14,"  S T U V W X Y Z 1 2 3 4 5 6 7 8 9 0")
-        ELSE
-          PROCprint40(12,"  a b c d e f g h i j k l m n o p q r")
-          PROCprint40(14,"  s t u v w x y z 1 2 3 4 5 6 7 8 9 0")
-        ENDIF
-        PROCprint40(16,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
-        PROCprint40(18,"  [ ] ; { } \ | : ' "" < > / ?"+tc$+"SPC CAP" )
+          IF shapesel%>-1 AND shapesel%<10 THEN
+            PRINTTAB(sopt{(shapesel%)}.x%,sopt{(shapesel%)}.y%)"*"
+          ENDIF
 
-        PROCprint40(20,"TEXT:"+tg$+text$)
-        PRINTTAB(36,20)tr$;"< X";
-        PRINTTAB(15,22)tb$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
+          IF caps% THEN
+            PROCprint40(12,"  A B C D E F G H I J K L M N O P Q R")
+            PROCprint40(14,"  S T U V W X Y Z 1 2 3 4 5 6 7 8 9 0")
+          ELSE
+            PROCprint40(12,"  a b c d e f g h i j k l m n o p q r")
+            PROCprint40(14,"  s t u v w x y z 1 2 3 4 5 6 7 8 9 0")
+          ENDIF
+          PROCprint40(16,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
+          PROCprint40(18,"  [ ] ; { } \ | : ' "" < > / ?"+tc$+"SPC CAP" )
 
-        PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
+          PROCprint40(20,"TEXT:"+tg$+text$)
+          PRINTTAB(36,20)tr$;"< X";
+          PRINTTAB(6,22)tb$;CHR$(157);ty$;"SPRITES  ";CHR$(156);"    ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
 
-      ENDIF
+          PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
+
+        WHEN 2 : REM SPRITE MENU
+
+
+
+      ENDCASE
 
       ENDPROC
 
