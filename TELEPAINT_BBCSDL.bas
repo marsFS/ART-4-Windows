@@ -242,6 +242,7 @@
       UNTIL frame_old%<0
       PROCWAITMOUSE(0)
       menuext%=0
+      sprite_old%=0
 
       REM frame buffer
       DIM frame_buffer&(frame_max%-1,959)
@@ -276,6 +277,10 @@
         REM WAIT 10
       NEXT frame%
       frame%=1
+
+      FOR s%=0 TO frame_max%-1
+        PROCsavesprite(s%)
+      NEXT
 
       IF frame_old%=-2 THEN PROCshowhelp
 
@@ -521,14 +526,56 @@
                           REPEAT
                             PROCREADMOUSE
                             IF PX%>19 AND PX%<60 AND PY%>20 AND PY%<57 THEN
+                              IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+                                PROCpoint(PX%,PY%,1-erase%)
+                                OLD_PX%=PX%
+                                OLD_PY%=PY%
+                              ENDIF
+                            ENDIF
+                          UNTIL MB%=0
+                          REM IF animation% THEN PROCloadnextframe(1,1)
 
-                              IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN PROCpoint(PX%,PY%,1-erase%)
-                              OLD_PX%=PX%
-                              OLD_PY%=PY%
-                            UNTIL MB%=0
-                            REM IF animation% THEN PROCloadnextframe(1,1)
+                        ENDIF
+
+                      WHEN 5: REM background colour
+                        REM PROCundosave
+                        IF TX%>9 AND TX%<30 AND TY%>6 AND TY%<19 THEN
+                          IF erase% THEN
+                            VDU 31,TX%,TY%,156
+                          ELSE
+                            IF TX%<29 THEN VDU 31,TX%,TY%,(curcol%+144),157
                           ENDIF
                         ENDIF
+                        REPEAT
+                          PROCREADMOUSE
+                          IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                            IF TX%>9 AND TX%<30 AND TY%>6 AND TY%<19 THEN
+                              IF erase% THEN
+                                VDU 31,TX%,TY%,156
+                              ELSE
+                                IF TX%<29 THEN VDU 31,TX%,TY%,(curcol%+144),157
+                              ENDIF
+                            ENDIF
+                          ENDIF
+                          OLD_TX%=TX%
+                          OLD_TY%=TY%
+                        UNTIL MB%=0
+                        REM IF animation% THEN PROCloadnextframe(1,1)
+
+                      WHEN 6: REM foreground colour
+                        REM PROCundosave
+
+                        IF TX%>9 AND TX%<30 AND TY%>6 AND TY%<19 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                        REPEAT
+                          PROCREADMOUSE
+                          IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                            IF TX%>9 AND TX%<30 AND TY%>6 AND TY%<19 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                            OLD_TX%=TX%
+                            OLD_TY%=TY%
+                          ENDIF
+                        UNTIL MB%=0
+                        REM IF animation% THEN PROCloadnextframe(1,1)
+
                     ENDCASE
 
                     CASE TX% OF
@@ -544,16 +591,16 @@
                             IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
 
                         ENDCASE
-                        IF sprite_cur%<>sprite_old% THEN
-                          PROCspritemenu(0)
-                          sprite_old%=sprite_cur%
-                        ENDIF
 
                     ENDCASE
 
-
-
                 ENDCASE
+
+                IF sprite_cur%<>sprite_old% THEN
+                  PROCsavesprite(sprite_old%)
+                  PROCspritemenu(0)
+                  sprite_old%=sprite_cur%
+                ENDIF
 
 
               OTHERWISE : REM MAIN DRAWING CANVAS
@@ -868,36 +915,65 @@
           ENDIF
 
         ELSE
-          IF INKEY(-26) THEN PROCWAITNOKEY(-26) : PROCloadnextframe(-1,1) : REM SAVE CURRENT FRAME AND LOAD PREVIOUS FRAME
-          IF INKEY(-122) THEN PROCWAITNOKEY(-122) : PROCloadnextframe(1,1) : REM SAVE CURRENT FRAME AND LOAD NEXT FRAME
 
-          REM TEXT AT CURSOR HANDLER, IF MOUSE IS MOVED, NEW TEXT POS IS SET
-          K%=INKEY(0)
-          IF K%>1 AND TY%>0 THEN
-            REM SAVE UNDO ONLY FOR CURRENT 'LINE' OF TEXT
-            IF TX%<>OTX% OR TY%<>OTY% THEN
-              OTX%=TX%
-              OTY%=TY%
-              PROCundosave
+          REM left cursor key
+          IF INKEY(-26) THEN
+            IF menuext%=2 THEN
+              PROCWAITNOKEY(-26)
+              sprite_cur%-=1
+              IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
+            ELSE
+              PROCloadnextframe(-1,1) : REM SAVE CURRENT FRAME AND LOAD PREVIOUS FRAME
             ENDIF
-            REM HANDLE BACKSPACE
-            IF K%=8 THEN
-              IF TEXTX%>TX% THEN
-                REM IF AT END OF LINE CHECK LAST CHAR IF SPACE ALREADY
-                IF TEXTX%=39 AND GET(TEXTX%,TY%)<>32 THEN
-                  VDU 31,TEXTX%,TY%,32
-                ELSE
-                  TEXTX%-=1
-                  VDU 31,TEXTX%,TY%,32
+          ENDIF
+
+          REM right cursor key
+          IF INKEY(-122) THEN
+            IF menuext%=2 THEN
+              PROCWAITNOKEY(-122)
+              sprite_cur%+=1
+              IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
+            ELSE
+              PROCloadnextframe(1,1) : REM SAVE CURRENT FRAME AND LOAD NEXT FRAME
+            ENDIF
+          ENDIF
+
+          IF menuext%<>2 THEN
+            REM TEXT AT CURSOR HANDLER, IF MOUSE IS MOVED, NEW TEXT POS IS SET
+            K%=INKEY(0)
+            IF K%>1 AND TY%>0 THEN
+              REM SAVE UNDO ONLY FOR CURRENT 'LINE' OF TEXT
+              IF TX%<>OTX% OR TY%<>OTY% THEN
+                OTX%=TX%
+                OTY%=TY%
+                PROCundosave
+              ENDIF
+              REM HANDLE BACKSPACE
+              IF K%=8 THEN
+                IF TEXTX%>TX% THEN
+                  REM IF AT END OF LINE CHECK LAST CHAR IF SPACE ALREADY
+                  IF TEXTX%=39 AND GET(TEXTX%,TY%)<>32 THEN
+                    VDU 31,TEXTX%,TY%,32
+                  ELSE
+                    TEXTX%-=1
+                    VDU 31,TEXTX%,TY%,32
+                  ENDIF
+                ENDIF
+              ELSE
+                IF K%<>136 AND K%<>137 THEN
+                  REM ADD CHAR AND INCREASE TEXT POS
+                  VDU 31,TEXTX%,TY%,K%
+                  IF TEXTX%<39 THEN TEXTX%+=1
                 ENDIF
               ENDIF
-            ELSE
-              IF K%<>136 AND K%<>137 THEN
-                REM ADD CHAR AND INCREASE TEXT POS
-                VDU 31,TEXTX%,TY%,K%
-                IF TEXTX%<39 THEN TEXTX%+=1
-              ENDIF
             ENDIF
+          ELSE
+            IF sprite_cur%<>sprite_old% THEN
+              PROCsavesprite(sprite_old%)
+              PROCspritemenu(0)
+              sprite_old%=sprite_cur%
+            ENDIF
+
           ENDIF
 
           WAIT 2
@@ -930,7 +1006,7 @@
       PY%=(999-MY%)/13.3333333
 
 
-      IF menuext%=0 THEN
+      IF menuext%=0 OR menuext%=2 THEN
         IF showcodes%=1 THEN
           newcode%=GET(TX%,TY%)
           IF oldcode%<>newcode% THEN
@@ -1559,6 +1635,30 @@
       PROCframerestore(frame%)
       PROCdrawmenu
       ENDPROC
+
+      REM save sprite
+      DEF PROCsavesprite(S%)
+      LOCAL U%
+      REM 10,7   29,18   20x12 TX,TY =240 bytes
+
+      FOR U%=0 TO 239
+        sprite_buffer&(S%,U%)=GET(U% MOD 20+10,U% DIV 20+7)
+      NEXT
+
+      ENDPROC
+
+      REM draw sprite
+      DEF PROCdrawsprite
+      LOCAL U%
+      REM 10,7   29,18   20x12 TX,TY =240 bytes
+
+      FOR U%=0 TO 239
+        REM sprite_buffer&(sprite_cur%,U%)=GET(U% MOD 20+10,U% DIV 20+7)
+        VDU 31,U% MOD 20+10,U% DIV 20+7,sprite_buffer&(sprite_cur%,U%)
+      NEXT
+
+      ENDPROC
+
 
       REM save current screen to undo buffer
       DEF PROCundosave
@@ -2656,17 +2756,18 @@
         PRINTTAB(9,2)CHR$(141);tb$;CHR$(157);ty$;"SPRITE EDITOR  ";CHR$(156);
         PRINTTAB(9,3)CHR$(141);tb$;CHR$(157);ty$;"SPRITE EDITOR  ";CHR$(156);
 
-        PRINTTAB(9,6)STRING$(22,CHR$(163));
-        PRINTTAB(9,19)STRING$(22,CHR$(240));
+        REM PRINTTAB(10,6)STRING$(20,CHR$(172));
+        REM PRINTTAB(10,19)STRING$(20,CHR$(172));
 
         FOR Y%=7 TO 18
-          PRINTTAB(8,Y%)CHR$(181);
-          PRINTTAB(31,Y%)CHR$(234);
+          REM   PRINTTAB(9,Y%)CHR$(181);
+          REM PRINTTAB(30,Y%)CHR$(234);
+          VDU 31,30,Y%,156
         NEXT
-        VDU 31,8,6,182
-        VDU 31,8,19,229
-        VDU 31,31,6,233
-        VDU 31,31,19,186
+        VDU 31,9,6,184
+        VDU 31,9,19,169
+        VDU 31,30,6,228
+        VDU 31,30,19,166
 
         PRINTTAB(32,8)tb$;CHR$(157);tc$;">  ";CHR$(156);gw$
         PRINTTAB(32,10)tb$;CHR$(157);tc$;"<  ";CHR$(156);gw$
@@ -2676,11 +2777,13 @@
       REM REFRESH DYNAMIC AREAS
       PRINTTAB(32,6)tr$;CHR$(157);ty$;RIGHT$(" "+STR$(sprite_cur%+1),2)+" ";CHR$(156);
 
-      FOR X%=0 TO 39
-        FOR Y%=0 TO 35
-          PROCpoint(X%+20,Y%+21,0) : REM sprite_buffer&(sprite_cur%,X%+Y%*40))
-        NEXT
-      NEXT
+      PROCdrawsprite
+
+      REM     FOR X%=0 TO 39
+      REM FOR Y%=0 TO 35
+      REM PROCpoint(X%+20,Y%+21,0) : REM sprite_buffer&(sprite_cur%,X%+Y%*40))
+      REM NEXT
+      REM NEXT
 
       ENDPROC
 
