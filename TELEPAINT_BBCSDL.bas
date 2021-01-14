@@ -51,7 +51,7 @@
       fxMax%=80
       fyMin%=3
       fyMax%=74
-      DIM fill{(100) x%,y%}
+      DIM fill{(256) x%,y%}
 
 
       REM OLD PIXEL & MOUSE COORDS
@@ -249,7 +249,7 @@
 
       REM sprite buffer
       DIM sprite_buffer&(sprite_max%-1,959)
-      DIM spr_tmp&(959)
+      DIM spr_tmp&(2000)
       DIM spr{(sprite_max%-1) x%,y%,w%,h%}
 
       REM undo buffer
@@ -520,11 +520,11 @@
 
                     CASE toolsel% OF
                       WHEN 1: REM PAINT TOOL
-                        IF PX%>19 AND PX%<60 AND PY%>20 AND PY%<57 THEN
+                        IF PX%>19 AND PX%<60 AND PY%>17 AND PY%<54 THEN
                           PROCpoint(PX%,PY%,1)
                           REPEAT
                             PROCREADMOUSE
-                            IF PX%>19 AND PX%<60 AND PY%>20 AND PY%<57 THEN
+                            IF PX%>19 AND PX%<60 AND PY%>17 AND PY%<54 THEN
                               IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
                                 PROCpoint(PX%,PY%,1-erase%)
                                 OLD_PX%=PX%
@@ -537,64 +537,70 @@
                         ENDIF
 
                       WHEN 5: REM background colour
-                        IF TX%>9 AND TX%<30 AND TY%>6 AND TY%<19 THEN
+                        IF TX%>9 AND TX%<30 AND TY%>5 AND TY%<18 THEN
                           IF erase% THEN
                             VDU 31,TX%,TY%,156
                           ELSE
                             IF TX%<29 THEN VDU 31,TX%,TY%,(curcol%+144),157
                           ENDIF
-                        ENDIF
-                        REPEAT
-                          PROCREADMOUSE
-                          IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                            IF TX%>9 AND TX%<30 AND TY%>6 AND TY%<19 THEN
-                              IF erase% THEN
-                                VDU 31,TX%,TY%,156
-                              ELSE
-                                IF TX%<29 THEN VDU 31,TX%,TY%,(curcol%+144),157
+
+                          REPEAT
+                            PROCREADMOUSE
+                            IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                              IF TX%>9 AND TX%<30 AND TY%>5 AND TY%<18 THEN
+                                IF erase% THEN
+                                  VDU 31,TX%,TY%,156
+                                ELSE
+                                  IF TX%<29 THEN VDU 31,TX%,TY%,(curcol%+144),157
+                                ENDIF
                               ENDIF
                             ENDIF
-                          ENDIF
-                          OLD_TX%=TX%
-                          OLD_TY%=TY%
-                        UNTIL MB%=0
-                        PROCsavesprite(sprite_cur%)
-
-                      WHEN 6: REM foreground colour
-                        IF TX%>9 AND TX%<30 AND TY%>6 AND TY%<19 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
-                        REPEAT
-                          PROCREADMOUSE
-                          IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                            IF TX%>9 AND TX%<30 AND TY%>6 AND TY%<19 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
                             OLD_TX%=TX%
                             OLD_TY%=TY%
-                          ENDIF
-                        UNTIL MB%=0
-                        PROCsavesprite(sprite_cur%)
-
+                          UNTIL MB%=0
+                          PROCsavesprite(sprite_cur%)
+                        ENDIF
+                      WHEN 6: REM foreground colour
+                        IF TX%>9 AND TX%<30 AND TY%>5 AND TY%<18 THEN
+                          VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                          REPEAT
+                            PROCREADMOUSE
+                            IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                              IF TX%>9 AND TX%<30 AND TY%>5 AND TY%<18 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                              OLD_TX%=TX%
+                              OLD_TY%=TY%
+                            ENDIF
+                          UNTIL MB%=0
+                          PROCsavesprite(sprite_cur%)
+                        ENDIF
                     ENDCASE
 
-                    REM 10,7   29,18   20x12 TX,TY =240 bytes
+                    REM 10,6   29,17   20x12 TX,TY =240 bytes || 20,18   40X36 PX,PY = 1440
+                    PROCWAITMOUSE(0)
 
                     CASE TX% OF
-                      WHEN 33,34,35,36,37 : REM SPRITE TOOLS
-                        PROCWAITMOUSE(0)
+                      WHEN 12,13,14,15,16
                         CASE TY% OF
-                          WHEN 6 : REM SPRITE NEXT
-                            sprite_cur%+=1
-                            IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
-
-                          WHEN 8 : REM SPRITE PREV
+                          WHEN 19 : REM SPRITE PREV
                             sprite_cur%-=1
                             IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
+                        ENDCASE
+                      WHEN 19,20,21,22,23
+                        CASE TY% OF
+                          WHEN 19 : REM SPRITE NEXT
+                            sprite_cur%+=1
+                            IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
+                        ENDCASE
+                      WHEN 33,34,35,36,37 : REM SPRITE TOOLS
+                        CASE TY% OF
 
-                          WHEN 10 : REM CLS
+                          WHEN 4 : REM CLS
                             FOR S%=0 TO 239
                               sprite_buffer&(sprite_cur%,S%)=32
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 12 : REM SCROLL LEFT
+                          WHEN 6 : REM SCROLL LEFT
                             FOR S%=0 TO 11
                               spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20)
                             NEXT
@@ -606,7 +612,7 @@
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 14 : REM SCROLL RIGHT
+                          WHEN 8 : REM SCROLL RIGHT
                             FOR S%=0 TO 11
                               spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20+19)
                             NEXT
@@ -618,7 +624,7 @@
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 16 : REM SCROLL UP
+                          WHEN 10 : REM SCROLL UP
                             FOR S%=0 TO 19
                               spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%)
                             NEXT
@@ -630,7 +636,7 @@
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 18 : REM SCROLL DOWN
+                          WHEN 12 : REM SCROLL DOWN
                             FOR S%=0 TO 19
                               spr_tmp&(S%)=sprite_buffer&(sprite_cur%,220+S%)
                             NEXT
@@ -642,14 +648,40 @@
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 20 : REM COPY TO NEXT SPRITE
+                          WHEN 14 : REM FLIP HORZ
+                            FOR X%=0 TO 39
+                              FOR Y%=0 TO 35
+                                spr_tmp&(Y%*40+X%)=FNpoint((39-X%)+20,Y%+18)
+                                REM spr_tmp&(S%)=sprite_buffer&(sprite_cur%,19+(S% DIV 20)*20-S% MOD 20)
+                              NEXT
+                            NEXT
+                            FOR S%=0 TO 1439
+                              REM sprite_buffer&(sprite_cur%,S%)=spr_tmp&(S%)
+                              PROCpoint(S% MOD 40+20,S% DIV 40+18,spr_tmp&(S%))
+                            NEXT
+                            PROCsavesprite(sprite_cur%)
+
+                          WHEN 16 : REM FLIP VERT
+                            FOR X%=0 TO 39
+                              FOR Y%=0 TO 35
+                                spr_tmp&(Y%*40+X%)=FNpoint(X%+20,(35-Y%)+18)
+                                REM spr_tmp&(S%)=sprite_buffer&(sprite_cur%,19+(S% DIV 20)*20-S% MOD 20)
+                              NEXT
+                            NEXT
+                            FOR S%=0 TO 1439
+                              REM sprite_buffer&(sprite_cur%,S%)=spr_tmp&(S%)
+                              PROCpoint(S% MOD 40+20,S% DIV 40+18,spr_tmp&(S%))
+                            NEXT
+                            PROCsavesprite(sprite_cur%)
+
+                          WHEN 18 : REM COPY TO NEXT SPRITE
                             dst%=sprite_cur%+1
                             IF dst%>sprite_max%-1 THEN dst%=0
                             FOR S%=0 TO 239
                               sprite_buffer&(dst%,S%)=sprite_buffer&(sprite_cur%,S%)
                             NEXT
 
-                          WHEN 22 : REM COPY TO PREV SPRITE
+                          WHEN 20 : REM COPY TO PREV SPRITE
                             dst%=sprite_cur%-1
                             IF dst%<0 THEN dst%=sprite_max%-1
                             FOR S%=0 TO 239
@@ -1708,7 +1740,7 @@
       REM 10,7   29,18   20x12 TX,TY =240 bytes
 
       FOR U%=0 TO 239
-        sprite_buffer&(S%,U%)=GET(U% MOD 20+10,U% DIV 20+7)
+        sprite_buffer&(S%,U%)=GET(U% MOD 20+10,U% DIV 20+6)
       NEXT
 
       ENDPROC
@@ -1719,7 +1751,7 @@
       REM 10,7   29,18   20x12 TX,TY =240 bytes
 
       FOR U%=0 TO 239
-        VDU 31,U% MOD 20+10,U% DIV 20+7,sprite_buffer&(sprite_cur%,U%)
+        VDU 31,U% MOD 20+10,U% DIV 20+6,sprite_buffer&(sprite_cur%,U%)
       NEXT
 
       ENDPROC
@@ -2824,30 +2856,47 @@
         REM PRINTTAB(10,6)STRING$(20,CHR$(172));
         REM PRINTTAB(10,19)STRING$(20,CHR$(172));
 
-        FOR Y%=7 TO 18
+        FOR Y%=5 TO 18
           REM   PRINTTAB(9,Y%)CHR$(181);
           REM PRINTTAB(30,Y%)CHR$(234);
+          VDU 31,8,Y%,151
           VDU 31,30,Y%,156
         NEXT
-        VDU 31,9,6,184
-        VDU 31,9,19,169
-        VDU 31,30,6,228
-        VDU 31,30,19,166
 
-        PRINTTAB(32,6)tb$;CHR$(157);tc$;">  ";CHR$(156);
-        PRINTTAB(32,8)tb$;CHR$(157);tc$;"<  ";CHR$(156);
-        PRINTTAB(33,10)tc$;"CLS";
-        PRINTTAB(32,12)tc$;"SCR-L";
-        PRINTTAB(32,14)tc$;"SCR-R";
-        PRINTTAB(32,16)tc$;"SCR-U";
-        PRINTTAB(32,18)tc$;"SCR-D";
-        PRINTTAB(32,20)tc$;"CPY >";
-        PRINTTAB(32,22)tc$;"CPY <";
+        VDU 31,9,5,184
+        VDU 31,9,18,169
+        VDU 31,30,5,228
+        VDU 31,30,18,166
+
+        REM        PRINTTAB(18,19)tb$;CHR$(157);tc$;">  ";CHR$(156);
+        PRINTTAB(11,19)tb$;CHR$(157);tc$;"<  ";CHR$(156);tb$;CHR$(157);tc$;">  ";CHR$(156);
+
+        PRINTTAB(6,21)tb$;CHR$(157);tc$;"COPY SPR  ";CHR$(156);tr$;CHR$(157);ty$;"UNDO SPR  ";CHR$(156);
+
+        PRINTTAB(0,4)ty$;"LOAD";
+        PRINTTAB(0,6)ty$;"SAVE";
+        PRINTTAB(0,8)tg$;"MENU1";
+        PRINTTAB(0,10)tg$;"MENU2";
+        PRINTTAB(0,12)tg$;"MENU3";
+        PRINTTAB(0,14)tg$;"MENU4";
+        PRINTTAB(0,16)tg$;"MENU5";
+        PRINTTAB(0,18)tg$;"MENU6";
+        PRINTTAB(0,20)tg$;"MENU7";
+
+        PRINTTAB(33,4)tc$;"CLS";
+        PRINTTAB(32,6)tc$;"SCR-L";
+        PRINTTAB(32,8)tc$;"SCR-R";
+        PRINTTAB(32,10)tc$;"SCR-U";
+        PRINTTAB(32,12)tc$;"SCR-D";
+        PRINTTAB(32,14)tc$;"FLP-]";
+        PRINTTAB(32,16)tc$;"FLP-^";
+        PRINTTAB(32,18)tc$;"CPY >";
+        PRINTTAB(32,20)tc$;"CPY <";
 
       ENDIF
 
       REM REFRESH DYNAMIC AREAS
-      PRINTTAB(25,5)tr$;CHR$(157);ty$;RIGHT$(" "+STR$(sprite_cur%+1),2)+" ";CHR$(156);
+      PRINTTAB(25,19)tr$;CHR$(157);ty$;RIGHT$(" "+STR$(sprite_cur%+1),2)+" ";CHR$(156);
 
       PROCdrawsprite
 
