@@ -1079,9 +1079,9 @@
         ENDIF
 
         REM show mouse tracking details for debug
-        PRINTTAB(0,1)SPC(40)
+        REM PRINTTAB(0,1)SPC(40)
         REM        PRINTTAB(0,1)"MX:";STR$(MX%);" MY:";STR$(MY%);" TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%)
-        PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%);" ME:";STR$(menuext%);
+        REM PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%);" ME:";STR$(menuext%);
         REM REMEMBER MOUSE POSITION
         OLD_MX%=MX%
         OLD_MY%=MY%
