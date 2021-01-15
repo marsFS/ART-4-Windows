@@ -32,7 +32,7 @@
 
       version$="v0.16"
 
-      DEBUG%=1
+      DEBUG%=0
 
       REM FOR 64 BIT COMPARISONS
       REM *HEX 64
@@ -194,8 +194,8 @@
       PRINTTAB(3,2)CHR$(141);gr$;CHR$(157);ty$;"= = T E L E P A I N T = =  ";CHR$(156)
       PRINTTAB(3,3)CHR$(141);gy$;CHR$(157);tr$;"= = T E L E P A I N T = =  ";CHR$(156)
 
-      PRINTTAB(8,6)gg$;CHR$(157);tb$;"  IMPORT IMAGE    ";CHR$(156)
-      PRINTTAB(8,9)gg$;CHR$(157);tb$;"  DISPLAY HELP    ";CHR$(156)
+      PRINTTAB(8,6)gm$;CHR$(157);ty$;"  IMPORT IMAGE    ";CHR$(156)
+      PRINTTAB(8,9)gm$;CHR$(157);ty$;"  DISPLAY HELP    ";CHR$(156)
       PRINTTAB(7,12)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
       PRINTTAB(7,13)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
 
@@ -309,7 +309,7 @@
         IF MX%<>OLD_MX% OR MY%<>OLD_MY% OR MB% THEN
           TEXTX%=TX%
           IF TY%=0 THEN
-            REM click unside menu area
+            REM click inside menu area
             IF MB%=4 THEN
               PROCWAITMOUSE(0)
               IF TY%=0 THEN
@@ -632,12 +632,12 @@
                             sprlist{(spr_lstcount%)}.y%=spr_frmy%
 
 
-                            spr_frmstart%=1
-                            spr_frmstep%=0
-                            spr_frmx%=1
-                            spr_frmy%=1
-                            spr_frmh%=0
-                            spr_frmv%=0
+                            spr_frmstart%+=1
+                            spr_frmstep%+=0
+                            spr_frmx%+=1
+                            spr_frmy%+=1
+                            spr_frmh%+=0
+                            spr_frmv%+=0
 
                           WHEN 33,34,35,36,37 : REM SCROLL RIGHT
                             FOR S%=0 TO 11
@@ -711,11 +711,9 @@
                             FOR X%=0 TO 39
                               FOR Y%=0 TO 35
                                 spr_tmp&(Y%*40+X%)=FNpoint((39-X%)+20,Y%+18)
-                                REM spr_tmp&(S%)=sprite_buffer&(sprite_cur%,19+(S% DIV 20)*20-S% MOD 20)
                               NEXT
                             NEXT
                             FOR S%=0 TO 1439
-                              REM sprite_buffer&(sprite_cur%,S%)=spr_tmp&(S%)
                               PROCpoint(S% MOD 40+20,S% DIV 40+18,spr_tmp&(S%))
                             NEXT
                             PROCsavesprite(sprite_cur%)
@@ -730,11 +728,9 @@
                             FOR X%=0 TO 39
                               FOR Y%=0 TO 35
                                 spr_tmp&(Y%*40+X%)=FNpoint(X%+20,(35-Y%)+18)
-                                REM spr_tmp&(S%)=sprite_buffer&(sprite_cur%,19+(S% DIV 20)*20-S% MOD 20)
                               NEXT
                             NEXT
                             FOR S%=0 TO 1439
-                              REM sprite_buffer&(sprite_cur%,S%)=spr_tmp&(S%)
                               PROCpoint(S% MOD 40+20,S% DIV 40+18,spr_tmp&(S%))
                             NEXT
                             PROCsavesprite(sprite_cur%)
@@ -783,13 +779,15 @@
                           WHEN 7,8,9,10,11,12,13,14,15,16,17,18 : REM DRAW ALL SPRITES
                             IF spr_lstcount%>-1 THEN
                               FOR S%=0 TO spr_lstcount%
-                                FOR U%=0 TO 239
-                                  X%=sprlist{(S%)}.x%+U% MOD 20
-                                  Y%=sprlist{(S%)}.y%+U% DIV 20
-                                  IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
-                                    frame_buffer&(sprlist{(S%)}.f%-1,X%+Y%*40)=sprite_buffer&(sprlist{(S%)}.s%,U%)
-                                  ENDIF
-                                NEXT
+                                IF sprlist{(S%)}.f%-1<sprite_max% THEN
+                                  FOR U%=0 TO 239
+                                    X%=sprlist{(S%)}.x%+U% MOD 20
+                                    Y%=sprlist{(S%)}.y%+U% DIV 20
+                                    IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
+                                      frame_buffer&(sprlist{(S%)}.f%-1,X%+Y%*40)=sprite_buffer&(sprlist{(S%)}.s%,U%)
+                                    ENDIF
+                                  NEXT
+                                ENDIF
                               NEXT
 
                             ENDIF
@@ -846,7 +844,7 @@
                     CASE toolsel% OF
                       WHEN 1: REM PAINT TOOL
                         PROCundosave
-                        PROCpoint(PX%,PY%,1)
+                        PROCpoint(PX%,PY%,1-erase%)
                         REPEAT
                           PROCREADMOUSE
                           IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN PROCpoint(PX%,PY%,1-erase%)
@@ -1276,7 +1274,7 @@
       ENDPROC
 
       REM Read the point at the specified coordinates (1=set, 0=cleared)
-      DEFFNpoint(x%,y%)
+      DEF FNpoint(x%,y%)
       LOCAL cx%,cy%,chr%,C%
       REM Get character cell
       cx% = x% DIV 2
@@ -1290,8 +1288,8 @@
       REM SIXEL COORDINATES WITH 0,0 BEING TOP LEFT THE SAME AS THE TEXT SCREEN
       REM cmd% 0: Clear the point
       REM cmd% 1: Set the point
-      REM cmd% 2: Toggle the point
-      DEFPROCpoint(x%, y%, cmd%)
+      REM cmd% 2: Toggle the point XOR
+      DEF PROCpoint(x%, y%, cmd%)
 
       IF x%>xMin% AND x%<xMax% AND y%>yMin% AND y%<yMax% THEN
 
@@ -1314,7 +1312,7 @@
       ENDPROC
 
       REM Read the point at the specified coordinates from specified buffer (1=set, 0=cleared)
-      DEFFNpoint_buf(x%,y%,f%)
+      DEF FNpoint_buf(x%,y%,f%)
       LOCAL cx%,cy%,chr%,C%
       REM Get character cell
       cx% = x% DIV 2
@@ -1329,7 +1327,7 @@
       REM cmd% 0: Clear the point
       REM cmd% 1: Set the point
       REM cmd% 2: Toggle the point
-      DEFPROCpoint_buf(x%, y%, cmd%,f%)
+      DEF PROCpoint_buf(x%, y%, cmd%,f%)
 
       IF x%>xMin% AND x%<xMax% AND y%>yMin% AND y%<yMax% THEN
 
