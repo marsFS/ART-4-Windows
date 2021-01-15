@@ -30,7 +30,9 @@
 
       MODE 7
 
-      version$="v0.15"
+      version$="v0.16"
+
+      DEBUG%=1
 
       REM FOR 64 BIT COMPARISONS
       REM *HEX 64
@@ -179,6 +181,13 @@
       sprite_max%=8
       sprite_old%=0
       sprite_cur%=0
+      spr_frmstart%=1
+      spr_frmstep%=0
+      spr_frmx%=1
+      spr_frmy%=1
+      spr_frmh%=0
+      spr_frmv%=0
+      spr_lstcount%=-1
 
       VDU 23,1,0;0;0;0; : REM Disable cursor
 
@@ -250,7 +259,7 @@
       REM sprite buffer
       DIM sprite_buffer&(sprite_max%-1,959)
       DIM spr_tmp&(2000)
-      DIM spr{(sprite_max%-1) x%,y%,w%,h%}
+      DIM sprlist{(2000) s%,f%,x%,y%}
 
       REM undo buffer
       undo_max%=19
@@ -336,6 +345,7 @@
                       IF menuext%>0 THEN PROCmenurestore
                       PROCmenusave
                       menuext%=1
+                      PROCspecialmenu(1)
                     ELSE
                       PROCmenurestore
                     ENDIF
@@ -386,6 +396,7 @@
                           PROCdrawmenu
                           PROCshowhelp
                           menuext%=1
+                          PROCspecialmenu(1)
                       ENDCASE
 
                     WHEN 2
@@ -486,23 +497,24 @@
                       REM showcodes%=(showcodes%+1) AND 1
 
                     WHEN 22 : REM SPRITE AND CLOSE BUTTTONS
-                      PROCmenurestore
                       IF TX%>6 AND TX%<18 THEN
+
                         menuext%=2
                         PROCspritemenu(1)
 
                       ENDIF
-                      REM   WHEN 24..32 : REM CLOSE
+
+                      IF TX%>23 AND TX%<33 THEN
+                        PROCmenurestore
+                      ENDIF
 
                   ENDCASE
+                  IF shapesel%>-1 THEN toolsel%=4:toolcursor%=19
+
+                  IF menuext%=1 THEN PROCspecialmenu(0)
+
                 ENDIF
 
-                REM ENDCASE
-
-                IF shapesel%>-1 THEN toolsel%=4:toolcursor%=19
-
-                PROCdrawmenu
-                REM ENDIF
 
               WHEN 2 : REM SPRITE EDITOR
 
@@ -578,29 +590,24 @@
                     REM 10,6   29,17   20x12 TX,TY =240 bytes || 20,18   40X36 PX,PY = 1440
                     PROCWAITMOUSE(0)
 
-                    CASE TX% OF
-                      WHEN 12,13,14,15,16
-                        CASE TY% OF
-                          WHEN 19 : REM SPRITE PREV
-                            sprite_cur%-=1
-                            IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
-                        ENDCASE
-                      WHEN 19,20,21,22,23
-                        CASE TY% OF
-                          WHEN 19 : REM SPRITE NEXT
-                            sprite_cur%+=1
-                            IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
-                        ENDCASE
-                      WHEN 33,34,35,36,37 : REM SPRITE TOOLS
-                        CASE TY% OF
+                    REM process sprite buttons
+                    CASE TY% OF
+                      WHEN 4
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM LOAD
 
-                          WHEN 4 : REM CLS
+                          WHEN 33,34,35,36,37 : REM CLS
                             FOR S%=0 TO 239
                               sprite_buffer&(sprite_cur%,S%)=32
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 6 : REM SCROLL LEFT
+                        ENDCASE
+                      WHEN 6
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM SAVE
+
+                          WHEN 33,34,35,36,37 : REM SCROLL LEFT
                             FOR S%=0 TO 11
                               spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20)
                             NEXT
@@ -612,7 +619,27 @@
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 8 : REM SCROLL RIGHT
+                        ENDCASE
+
+                      WHEN 8
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM ADD SPRITE TO LIST
+
+                            spr_lstcount%+=1
+                            sprlist{(spr_lstcount%)}.s%=sprite_cur%
+                            sprlist{(spr_lstcount%)}.f%=spr_frmstart%
+                            sprlist{(spr_lstcount%)}.x%=spr_frmx%
+                            sprlist{(spr_lstcount%)}.y%=spr_frmy%
+
+
+                            spr_frmstart%=1
+                            spr_frmstep%=0
+                            spr_frmx%=1
+                            spr_frmy%=1
+                            spr_frmh%=0
+                            spr_frmv%=0
+
+                          WHEN 33,34,35,36,37 : REM SCROLL RIGHT
                             FOR S%=0 TO 11
                               spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20+19)
                             NEXT
@@ -624,7 +651,27 @@
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 10 : REM SCROLL UP
+                        ENDCASE
+
+                      WHEN 10
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM VIEW SPRITE LIST
+                            IF spr_lstcount%>-1 THEN
+                              CLS
+                              FOR S%=0 TO spr_lstcount%
+                                PRINT"SPR: ";RIGHT$("0"+STR$(sprlist{(S%)}.s%+1),2);"  ";
+                                PRINT"FRM: ";RIGHT$("00"+STR$(sprlist{(S%)}.f%),3);"  ";
+                                PRINT"X: ";RIGHT$("0"+STR$(sprlist{(S%)}.x%),2);"  ";
+                                PRINT"Y: ";RIGHT$("0"+STR$(sprlist{(S%)}.y%),2)
+                              NEXT
+
+                              PROCWAITMOUSE(4)
+                              PROCWAITMOUSE(0)
+
+                              PROCdrawmenu
+                              PROCspritemenu(1)
+                            ENDIF
+                          WHEN 33,34,35,36,37 : REM SCROLL UP
                             FOR S%=0 TO 19
                               spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%)
                             NEXT
@@ -636,7 +683,13 @@
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 12 : REM SCROLL DOWN
+                        ENDCASE
+
+                      WHEN 12
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM MENU3
+
+                          WHEN 33,34,35,36,37 : REM SCROLL DOWN
                             FOR S%=0 TO 19
                               spr_tmp&(S%)=sprite_buffer&(sprite_cur%,220+S%)
                             NEXT
@@ -648,7 +701,13 @@
                             NEXT
                             PROCdrawsprite
 
-                          WHEN 14 : REM FLIP HORZ
+                        ENDCASE
+
+                      WHEN 14
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM MENU4
+
+                          WHEN 33,34,35,36,37 : REM FLIP HORIZONTAL
                             FOR X%=0 TO 39
                               FOR Y%=0 TO 35
                                 spr_tmp&(Y%*40+X%)=FNpoint((39-X%)+20,Y%+18)
@@ -661,7 +720,13 @@
                             NEXT
                             PROCsavesprite(sprite_cur%)
 
-                          WHEN 16 : REM FLIP VERT
+                        ENDCASE
+
+                      WHEN 16
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM MENU5
+
+                          WHEN 33,34,35,36,37 : REM FLIP VERTICAL
                             FOR X%=0 TO 39
                               FOR Y%=0 TO 35
                                 spr_tmp&(Y%*40+X%)=FNpoint(X%+20,(35-Y%)+18)
@@ -674,14 +739,37 @@
                             NEXT
                             PROCsavesprite(sprite_cur%)
 
-                          WHEN 18 : REM COPY TO NEXT SPRITE
+                        ENDCASE
+
+                      WHEN 18
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM MENU6
+
+                          WHEN 33,34,35,36,37 : REM COPY TO NEXT SPRITE
                             dst%=sprite_cur%+1
                             IF dst%>sprite_max%-1 THEN dst%=0
                             FOR S%=0 TO 239
                               sprite_buffer&(dst%,S%)=sprite_buffer&(sprite_cur%,S%)
                             NEXT
 
-                          WHEN 20 : REM COPY TO PREV SPRITE
+                        ENDCASE
+
+                      WHEN 19 : REM PREV / NEXT SPRITE
+                        CASE TX% OF
+                          WHEN 12,13,14,15,16
+                            sprite_cur%-=1
+                            IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
+                          WHEN 19,20,21,22,23
+                            sprite_cur%+=1
+                            IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
+
+                        ENDCASE
+
+                      WHEN 20
+                        CASE TX% OF
+                          WHEN 1,2,3,4,5 : REM MENU7
+
+                          WHEN 33,34,35,36,37 : REM COPY TO PREV SPRITE
                             dst%=sprite_cur%-1
                             IF dst%<0 THEN dst%=sprite_max%-1
                             FOR S%=0 TO 239
@@ -690,7 +778,38 @@
 
                         ENDCASE
 
+                      WHEN 21 : REM DRAW / UNDO SPRITES
+                        CASE TX% OF
+                          WHEN 7,8,9,10,11,12,13,14,15,16,17,18 : REM DRAW ALL SPRITES
+                            IF spr_lstcount%>-1 THEN
+                              FOR S%=0 TO spr_lstcount%
+                                FOR U%=0 TO 239
+                                  X%=sprlist{(S%)}.x%+U% MOD 20
+                                  Y%=sprlist{(S%)}.y%+U% DIV 20
+                                  IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
+                                    frame_buffer&(sprlist{(S%)}.f%-1,X%+Y%*40)=sprite_buffer&(sprlist{(S%)}.s%,U%)
+                                  ENDIF
+                                NEXT
+                              NEXT
+
+                            ENDIF
+
+                          WHEN 21,22,23,24,25,26,27,28,29,30,31,32 : REM UNDO ALL SPRITES
+
+                        ENDCASE
+
+                      WHEN 23 : REM FRAME POINTERS
+                        CASE TX% OF
+
+                        ENDCASE
+
+                      WHEN 24 : REM SPRITE OFFSETS
+                        CASE TX% OF
+
+                        ENDCASE
+
                     ENDCASE
+
 
                 ENDCASE
 
@@ -1014,74 +1133,87 @@
 
         ELSE
 
-          REM left cursor key
-          IF INKEY(-26) THEN
-            IF menuext%=2 THEN
-              PROCWAITNOKEY(-26)
-              sprite_cur%-=1
-              IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
-            ELSE
-              PROCloadnextframe(-1,1) : REM SAVE CURRENT FRAME AND LOAD PREVIOUS FRAME
-            ENDIF
-          ENDIF
+          CASE menuext% OF
+            WHEN 0 : REM keyboard handler
 
-          REM right cursor key
-          IF INKEY(-122) THEN
-            IF menuext%=2 THEN
-              PROCWAITNOKEY(-122)
-              sprite_cur%+=1
-              IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
-            ELSE
-              PROCloadnextframe(1,1) : REM SAVE CURRENT FRAME AND LOAD NEXT FRAME
-            ENDIF
-          ENDIF
-
-          IF menuext%<>2 THEN
-            REM TEXT AT CURSOR HANDLER, IF MOUSE IS MOVED, NEW TEXT POS IS SET
-            K%=INKEY(0)
-            IF K%>1 AND TY%>0 THEN
-              REM SAVE UNDO ONLY FOR CURRENT 'LINE' OF TEXT
-              IF TX%<>OTX% OR TY%<>OTY% THEN
-                OTX%=TX%
-                OTY%=TY%
-                PROCundosave
-              ENDIF
-              REM HANDLE BACKSPACE
-              IF K%=8 THEN
-                IF TEXTX%>TX% THEN
-                  REM IF AT END OF LINE CHECK LAST CHAR IF SPACE ALREADY
-                  IF TEXTX%=39 AND GET(TEXTX%,TY%)<>32 THEN
-                    VDU 31,TEXTX%,TY%,32
-                  ELSE
-                    TEXTX%-=1
-                    VDU 31,TEXTX%,TY%,32
-                  ENDIF
+              REM TEXT AT CURSOR HANDLER, IF MOUSE IS MOVED, NEW TEXT POS IS SET
+              K%=INKEY(0)
+              IF K%>1 THEN
+                REM SAVE UNDO ONLY FOR CURRENT 'LINE' OF TEXT
+                IF TX%<>OTX% OR TY%<>OTY% AND TY%>0 THEN
+                  OTX%=TX%
+                  OTY%=TY%
+                  PROCundosave
                 ENDIF
-              ELSE
-                IF K%<>136 AND K%<>137 THEN
-                  REM ADD CHAR AND INCREASE TEXT POS
-                  VDU 31,TEXTX%,TY%,K%
-                  IF TEXTX%<39 THEN TEXTX%+=1
-                ENDIF
-              ENDIF
-            ENDIF
-          ELSE
-            IF sprite_cur%<>sprite_old% THEN
-              REM PROCsavesprite(sprite_old%)
-              PROCspritemenu(0)
-              sprite_old%=sprite_cur%
-            ENDIF
 
-          ENDIF
+                REM handle specific keypresses
+                CASE K% OF
+                  WHEN 8 : REM backspace
+                    IF TEXTX%>TX% AND TY%>0 THEN
+                      REM IF AT END OF LINE CHECK LAST CHAR IF SPACE ALREADY
+                      IF TEXTX%=39 AND GET(TEXTX%,TY%)<>32 THEN
+                        VDU 31,TEXTX%,TY%,32
+                      ELSE
+                        TEXTX%-=1
+                        VDU 31,TEXTX%,TY%,32
+                      ENDIF
+                    ENDIF
+
+                  WHEN 136 : REM left cursor
+                    PROCloadnextframe(-1,1) : REM SAVE CURRENT FRAME AND LOAD PREVIOUS FRAME
+                    REM PROCWAITNOKEY(0,-1)
+
+                  WHEN 137 : REM right cursor
+                    PROCloadnextframe(1,1) : REM SAVE CURRENT FRAME AND LOAD NEXT FRAME
+                    REM PROCWAITNOKEY(0,-1)
+
+                  OTHERWISE
+                    REM ADD CHAR AND INCREASE TEXT POS
+                    IF TY%>0 THEN
+                      VDU 31,TEXTX%,TY%,K%
+                      IF TEXTX%<39 THEN TEXTX%+=1
+                    ENDIF
+                ENDCASE
+              ENDIF
+
+            WHEN 1 : REM special sub menu
+
+            WHEN 2 : REM sprite menu
+
+              REM left cursor key
+              IF INKEY(-26) THEN
+                sprite_cur%-=1
+                IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
+                PROCspritemenu(0)
+                sprite_old%=sprite_cur%
+                PROCWAITNOKEY(-26,0)
+              ENDIF
+
+              REM right cursor key
+              IF INKEY(-122) THEN
+                sprite_cur%+=1
+                IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
+                PROCspritemenu(0)
+                sprite_old%=sprite_cur%
+                PROCWAITNOKEY(-122,0)
+              ENDIF
+
+          ENDCASE
+
+          PROCWAITNOKEY(0,-1)
 
           WAIT 2
 
         ENDIF
 
         REM show mouse tracking details for debug
-        REM PRINTTAB(0,1)SPC(40)
-        REM        PRINTTAB(0,1)"MX:";STR$(MX%);" MY:";STR$(MY%);" TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%)
-        REM PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%);" ME:";STR$(menuext%);
+        IF DEBUG% THEN
+          PRINTTAB(0,1)SPC(40)
+          REM        PRINTTAB(0,1)"MX:";STR$(MX%);" MY:";STR$(MY%);" TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%)
+          PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%);" ME:";STR$(menuext%);
+
+        ENDIF
+
         REM REMEMBER MOUSE POSITION
         OLD_MX%=MX%
         OLD_MY%=MY%
@@ -1139,10 +1271,8 @@
       ENDPROC
 
       REM WAIT FOR NO KEY INPUT
-      DEF PROCWAITNOKEY(W%)
-      REPEAT
-
-      UNTIL INKEY(W%)=0
+      DEF PROCWAITNOKEY(K%,R%)
+      REPEAT UNTIL INKEY(K%)=R%
       ENDPROC
 
       REM Read the point at the specified coordinates (1=set, 0=cleared)
@@ -2871,17 +3001,20 @@
         REM        PRINTTAB(18,19)tb$;CHR$(157);tc$;">  ";CHR$(156);
         PRINTTAB(11,19)tb$;CHR$(157);tc$;"<  ";CHR$(156);tb$;CHR$(157);tc$;">  ";CHR$(156);
 
-        PRINTTAB(6,21)tb$;CHR$(157);tc$;"COPY SPR  ";CHR$(156);tr$;CHR$(157);ty$;"UNDO SPR  ";CHR$(156);
+        PRINTTAB(6,21)tb$;CHR$(157);tc$;"DRAW ALL  ";CHR$(156);tr$;CHR$(157);ty$;"UNDO ALL  ";CHR$(156);
+
+        PRINTTAB(0,23)tb$;"FRAME";tc$;"START";tw$;"-";ty$;"001";tw$;"+";tc$;" STEP";tw$;"-";ty$;"000";tw$;"+";
+        PRINTTAB(0,24)tc$;"X";tw$;"-";ty$;"01";tw$;"+"tc$;"Y";tw$;"-";ty$;"01";tw$;"+"tc$;"H";tw$;"-";ty$;"00";tw$;"+"tc$;"V";tw$;"-";ty$;"00";tw$;"+";
 
         PRINTTAB(0,4)ty$;"LOAD";
         PRINTTAB(0,6)ty$;"SAVE";
-        PRINTTAB(0,8)tg$;"MENU1";
-        PRINTTAB(0,10)tg$;"MENU2";
-        PRINTTAB(0,12)tg$;"MENU3";
-        PRINTTAB(0,14)tg$;"MENU4";
-        PRINTTAB(0,16)tg$;"MENU5";
-        PRINTTAB(0,18)tg$;"MENU6";
-        PRINTTAB(0,20)tg$;"MENU7";
+        PRINTTAB(0,8)tg$;"ADD L";
+        PRINTTAB(0,10)tg$;"VIEW L";
+        PRINTTAB(0,12)tb$;"MENU3";
+        PRINTTAB(0,14)tb$;"MENU4";
+        PRINTTAB(0,16)tb$;"MENU5";
+        PRINTTAB(0,18)tb$;"MENU6";
+        PRINTTAB(0,20)tb$;"MENU7";
 
         PRINTTAB(33,4)tc$;"CLS";
         PRINTTAB(32,6)tc$;"SCR-L";
@@ -2900,11 +3033,69 @@
 
       PROCdrawsprite
 
-      REM     FOR X%=0 TO 39
-      REM FOR Y%=0 TO 35
-      REM PROCpoint(X%+20,Y%+21,0) : REM sprite_buffer&(sprite_cur%,X%+Y%*40))
-      REM NEXT
-      REM NEXT
+      ENDPROC
+
+      REM shape and special sub menu
+      DEF PROCspecialmenu(R%)
+
+      REM REDRAW EVERYTHING
+      IF R%=1 THEN
+
+        FOR Y%=1 TO 23
+          PROCprint40(Y%,"")
+        NEXT
+
+        PROCprint40(2,tg$+"( )"+tw$+"LINE     "+tg$+"( )"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
+        PROCprint40(3,tg$+"( )"+tw$+"RECT         "+tc$+"GAP:"+tw$+"-"+ty$+" "+tw$+"+")
+        PROCprint40(4,tg$+"( )"+tw$+"CIRC         "+tc$+"LEN:"+tw$+"-"+ty$+" "+tw$+"+")
+        PROCprint40(6,tg$+"( )"+tw$+"FLSH (136)  "+tg$+"( )"+tw$+"DBLH (141)")
+        PROCprint40(7,tg$+"( )"+tw$+"SEPR (154)  "+tg$+"( )"+tw$+"HOLD (158)")
+        PROCprint40(9,tg$+"( )"+tw$+"FORE "+tg$+"( )"+tw$+"BACK"+tb$+"(ENTIRE COLUMN)")
+        PROCprint40(10,tg$+"( )"+tw$+"HORZ "+tg$+"( )"+tw$+"VERT"+tb$+"(LOCK PASTE POS)")
+        D$=CHR$(129+showcodes%)
+
+        PRINTTAB(35,1)tm$;"HELP"
+        PROCprint40(11,tg$+"( )"+tw$+"TEXT")
+        PROCprint40(16,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
+        PROCprint40(18,"  [ ] ; { } \ | : ' "" < > / ?"+tc$+"SPC CAP" )
+
+        PRINTTAB(6,22)tb$;CHR$(157);ty$;"SPRITES  ";CHR$(156);"    ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
+
+        PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
+      ENDIF
+
+      REM REFRESH DYNAMIC AREAS
+      FOR I%=0 TO 9
+        IF shapesel%=I% THEN
+          D$="*"
+        ELSE
+          D$=" "
+        ENDIF
+        PRINTTAB(sopt{(I%)}.x%,sopt{(I%)}.y%)D$
+      NEXT
+
+      D$=CHR$(32+animateshape%*10)
+      A$=STR$(animategap%)
+      F$=STR$(animatelen%)
+      R$=CHR$(32+copylockxt%*10)
+      U$=CHR$(32+copylockyt%*10)
+
+      PRINTTAB(16,2)D$;
+      PRINTTAB(26,3)A$;
+      PRINTTAB(26,4)F$;
+      PRINTTAB(2,10)R$;
+      PRINTTAB(12,10)U$;
+
+      IF caps% THEN
+        PROCprint40(12,"  A B C D E F G H I J K L M N O P Q R")
+        PROCprint40(14,"  S T U V W X Y Z 1 2 3 4 5 6 7 8 9 0")
+      ELSE
+        PROCprint40(12,"  a b c d e f g h i j k l m n o p q r")
+        PROCprint40(14,"  s t u v w x y z 1 2 3 4 5 6 7 8 9 0")
+      ENDIF
+
+      PROCprint40(20,"TEXT:"+tg$+text$)
+      PRINTTAB(36,20)tr$;"< X";
 
       ENDPROC
 
@@ -2966,61 +3157,6 @@
       F$=RIGHT$("0"+STR$(frame%),2)
       P$=CHR$(67+copypaste%*13)
       PRINTTAB(14,0)tw$;"P";D$;P$;"FS";E$;"E";U$;"U";R$;"R";tw$;"CBF LS";A$;"A";tw$;F$;">P"
-
-      REM debug info
-      REM PRINTTAB(0,1)STR$(undo_count&(frame%-1));"  ";STR$(undo_index%(frame%-1));"  "
-      REM PRINTTAB(0,2)STR$(redo_count&(frame%-1));"  ";STR$(redo_index%(frame%-1));"  "
-
-      REM shape and special sub menu
-      CASE menuext% OF
-        WHEN 1 : REM SPECIAL MENU
-
-          D$=CHR$(32+animateshape%*10)
-          A$=STR$(animategap%)
-          F$=STR$(animatelen%)
-          R$=CHR$(32+copylockxt%*10)
-          U$=CHR$(32+copylockyt%*10)
-
-          FOR Y%=1 TO 23
-            PROCprint40(Y%,"")
-          NEXT
-
-          PRINTTAB(35,1)tm$;"HELP"
-          PROCprint40(2,tg$+"( )"+tw$+"LINE     "+tg$+"("+D$+")"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
-          PROCprint40(3,tg$+"( )"+tw$+"RECT         "+tc$+"GAP:"+tw$+"-"+ty$+A$+tw$+"+")
-          PROCprint40(4,tg$+"( )"+tw$+"CIRC         "+tc$+"LEN:"+tw$+"-"+ty$+F$+tw$+"+")
-          PROCprint40(6,tg$+"( )"+tw$+"FLSH (136)  "+tg$+"( )"+tw$+"DBLH (141)")
-          PROCprint40(7,tg$+"( )"+tw$+"SEPR (154)  "+tg$+"( )"+tw$+"HOLD (158)")
-          PROCprint40(9,tg$+"( )"+tw$+"FORE "+tg$+"( )"+tw$+"BACK"+tb$+"(ENTIRE COLUMN)")
-          PROCprint40(10,tg$+"("+R$+")"+tw$+"HORZ "+tg$+"("+U$+")"+tw$+"VERT"+tb$+"(LOCK PASTE POS)")
-          PROCprint40(11,tg$+"( )"+tw$+"TEXT")
-          D$=CHR$(129+showcodes%)
-
-          IF shapesel%>-1 AND shapesel%<10 THEN
-            PRINTTAB(sopt{(shapesel%)}.x%,sopt{(shapesel%)}.y%)"*"
-          ENDIF
-
-          IF caps% THEN
-            PROCprint40(12,"  A B C D E F G H I J K L M N O P Q R")
-            PROCprint40(14,"  S T U V W X Y Z 1 2 3 4 5 6 7 8 9 0")
-          ELSE
-            PROCprint40(12,"  a b c d e f g h i j k l m n o p q r")
-            PROCprint40(14,"  s t u v w x y z 1 2 3 4 5 6 7 8 9 0")
-          ENDIF
-          PROCprint40(16,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
-          PROCprint40(18,"  [ ] ; { } \ | : ' "" < > / ?"+tc$+"SPC CAP" )
-
-          PROCprint40(20,"TEXT:"+tg$+text$)
-          PRINTTAB(36,20)tr$;"< X";
-          PRINTTAB(6,22)tb$;CHR$(157);ty$;"SPRITES  ";CHR$(156);"    ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
-
-          PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
-
-        WHEN 2 : REM SPRITE MENU
-
-
-
-      ENDCASE
 
       ENDPROC
 
