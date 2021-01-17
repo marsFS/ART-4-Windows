@@ -9,6 +9,8 @@
 
       REM *** SCROLL OFF SCREEN E.G. NO WRAP
 
+      REM *** ADD UNDO FOR EACH FRAME IN ANIMATE LINE / RECT MODE
+
       REM *** SCROLL FRAMES LAYER, HOW WOULD THIS INTERACT WITH DRAW FRAMES?
 
       REM *** IMPLEMENT ANIMATED CIRCLE (REDO CIRCLE ROUTINE)
@@ -24,7 +26,7 @@
       REM *** HELP SCREEN: MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
 
       REM ALLOCATE 10MB FOR BUFFERS
-      HIMEM = PAGE+10485760
+      HIMEM = PAGE+20000000
 
       INSTALL @lib$+"sortlib"
 
@@ -205,7 +207,7 @@
       DIM sprlist{(2000) s%,f%,x%,y%}
 
       REM undo buffer
-      undo_max%=19
+      undo_max%=99
       DIM undo_buffer&(frame_max%-1,undo_max%,959)
       DIM undo_index%(frame_max%-1)
       DIM undo_count&(frame_max%-1)
@@ -726,13 +728,13 @@
             IF TX%<>OTX% OR TY%<>OTY% AND TY%>0 THEN
               OTX%=TX%
               OTY%=TY%
-              PROCundosave
             ENDIF
 
             REM handle specific keypresses
             CASE K% OF
               WHEN 8 : REM backspace
                 IF TEXTX%>TX% AND TY%>0 THEN
+                  PROCundosave
                   REM IF AT END OF LINE CHECK LAST CHAR IF SPACE ALREADY
                   IF TEXTX%=39 AND GET(TEXTX%,TY%)<>32 THEN
                     VDU 31,TEXTX%,TY%,32
@@ -752,8 +754,9 @@
                 REM PROCWAITNOKEY(0,-1)
 
               OTHERWISE
-                REM ADD CHAR AND INCREASE TEXT POS
-                IF TY%>0 THEN
+                REM ADD VALID CHARS AND INCREASE TEXT POS
+                IF K%>31 AND K%<127  AND TY%>0 THEN
+                  PROCundosave
                   VDU 31,TEXTX%,TY%,K%
                   IF TEXTX%<39 THEN TEXTX%+=1
                   PROCframesave(frame%)
@@ -793,10 +796,10 @@
       REM MENU HANDLER
       DEF PROCmenuhandler
       PROCWAITMOUSE(0)
+
       CASE TX% OF
         WHEN 0 : REM display control codes
-          PROCmenurestore
-          REM *** DRAWFRAME??
+          PROCmenucheck
           PROCcontrolcodes
 
         WHEN 1,2,3,4,5,6,7,8,9,10,11,12,13,14 : REM colour selector
@@ -837,28 +840,28 @@
 
         WHEN 21 : erase%=(erase%+1) AND 1 : REM toggle erase tool
 
-        WHEN 23 : PROCmenurestore:PROCundorestore : REM undo
-        WHEN 25 : PROCmenurestore:PROCredorestore : REM redo
+        WHEN 23 : PROCmenucheck : PROCundorestore : REM undo PROCmenurestore:
+        WHEN 25 : PROCmenucheck : PROCredorestore : REM redo PROCmenurestore:
 
-        WHEN 27 : PROCmenurestore:PROCclearscreen:toolsel%=1:toolcursor%=15 : REM clearscreen
+        WHEN 27 : PROCmenucheck : PROCclearscreen:toolsel%=1:toolcursor%=15 : REM clearscreen PROCmenurestore:
         WHEN 28 : toolsel%=5:toolcursor%=TX% : REM background colour
         WHEN 29 : toolsel%=6:toolcursor%=TX% : REM foreground colour
 
-        WHEN 31 : PROCmenurestore:PROCloadfile(0) : REM load file dialog - 0 load bin file
-        WHEN 32 : PROCmenurestore:PROCsavefile : REM save frames to file
+        WHEN 31 : PROCmenucheck : PROCloadfile(0) : REM load file dialog - 0 load bin file PROCmenurestore:
+        WHEN 32 : PROCmenucheck : PROCsavefile : REM save frames to file PROCmenurestore:
 
         WHEN 34 : animation%=(animation%+1) AND 1 : REM toggle frame animation advance tool
 
           REM                  WHEN 36 : REM frame%
-        WHEN 36,37 : PROCmenurestore:PROCloadnextframe(-1,1) : REM save current frame and display previous frame in sequence
-        WHEN 38 : PROCmenurestore:PROCloadnextframe(1,1) : REM save current frame and display next frame in sequence
-        WHEN 39 : PROCmenurestore:PROCplay : REM save current frame and play all frames in a loop
+        WHEN 36,37 : PROCmenucheck : PROCloadnextframe(-1,1) : REM save current frame and display previous frame in sequence PROCmenurestore:
+        WHEN 38 : PROCmenucheck : PROCloadnextframe(1,1) : REM save current frame and display next frame in sequence  PROCmenurestore:
+        WHEN 39 : PROCmenucheck : PROCplay : REM save current frame and play all frames in a loop  PROCmenurestore:
 
 
       ENDCASE
 
       REM hide shape menu if another menu item was clicked
-      IF TX%<>19 AND menuext%=1 THEN PROCmenurestore
+      IF TX%<>19 AND menuext%>0 THEN PROCmenurestore
       IF toolsel%<>4 THEN shapesel%=-1
 
       PROCdrawmenu
@@ -1442,7 +1445,11 @@
         WHEN 4: REM shape / special tools
           CASE shapesel% OF
             WHEN 0: REM line tool
-              PROCundosave
+              IF animateshape% THEN
+                PROCundosaveall
+              ELSE
+                PROCundosave
+              ENDIF
               startx%=PX%: starty%=PY%
               OLD_PX%=PX% : OLD_PY%=PY%
               PROCpoint(startx%,starty%,2)
@@ -1475,7 +1482,12 @@
               ENDIF
 
             WHEN 1: REM rectangle tool
-              PROCundosave
+              IF animateshape% THEN
+                PROCundosaveall
+              ELSE
+                PROCundosave
+              ENDIF
+
               startx%=PX%: starty%=PY%
               OLD_PX%=PX% : OLD_PY%=PY%
               PROCpoint(startx%,starty%,2)
@@ -2017,6 +2029,28 @@
       ENDPROC
 
       REM ##########################################################
+      REM save current screen to undo buffer
+      DEF PROCundosaveall
+      LOCAL U%,F%
+
+      FOR F%=0 TO frame_max%-1
+        IF undo_count&(F%)<undo_max% THEN undo_count&(F%)+=1
+
+        FOR U%=0 TO 959
+          undo_buffer&(F%,undo_index%(F%),U%)=frame_buffer&(F%,U%)
+        NEXT
+
+        undo_index%(F%)+=1
+        IF undo_index%(F%)>undo_max% THEN undo_index%(F%)=0
+
+        redo_count&(F%)=0
+      NEXT
+      PROCdrawmenu
+
+      ENDPROC
+
+
+      REM ##########################################################
       REM restore current undo buffer to screen
       DEF PROCundorestore
       LOCAL U%
@@ -2143,18 +2177,26 @@
 
       ENDPROC
 
+      REM ##########################################################
       REM menu buffer restore frame
       DEF PROCmenurestore
-      LOCAL U%
 
-      IF menuext% THEN menuext%=0
-      REM        FOR U%=0 TO 959
-      REM VDU 31,(U% MOD 40),(U% DIV 40+1),menu_buffer&(U%)
-      REM NEXT
+      IF menuext%<>0 THEN menuext%=0
       PROCframerestore(frame%)
 
-      REM      ENDIF
       ENDPROC
+
+      REM ##########################################################
+      REM menu ext check
+      DEF PROCmenucheck
+
+      IF menuext%<>0 THEN
+        menuext%=0
+        PROCframerestore(frame%)
+      ENDIF
+
+      ENDPROC
+
 
       REM ##########################################################
       REM save binary file
