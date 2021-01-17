@@ -1425,10 +1425,7 @@
             PROCdrawmenu
 
           ELSE
-            REPEAT
-              PROCREADMOUSE
-              WAIT 2
-            UNTIL MB%=0
+            PROCWAITMOUSE(0)
             PROCpasteregion(TX%,TY%)
           ENDIF
 
@@ -1561,9 +1558,7 @@
 
             WHEN 8: REM foreground entire column
               PROCundosave
-              REPEAT
-                PROCREADMOUSE
-              UNTIL MB%=4
+              PROCWAITMOUSE(4)
               PROCWAITMOUSE(0)
 
               FOR Y%=1 TO 24
@@ -1577,12 +1572,12 @@
               IF animation% THEN PROCloadnextframe(1,0)
 
             WHEN 9: REM backgroung entire column
-              PROCundosave
+
               PROCWAITMOUSE(4)
               PROCWAITMOUSE(0)
 
               IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
-
+                PROCundosave
                 FOR Y%=1 TO 24
                   IF erase% THEN
                     VDU 31,TX%,Y%,156
@@ -2065,7 +2060,7 @@
         FOR U%=0 TO 959
           VDU 31,(U% MOD 40),(U% DIV 40+1),undo_buffer&(frame%-1,undo_index%(frame%-1),U%)
         NEXT
-
+        PROCframesave(frame%)
       ENDIF
 
       ENDPROC
@@ -2100,6 +2095,7 @@
         FOR U%=0 TO 959
           VDU 31,(U% MOD 40),(U% DIV 40+1),redo_buffer&(frame%-1,redo_index%(frame%-1),U%)
         NEXT
+        PROCframesave(frame%)
 
         undo_index%(frame%-1)+=1
         IF undo_index%(frame%-1)>undo_max% THEN undo_index%(frame%-1)=0
