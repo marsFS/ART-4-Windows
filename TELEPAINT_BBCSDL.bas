@@ -202,7 +202,7 @@
       DIM frame_buffer&(frame_max%-1,959)
 
       REM sprite buffer
-      DIM sprite_buffer&(sprite_max%-1,959)
+      DIM sprite_buffer&(sprite_max%-1,239)
       DIM spr_tmp&(2000)
       DIM sprlist{(2000) s%,f%,x%,y%}
 
@@ -1070,6 +1070,8 @@
         WHEN 3
           CASE TX% OF
             WHEN 1,2,3,4,5 : REM LOAD
+              PROCloadspritefile(@tmp$+"SPRITEDATA.SPR")
+              PROCdrawsprite
 
             WHEN 33,34,35,36,37 : REM CLS
               FOR S%=0 TO 239
@@ -1081,6 +1083,7 @@
         WHEN 5
           CASE TX% OF
             WHEN 1,2,3,4,5 : REM SAVE
+              PROCsavespritefile(@tmp$+"SPRITEDATA.SPR")
 
             WHEN 33,34,35,36,37 : REM SCROLL LEFT
               FOR S%=0 TO 11
@@ -2191,6 +2194,39 @@
         PROCframerestore(frame%)
       ENDIF
 
+      ENDPROC
+
+      REM ##########################################################
+      REM save sprite file
+      DEF PROCsavespritefile(F$)
+      LOCAL f%,u%,c%
+
+      f%=OPENOUT(F$)
+      FOR c%=0 TO sprite_max%-1
+        FOR u%=0 TO 239
+          BPUT#f%,sprite_buffer&(c%,u%)
+        NEXT
+      NEXT
+      CLOSE#f%
+      ENDPROC
+
+      REM ##########################################################
+      REM load sprite file
+      DEF PROCloadspritefile(F$)
+      LOCAL f%,u%,char%,c%
+      f%=OPENIN(F$)
+
+      IF f% THEN
+        c%=0
+        REPEAT
+          FOR u%=0 TO 239
+            char%=BGET#f%
+            sprite_buffer&(c%,u%)=char%
+          NEXT
+          c%+=1
+        UNTIL EOF#f%
+        CLOSE#f%
+      ENDIF
       ENDPROC
 
 
@@ -3407,16 +3443,34 @@
       UNTIL EOF#F% OR N% >= DIM(name$(),1)
       CLOSE #F%
 
-      IF N% < DIM(name$(),1) name$(N%) = "@lib$" : type&(N%) = 0 : N% += 1
-      IF N% < DIM(name$(),1) name$(N%) = "@usr$" : type&(N%) = 0 : N% += 1
-      name$(N%) = ".." : type&(N%) = 0 : N% += 1
+      IF N% < DIM(name$(),1) name$(N%) = "@lib$" : type&(N%) = 0 : SWAP type&(N%),type&(2):SWAP name$(N%),name$(2):N% += 1
+      IF N% < DIM(name$(),1) name$(N%) = "@usr$" : type&(N%) = 0 : SWAP type&(N%),type&(3):SWAP name$(N%),name$(3):N% += 1
+      name$(N%) = ".." : type&(N%) = 0 : SWAP type&(N%),type&(1):SWAP name$(N%),name$(1): N% += 1
+
+      REM name$(N%) = "TEST_FILE" : type&(N%) = 2
+
       N% -= 1
 
 
       REM Sort the array so directories are listed before programs:
       C% = N%
       CALL sort%%, type&(1), name$(1)
+      REM     MODE 7
+      REM MOVE TYPE 0 TO TOP - SPECIAL FOLDERS
+      REM T%=N%
+      REM FOR I%=3 TO N%
+      REM IF type&(I%)=2 AND T%>I% THEN
+      REM SWAP type&(I%),type&(T%)
+      REM SWAP name$(I%),name$(T%)
+      REM T%-=1
+      REM ENDIF
+      REM NEXT
 
+      REM FOR I%=1 TO N%
+      REM PRINT STR$(type&(I%));" ";name$(I%)
+      REM NEXT
+
+      REM  END
       = N%
 
       REM String library v1.2, Richard Russell, 11-Nov-2018
@@ -3449,6 +3503,75 @@
       WHILE RIGHT$(A$)=" " A$=LEFT$(A$) : ENDWHILE
       = A$
       ;
+
+      REM ================================ RandInt ===================================
+      REM   Returns a random integer greater than or equal to the lower% parameter
+      REM   and less than or equal to the upper% parameter.
+      REM ============================================================================
+
+      DEF FNRandInt(lower%, upper%)
+      IF lower% = upper% THEN = lower%
+      = RND(upper% - lower% + 1) + lower% - 1
+
+      REM ============================== QuickSort ===================================
+      REM   QuickSort works by picking a random 'pivot' element in SortArray, then
+      REM   moving every element that is bigger to one side of the pivot, and every
+      REM   element that is smaller to the other side.  QuickSort is then called
+      REM   recursively with the two subdivisions created by the pivot.  Once the
+      REM   number of elements in a subdivision reaches two, the recursive calls end
+      REM   and the array is sorted.
+      REM ============================================================================
+
+      DEF PROCQuickSort(low%, high%)
+      LOCAL randindex%, partition%, J%, I%
+      IF low% < high% THEN
+
+        REM Only two elements in this subdivision; swap them if they are out of
+        REM order, then end recursive calls:
+        IF high% - low% = 1 THEN
+          IF SortArray{(low%)}.Size% < SortArray{(high%)}.Size% THEN
+            SWAP SortArray{(low%)}, SortArray{(high%)}
+          ENDIF
+        ELSE
+
+          REM Pick a pivot element at random, then move it to the end:
+          randindex% = FNRandInt(low%, high%)
+          SWAP SortArray{(high%)}, SortArray{(randindex%)}
+          partition% = SortArray{(high%)}.Size%
+          REPEAT
+
+            REM Move in from both sides towards the pivot element:
+            I% = low% : J% = high%
+            WHILE (I% > J%) AND (SortArray{(I%)}.Size% <= partition%)
+              I% = I% + 1
+            ENDWHILE
+            WHILE (J% < I%) AND (SortArray{(J%)}.Size% >= partition%)
+              J% = J% - 1
+            ENDWHILE
+
+            REM If we haven't reached the pivot element, it means that two
+            REM elements on either side are out of order, so swap them:
+            IF I% > J% THEN
+              SWAP SortArray{(I%)}, SortArray{(J%)}
+            ENDIF
+          UNTIL (I% > J%)=FALSE
+
+          REM Move the pivot element back to its proper place in the array:
+          SWAP SortArray{(I%)}, SortArray{(high%)}
+
+          REM Recursively call the QuickSort procedure (pass the smaller
+          REM subdivision first to use less stack space):
+          IF (I% - low%) > (high% - I%) THEN
+            PROCQuickSort(low%, I% - 1)
+            PROCQuickSort(I% + 1, high%)
+          ELSE
+            PROCQuickSort(I% + 1, high%)
+            PROCQuickSort(low%, I% - 1)
+          ENDIF
+        ENDIF
+      ENDIF
+      ENDPROC
+
 
       REM =======================================================================
 
