@@ -26,11 +26,11 @@
       REM *** HELP SCREEN: MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
 
       REM ALLOCATE 10MB FOR BUFFERS
-      HIMEM = PAGE+20000000
+      HIMEM = PAGE+24000000
 
       INSTALL @lib$+"sortlib"
 
-      version$="v0.17"
+      version$="v0.18"
 
       DEBUG%=0
 
@@ -180,7 +180,7 @@
       frame_limit%=100
       frame_max%=8
       frame_old%=0
-      sprite_limit%=16
+      sprite_limit%=48
       sprite_max%=8
       sprite_old%=0
       sprite_cur%=0
@@ -192,6 +192,10 @@
       spr_frmv%=0
       spr_lstcount%=-1
       spr_trns%=1
+      spr_impwid%=0
+      spr_imphgt%=0
+      spr_impbpp%=0
+      spr_impofs%=0
 
       PROCloadscreen
 
@@ -222,6 +226,8 @@
 
       REM copypaste buffer
       DIM copy_buffer&(959)
+
+      DIM import_buffer% 1000000
 
 
       PROCGR(curcol%,bakcol%,1)
@@ -423,12 +429,13 @@
       DEF PROCpoint_buf(x%, y%, cmd%,f%)
 
       IF x%>xMin% AND x%<xMax% AND y%>yMin% AND y%<yMax% THEN
-
         LOCAL cx%,cy%,chr%,C%
         REM Get character cell
         cx% = x% DIV 2
         cy% = (y% DIV 3)-1
+
         chr%=frame_buffer&(f%-1,cx%+cy%*40) AND &5F
+
         C%=(x% AND 1)+(y% MOD 3)*2
         C%=2^C% - (C%=5)*32
         CASE cmd% OF
@@ -438,8 +445,35 @@
         ENDCASE
 
         frame_buffer&(f%-1,cx%+cy%*40)=chr%+160
-      ENDIF
 
+      ENDIF
+      ENDPROC
+
+      REM ##########################################################
+      REM Plot a Teletext sixel point from specified buffer
+      REM SIXEL COORDINATES WITH 0,0 BEING TOP LEFT THE SAME AS THE TEXT SCREEN
+      REM cmd% 0: Clear the point
+      REM cmd% 1: Set the point
+      REM cmd% 2: Toggle the point
+      DEF PROCpoint_sprbuf(x%, y%, cmd%,s%)
+
+      IF x%>-1 AND x%<40 AND y%>-1 AND y%<36 THEN
+
+        LOCAL cx%,cy%,chr%,C%
+        REM Get character cell
+        cx% = x% DIV 2
+        cy% = y% DIV 3
+        chr%=sprite_buffer&(s%,cx%+cy%*20) AND &5F
+        C%=(x% AND 1)+(y% MOD 3)*2
+        C%=2^C% - (C%=5)*32
+        CASE cmd% OF
+          WHEN 0:chr% AND=(&5F - C%)
+          WHEN 1:chr% OR=C%
+          WHEN 2:chr% EOR=C%
+        ENDCASE
+
+        sprite_buffer&(s%,cx%+cy%*20)=chr%+160
+      ENDIF
       ENDPROC
 
       REM ##########################################################
@@ -470,6 +504,7 @@
 
       REPEAT
         IF animategapcount%=0 THEN
+
           PROCpoint_buf(x1%,y1%,m%,frame%)
 
           REM change frame if animate length reaches 0
@@ -861,7 +896,7 @@
       ENDCASE
 
       REM hide shape menu if another menu item was clicked
-      IF TX%<>19 AND menuext%>0 THEN PROCmenurestore
+      IF TX%<>19 AND menuext%=1 THEN PROCmenurestore
       IF toolsel%<>4 THEN shapesel%=-1
 
       PROCdrawmenu
@@ -1193,7 +1228,19 @@
 
         WHEN 13
           CASE TX% OF
-            WHEN 1,2,3,4,5 : REM MENU4
+            WHEN 1,2,3,4,5 : REM import sprite
+              REM menuext%=88
+              REM done%=0
+
+              REM              PROCloadfile(2)
+              PROCimportsprite
+
+              REM after loadfile menuext% returns: No file: 94, single image: 95, grid: 96
+
+              PROCdrawmenu
+              PROCspritemenu(1)
+              PROCdrawsprite
+
 
             WHEN 33,34,35,36,37 : REM FLIP HORIZONTAL
               FOR X%=0 TO 39
@@ -2032,6 +2079,7 @@
       LOCAL U%,F%
 
       FOR F%=0 TO frame_max%-1
+
         IF undo_count&(F%)<undo_max% THEN undo_count&(F%)+=1
 
         FOR U%=0 TO 959
@@ -2279,7 +2327,14 @@
       REM PROCmenusave
       REM *** FRAMESAVE???
       menuext%=99
-      maxy%=22-loadtype%*3
+      CASE loadtype% OF
+        WHEN 0 : maxy%=22
+        WHEN 1 : maxy%=19
+        WHEN 2 : maxy%=19
+      ENDCASE
+      REM      maxy%=22-loadtype%*3
+      REM       PRINTTAB(0,1)STR$(maxy%)
+
       FOR L%=4 TO maxy%
         PROCprint40(L%,"")
       NEXT
@@ -2309,6 +2364,11 @@
           GT%=0
           GX%=10
           GY%=2
+
+        WHEN 2 : REM import bmp to sprite
+          filetype$=".bmp"
+          PRINTTAB(2,4)gw$;CHR$(232);STRING$(8,CHR$(172));tg$;"SPRITE IMPORT";gw$;STRING$(8,CHR$(172));CHR$(180);
+          PRINTTAB(15,18)CHR$(156);
 
       ENDCASE
 
@@ -2526,6 +2586,66 @@
             OLD_TY%=GY%
 
           ENDIF
+
+        WHEN 2 : REM import sprite from bmp
+          MODE 6
+          VDU 23,1,0;0;0;0; : REM Disable cursor
+
+          IF F%=-1 THEN
+            COLOUR 9
+            PRINTTAB(0,0)"NO FILE LOADED"
+            menuext%=94
+          ELSE
+
+            REM OSCLI "DISPLAY """+curdir$+n$(SEL%)+""" 0,0"
+
+
+            OSCLI "LOAD """+curdir$+n$(SEL%)+""" "+STR$~import_buffer%+" +"+STR$1000000
+
+            REM PRINTTAB(0,0)"LOAD """;curdir$+n$(SEL%);""" ";STR$~import_buffer%;" +";STR$1000000
+            REM bmp filetype (2 bytes)
+            REM PRINT"Type:";CHR$(import_buffer%?0);CHR$(import_buffer%?1)
+            T$=CHR$(import_buffer%?0)+CHR$(import_buffer%?1)
+            REM bmp filesize (4 bytes) ?2 ?3 ?4 ?5
+            REM bmp reserved (2 bytes) ?6 ?7
+            REM bmp reserved (2 bytes) ?8 ?9
+            REM bmp pixel data offset (4 bytes)
+            REM PRINT"pOfs:";STR$(import_buffer%!10)
+            spr_impofs%=import_buffer%!10
+
+            REM bmp header size (4 bytes)
+            REM PRINT"hSze:";STR$(import_buffer%!14)
+
+            REM bmp image width (4 bytes)
+            REM PRINT"iWid:";STR$(import_buffer%!18)
+            spr_impwid%=import_buffer%!18
+
+            REM bmp image height (4 bytes)
+            REM PRINT"iHgt:";STR$(import_buffer%!22)
+            spr_imphgt%=import_buffer%!22
+            REM bmp planes (2 bytes) ?26 ?27
+            REM bmp but per pixel (2 bytes)
+            REM PRINT"bpp: ";STR$(import_buffer%?29);STR$(import_buffer%?28)
+            spr_impbpp%=import_buffer%?28+(import_buffer%?29*256)
+
+            REM bmp compression (4 bytes) ?30 ?31 ?32 ?33
+            REM bmp image size (4 bytes) ?34 ?35 ?36 ?37
+            REM bmp x pixels per meter (4 bytes) ?38 ?39 ?40 ?41
+            REM bmp y pixels per meter (4 bytes) ?42 ?43 ?44 ?45
+            REM bmp total colours (4 bytes) ?46 ?47 ?48 ?49
+            REM bmp important colours (4 bytes) ?50 ?51 ?52 ?53
+            IF T$<>"BM" OR spr_impofs%<>54 OR spr_impbpp%<>24 THEN
+              PRINTTAB(0,0)"Image format not supported, must be BMP 24bpp"
+              A=GET
+              menuext%=94
+            ELSE
+              OSCLI "MDISPLAY "+STR$~import_buffer%
+              menuext%=95
+            ENDIF
+
+
+          ENDIF
+
 
       ENDCASE
 
@@ -2824,6 +2944,195 @@
 
 
       ENDPROC
+
+      REM ##########################################################
+      REM import picture to one or more frames
+      DEF PROCimportsprite
+
+      LOCAL GX%,GY%
+
+      menuext%=96
+      done%=0
+
+      PROCloadfile(2)
+
+      REM after loadfile menuext% returns: No file: 94, single image: 95, grid: 96
+
+      PROCWAITMOUSE(0)
+
+      IF menuext%=94 THEN
+        GX%=0
+        REPEAT
+          PROCREADMOUSE
+          WAIT 5
+          GX%+=1
+        UNTIL GX%>100 OR MB%<>0
+      ELSE
+
+        GX%=1
+        GY%=1
+
+        startx%=-1
+        starty%=-1
+        gridsx%=78
+        gridsy%=70
+
+
+
+        REPEAT
+
+          PROCprint40(0,"Select Sprite: "+RIGHT$("0"+STR$(sprite_cur%),2))
+          GCOL 0,2
+          RECTANGLE FILL 788,558,494,440
+
+          MX%=(MX% DIV 2)*2
+          MY%=(MY% DIV 2)*2
+          OLDMX%=MX%
+          OLDMY%=MY%
+
+
+          GCOL 3,15
+          FOR X%=0 TO GX%
+            LINE MX%+X%*gridsx%,MY%,MX%+X%*gridsx%,MY%+gridsy%*GY%
+          NEXT
+          FOR Y%=0 TO GY%
+            LINE MX%,MY%+Y%*gridsy%,MX%+gridsx%*GX%,MY%+Y%*gridsy%
+          NEXT
+
+          REPEAT
+            PROCREADMOUSE
+
+            MX%=(MX% DIV 2)*2
+            MY%=(MY% DIV 2)*2
+            REM start a new selection
+
+            IF OLDMX%<>MX% OR OLDMY%<>MY% THEN
+              GCOL 3,15
+              FOR X%=0 TO GX%
+                LINE OLDMX%+X%*gridsx%,OLDMY%,OLDMX%+X%*gridsx%,OLDMY%+gridsy%*GY%
+              NEXT
+              FOR Y%=0 TO GY%
+                LINE OLDMX%,OLDMY%+Y%*gridsy%,OLDMX%+gridsx%*GX%,OLDMY%+Y%*gridsy%
+              NEXT
+
+              x%=MX% DIV 2
+              y%=MY% DIV 2
+
+              REM PRINTTAB(0,1)STR$(x%);"  ";STR$(y%);"   ";
+
+              px%=0
+              FOR X%=x% TO x%+39
+                py%=420
+                FOR Y%=y% TO y%+35
+
+                  REM IF POINT(X%,Y%)<>0 THEN
+                  col%=0
+                  IF X%>-1 AND X%<spr_impwid% AND Y%>-1 AND Y%<spr_imphgt% THEN
+                    ofs%=spr_impofs%+X%*3+Y%*spr_impwid%*3
+                    col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                  ENDIF
+                  IF col%>0 THEN
+                    GCOL 0,15
+                  ELSE
+                    GCOL 0,0
+                  ENDIF
+                  RECTANGLE FILL 794+px%,982-py%,12
+
+                  py%-=12
+                NEXT
+                px%+=12
+              NEXT
+
+              GCOL 3,15
+              FOR X%=0 TO GX%
+                LINE MX%+X%*gridsx%,MY%,MX%+X%*gridsx%,MY%+gridsy%*GY%
+              NEXT
+              FOR Y%=0 TO GY%
+                LINE MX%,MY%+Y%*gridsy%,MX%+gridsx%*GX%,MY%+Y%*gridsy%
+              NEXT
+              OLDMX%=MX%
+              OLDMY%=MY%
+
+            ELSE
+              WAIT 2
+
+            ENDIF
+
+          UNTIL MB%=4
+          FOR X%=0 TO GX%
+            LINE OLDMX%+X%*gridsx%,OLDMY%,OLDMX%+X%*gridsx%,OLDMY%+gridsy%*GY%
+          NEXT
+          FOR Y%=0 TO GY%
+            LINE OLDMX%,OLDMY%+Y%*gridsy%,OLDMX%+gridsx%*GX%,OLDMY%+Y%*gridsy%
+          NEXT
+
+          REM process selection(s)
+          x1%=MX%
+          y1%=MY%
+          x2%=MX%+78
+          y2%=MY%+70
+
+          IF x1%>x2% THEN SWAP x1%,x2%
+          IF y1%>y2% THEN SWAP y1%,y2%
+
+          PROCprint40(0,"Processing selection, Sprite: "+STR$(sprite_cur%))
+          REM A=GET
+
+          x%=0
+          FOR X%=x1% TO x2% STEP 2
+            y%=35
+            FOR Y%=y1% TO y2% STEP 2
+              REM PRINTTAB(0,1)STR$(x%);"  ";STR$(y%);"   ";
+              IF POINT(X%,Y%)<>0 THEN
+                PROCpoint_sprbuf(x%,y%,1,sprite_cur%)
+              ELSE
+                PROCpoint_sprbuf(x%,y%,0,sprite_cur%)
+              ENDIF
+              y%-=1
+            NEXT
+            x%+=1
+          NEXT
+          REM          PRINTTAB(0,1)STR$(x%);"  ";STR$(y%);"   ";
+          REM          A=GET
+
+          IF menuext%=95 THEN
+            PROCprint40(0,"Complete! Process next sprit?  Y   N")
+            GCOL 3,10
+            RECTANGLE FILL 948,960,108,40
+
+            GCOL 3,9
+            RECTANGLE FILL 1076,960,108,40
+
+            PROCWAITMOUSE(4)
+            PROCWAITMOUSE(0)
+
+            IF TY%=0 AND TX%>29 AND TX%<33 THEN
+
+              REM reset selection
+              startx%=-1
+              IF sprite_cur%<sprite_max% THEN
+                sprite_cur%+=1
+              ELSE
+                done%=1
+              ENDIF
+
+            ELSE
+              done%=1
+
+            ENDIF
+          ENDIF
+
+
+        UNTIL done%=1
+
+      ENDIF
+      PROCWAITMOUSE(0)
+      MODE 7
+      menuext%=2
+
+
+      ENDPROC
+
 
       REM ##########################################################
       REM animate all frames in sequence from 1 to frame_max%
@@ -3218,7 +3527,7 @@
         PRINTTAB(0,7)tg$;"ADD L";
         PRINTTAB(0,9)tg$;"VIEW L";
         PRINTTAB(0,11)tg$;"CLR L";
-        PRINTTAB(0,13)tb$;"MENU4";
+        PRINTTAB(0,13)ty$;"IMPRT";
         PRINTTAB(0,15)tb$;"MENU5";
         PRINTTAB(0,17)tb$;"MENU6";
 
