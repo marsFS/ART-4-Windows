@@ -1257,7 +1257,14 @@
 
         WHEN 15
           CASE TX% OF
-            WHEN 1,2,3,4,5 : REM MENU5
+            WHEN 1,2,3,4,5 : REM copy sprite to clipboad
+              FOR S%=0 TO 239
+                copy_buffer&(S%)=sprite_buffer&(sprite_cur%,(S% MOD 12)*20+(S% DIV 12))
+              NEXT
+              copyx%=19
+              copyy%=11
+              copysize%=S%
+
 
             WHEN 33,34,35,36,37 : REM FLIP VERTICAL
               FOR X%=0 TO 39
@@ -1274,7 +1281,7 @@
 
         WHEN 17
           CASE TX% OF
-            WHEN 1,2,3,4,5 : REM MENU6
+            WHEN 1,2,3,4,5 : REM paste clip board to sprite
 
             WHEN 33,34,35,36,37 : REM COPY TO NEXT SPRITE
               dst%=sprite_cur%+1
@@ -3056,6 +3063,14 @@
             ELSE
               WAIT 2
 
+              REM check for cursor keys and update mouse
+              IF INKEY(-26) AND MX%>0 THEN MX%-=2
+              IF INKEY(-122) AND MX%<1278 THEN MX%+=2
+              IF INKEY(-58) AND MY%<998 THEN MY%+=2
+              IF INKEY(-42) AND MY%>0 THEN MY%-=2
+
+              IF OLDMX%<>MX% OR OLDMY%<>MY% THEN MOUSE TO MX%,MY%
+
             ENDIF
 
           UNTIL MB%=4
@@ -3528,8 +3543,8 @@
         PRINTTAB(0,9)tg$;"VIEW L";
         PRINTTAB(0,11)tg$;"CLR L";
         PRINTTAB(0,13)ty$;"IMPRT";
-        PRINTTAB(0,15)tb$;"MENU5";
-        PRINTTAB(0,17)tb$;"MENU6";
+        PRINTTAB(0,15)tc$;"COPY";
+        PRINTTAB(0,17)tc$;"PASTE";
 
         PRINTTAB(33,3)tc$;"CLS";
         PRINTTAB(32,5)tc$;"SCR-L";
