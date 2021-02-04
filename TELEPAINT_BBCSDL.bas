@@ -1,3 +1,20 @@
+      REM      MODE 7
+      REM PRINT CHR$131 "This is MODE 7"
+      REM PRINT TAB(0,15) "This is still MODE 7"
+      REM OSCLI "DISPLAY """ + @lib$ + "../bbc256x.png"""
+
+      REM INSTALL @lib$+"aagfxlib"
+      REM MODE 7
+      REM PRINT CHR$131 "This is MODE 7"
+      REM PRINT TAB(0,15) "This is still MODE7"
+      REM PROC_aaline(0, 0, 1280, 1000, 4, &8000FF00, 0)
+
+      REM MODE 7
+      REM PRINT CHR$131 "This is MODE 7"
+      REM PRINT TAB(0,15) "This is still MODE 7"
+      REM SYS "SDL_SetRenderDrawColor", @memhdc%, 0, 255, 0, 255
+      REM SYS "SDL_RenderDrawLine", @memhdc%, 0, 500, 640, 0
+      REM *REFRESH
 
       REM *** TODO LIST ***
 
@@ -25,10 +42,11 @@
 
       REM *** HELP SCREEN: MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
 
-      REM ALLOCATE 10MB FOR BUFFERS
-      HIMEM = PAGE+24000000
+      REM ALLOCATE 40MB FOR BUFFERS
+      HIMEM = PAGE+40000000
 
       INSTALL @lib$+"sortlib"
+      REM INSTALL @lib$+"aagfxlib"
 
       version$="v0.18"
 
@@ -57,7 +75,8 @@
       fxMax%=80
       fyMin%=3
       fyMax%=74
-      DIM fill{(256) x%,y%}
+      fillmax%=255
+      DIM fill{(fillmax%) x%,y%}
 
       REM OLD PIXEL & MOUSE COORDS
       OLD_PX%=0
@@ -123,6 +142,7 @@
       showcodes%=0
       gridx%=10
       gridy%=2
+      gridshow%=1
 
       REM colour string constants
       tr$=CHR$(129) : REM alphanumeric red
@@ -292,6 +312,13 @@
 
           PROCcheckkeyboard
 
+
+          REM FOR Y%=0 TO 24
+          REM PROC_aaline(0, Y%*40, 1280, Y%*40, 1, &90909000, 0)
+          REM  SYS "SDL_RenderDrawLine", @memhdc%, 0, Y%*20, 639, Y%*20
+          REM NEXT
+          REM *REFRESH
+
           WAIT 2
 
         ENDIF
@@ -344,11 +371,35 @@
         ELSE
           VDU 31,toolcursor%,0
         ENDIF
+
+        IF MX%<>OLD_MX% OR MY%<>OLD_MY% THEN
+          IF menuext%=0 THEN
+            IF gridshow%=1 THEN
+              SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
+              FOR X%=0 TO 39
+                REM PROC_aaline(X%*32, 0, X%*32, 960, 1, &90909000, 0)
+                SYS "SDL_RenderDrawLine", @memhdc%, X%*16, 499, X%*16, 20
+                IF X%<25 THEN SYS "SDL_RenderDrawLine", @memhdc%, 0, X%*20, 639, X%*20
+              NEXT
+              *REFRESH
+            ENDIF
+          ELSE
+            SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
+            FOR X%=0 TO 20
+              SYS "SDL_RenderDrawLine", @memhdc%, X%*16+160, 100, X%*16+160, 340
+              IF X%<13 THEN SYS "SDL_RenderDrawLine", @memhdc%, 160, X%*20+100, 480, X%*20+100
+            NEXT
+            *REFRESH
+          ENDIF
+        ENDIF
       ELSE
         IF menuext%=1 THEN
           VDU 31,LEN(text$)+6,20
+
         ENDIF
       ENDIF
+
+
 
 
       ENDPROC
@@ -680,7 +731,7 @@
       DEF PROCaddFill(x%,y%)
       fill{(bCnt%)}.x%=x%
       fill{(bCnt%)}.y%=y%
-      IF bCnt%<100 THEN bCnt%+=1
+      IF bCnt%<fillmax% THEN bCnt%+=1
       ENDPROC
 
       REM ##########################################################
@@ -939,19 +990,20 @@
               animategap%+=1
               IF animategap%>5 THEN animategap%=5
 
+            WHEN 35:  REM animated len decrement
+              animatelen%-=1
+              IF animatelen%<1 THEN animatelen%=1
+            WHEN 39:  REM animated len increment
+              animatelen%+=1
+              IF animatelen%>5 THEN animatelen%=5
+
           ENDCASE
 
         WHEN 4
           CASE TX% OF
             WHEN 1,2,3: shapesel%=2 : REM circle
 
-            WHEN 24:  REM animated len decrement
-              animatelen%-=1
-              IF animatelen%<1 THEN animatelen%=1
-            WHEN 28:  REM animated len increment
-              animatelen%+=1
-              IF animatelen%>5 THEN animatelen%=5
-
+            WHEN 15,16,17: gridshow%=(gridshow%+1) AND 1 : REM gridshow toggle
           ENDCASE
 
         WHEN 6
@@ -1264,7 +1316,8 @@
               copyx%=19
               copyy%=11
               copysize%=S%
-
+              toolsel%=7:toolcursor%=17:copypaste%=1
+              PROCmenurestore
 
             WHEN 33,34,35,36,37 : REM FLIP VERTICAL
               FOR X%=0 TO 39
@@ -1691,6 +1744,7 @@
 
       ENDCASE  : REM toolsel%
 
+
       ENDPROC
 
       REM ##########################################################
@@ -2026,9 +2080,7 @@
         IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
           S%=sprite_buffer&(s%,U%)
           IF spr_trns%=1 THEN
-            IF S%<>32 THEN
-              frame_buffer&(f%-1,X%+(Y%-1)*40)=S%
-            ENDIF
+            IF S%<>32 THEN frame_buffer&(f%-1,X%+(Y%-1)*40)=S%
           ELSE
             frame_buffer&(f%-1,X%+(Y%-1)*40)=S%
           ENDIF
@@ -2212,7 +2264,11 @@
         FOR X%=x1% TO x1%+copyx%
           FOR Y%=y1% TO y1%+copyy%
             IF X%<40 AND X%>-1 AND Y%<25 AND Y%>0 THEN
-              VDU 31,X%,Y%,copy_buffer&(s%)
+              IF spr_trns%=0 THEN
+                VDU 31,X%,Y%,copy_buffer&(s%)
+              ELSE
+                IF copy_buffer&(s%)<>32 THEN VDU 31,X%,Y%,copy_buffer&(s%)
+              ENDIF
             ENDIF
             s%+=1
           NEXT
@@ -3587,8 +3643,8 @@
         NEXT
 
         PROCprint40(2,tg$+"( )"+tw$+"LINE     "+tg$+"( )"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
-        PROCprint40(3,tg$+"( )"+tw$+"RECT         "+tc$+"GAP:"+tw$+"-"+ty$+" "+tw$+"+")
-        PROCprint40(4,tg$+"( )"+tw$+"CIRC         "+tc$+"LEN:"+tw$+"-"+ty$+" "+tw$+"+")
+        PROCprint40(3,tg$+"( )"+tw$+"RECT         "+tc$+"GAP:"+tw$+"-"+ty$+" "+tw$+"+"+tc$+"LEN:"+tw$+"-"+ty$+" "+tw$+"+")
+        PROCprint40(4,tg$+"( )"+tw$+"CIRC     "+tg$+"( )"+tw$+"SHOW GRID")
         PROCprint40(6,tg$+"( )"+tw$+"FLSH (136)  "+tg$+"( )"+tw$+"DBLH (141)")
         PROCprint40(7,tg$+"( )"+tw$+"SEPR (154)  "+tg$+"( )"+tw$+"HOLD (158)")
         PROCprint40(9,tg$+"( )"+tw$+"FORE "+tg$+"( )"+tw$+"BACK"+tb$+"(ENTIRE COLUMN)")
@@ -3618,12 +3674,14 @@
       D$=CHR$(32+animateshape%*10)
       A$=STR$(animategap%)
       F$=STR$(animatelen%)
+      G$=CHR$(32+gridshow%*10)
       R$=CHR$(32+copylockxt%*10)
       U$=CHR$(32+copylockyt%*10)
 
       PRINTTAB(16,2)D$;
       PRINTTAB(26,3)A$;
-      PRINTTAB(26,4)F$;
+      PRINTTAB(37,3)F$;
+      PRINTTAB(16,4)G$;
       PRINTTAB(2,10)R$;
       PRINTTAB(12,10)U$;
 
