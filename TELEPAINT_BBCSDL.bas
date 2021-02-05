@@ -38,6 +38,9 @@
 
       REM *** MENU DESIGN IN DIFFERENT MODE FOR MORE FLEXIBILITY
 
+      REM *** BUGS ***
+      REM     * IMPORT SPRITE IMAGE WIDTH ODD NUMBER CAUSES ANOMALY
+
       REM *** TODO LIST ***
 
       REM *** HELP SCREEN: MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
@@ -373,24 +376,7 @@
         ENDIF
 
         IF MX%<>OLD_MX% OR MY%<>OLD_MY% THEN
-          IF menuext%=0 THEN
-            IF gridshow%=1 THEN
-              SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
-              FOR X%=0 TO 39
-                REM PROC_aaline(X%*32, 0, X%*32, 960, 1, &90909000, 0)
-                SYS "SDL_RenderDrawLine", @memhdc%, X%*16, 499, X%*16, 20
-                IF X%<25 THEN SYS "SDL_RenderDrawLine", @memhdc%, 0, X%*20, 639, X%*20
-              NEXT
-              *REFRESH
-            ENDIF
-          ELSE
-            SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
-            FOR X%=0 TO 20
-              SYS "SDL_RenderDrawLine", @memhdc%, X%*16+160, 100, X%*16+160, 340
-              IF X%<13 THEN SYS "SDL_RenderDrawLine", @memhdc%, 160, X%*20+100, 480, X%*20+100
-            NEXT
-            *REFRESH
-          ENDIF
+          IF gridshow%=1 THEN PROCdrawgrid
         ENDIF
       ELSE
         IF menuext%=1 THEN
@@ -398,9 +384,6 @@
 
         ENDIF
       ENDIF
-
-
-
 
       ENDPROC
 
@@ -525,6 +508,35 @@
 
         sprite_buffer&(s%,cx%+cy%*20)=chr%+160
       ENDIF
+      ENDPROC
+
+      REM ##########################################################
+      REM update grid
+      DEF PROCdrawgrid
+      LOCAL X%
+      SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
+      CASE menuext% OF
+        WHEN 0
+          FOR X%=0 TO 39
+            SYS "SDL_RenderDrawLine", @memhdc%, X%*16, 499, X%*16, 20
+            IF X%<25 THEN SYS "SDL_RenderDrawLine", @memhdc%, 0, X%*20, 639, X%*20
+          NEXT
+      ENDCASE
+      *REFRESH
+
+      ENDPROC
+
+      REM ##########################################################
+      REM update sprite grid
+      DEF PROCdrawspritegrid
+      LOCAL X%
+      SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
+      FOR X%=0 TO 20
+        SYS "SDL_RenderDrawLine", @memhdc%, X%*16+160, 100, X%*16+160, 340
+        IF X%<13 THEN SYS "SDL_RenderDrawLine", @memhdc%, 160, X%*20+100, 480, X%*20+100
+      NEXT
+      *REFRESH
+
       ENDPROC
 
       REM ##########################################################
@@ -822,7 +834,8 @@
                 IF TEXTX%>TX% AND TY%>0 THEN
                   PROCundosave
                   REM IF AT END OF LINE CHECK LAST CHAR IF SPACE ALREADY
-                  IF TEXTX%=39 AND GET(TEXTX%,TY%)<>32 THEN
+                  C%=GET(TEXTX%,TY%)
+                  IF TEXTX%=39 AND C%<>32 AND C%<>160 THEN
                     VDU 31,TEXTX%,TY%,32
                   ELSE
                     TEXTX%-=1
@@ -2080,7 +2093,7 @@
         IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
           S%=sprite_buffer&(s%,U%)
           IF spr_trns%=1 THEN
-            IF S%<>32 THEN frame_buffer&(f%-1,X%+(Y%-1)*40)=S%
+            IF S%<>32 AND S%<>160 THEN frame_buffer&(f%-1,X%+(Y%-1)*40)=S%
           ELSE
             frame_buffer&(f%-1,X%+(Y%-1)*40)=S%
           ENDIF
@@ -2098,6 +2111,8 @@
         sprite_buffer&(S%,U%)=GET(U% MOD 20+10,U% DIV 20+5)
       NEXT
 
+      PROCdrawspritegrid
+
       ENDPROC
 
       REM ##########################################################
@@ -2109,6 +2124,8 @@
       FOR U%=0 TO 239
         VDU 31,U% MOD 20+10,U% DIV 20+5,sprite_buffer&(sprite_cur%,U%)
       NEXT
+
+      PROCdrawspritegrid
 
       ENDPROC
 
@@ -2252,7 +2269,7 @@
       REM ##########################################################
       REM paste copypaste buffer yo current frame
       DEF PROCpasteregion(x1%,y1%)
-      LOCAL s%,X%,Y%
+      LOCAL s%,X%,Y%,C%
 
       s%=0
 
@@ -2264,10 +2281,11 @@
         FOR X%=x1% TO x1%+copyx%
           FOR Y%=y1% TO y1%+copyy%
             IF X%<40 AND X%>-1 AND Y%<25 AND Y%>0 THEN
+              C%=copy_buffer&(s%)
               IF spr_trns%=0 THEN
-                VDU 31,X%,Y%,copy_buffer&(s%)
+                VDU 31,X%,Y%,C%
               ELSE
-                IF copy_buffer&(s%)<>32 THEN VDU 31,X%,Y%,copy_buffer&(s%)
+                IF C%<>32 AND C%<>160 THEN VDU 31,X%,Y%,copy_buffer&(s%)
               ENDIF
             ENDIF
             s%+=1
@@ -2335,7 +2353,7 @@
             sprite_buffer&(c%,u%)=char%
           NEXT
           c%+=1
-        UNTIL EOF#f%
+        UNTIL EOF#f% OR c%>=sprite_max%
         CLOSE#f%
       ENDIF
       ENDPROC
@@ -2699,7 +2717,8 @@
             REM bmp important colours (4 bytes) ?50 ?51 ?52 ?53
             IF T$<>"BM" OR spr_impofs%<>54 OR spr_impbpp%<>24 THEN
               PRINTTAB(0,0)"Image format not supported, must be BMP 24bpp"
-              A=GET
+              PROCWAITMOUSE(4)
+              PROCWAITMOUSE(0)
               menuext%=94
             ELSE
               OSCLI "MDISPLAY "+STR$~import_buffer%
@@ -3611,6 +3630,8 @@
         PRINTTAB(32,15)tc$;"FLP-^";
         PRINTTAB(32,17)tc$;"CPY >";
         PRINTTAB(32,19)tc$;"CPY <";
+
+        PROCdrawspritegrid
 
       ENDIF
 
