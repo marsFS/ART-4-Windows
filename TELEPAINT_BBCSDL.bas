@@ -26,13 +26,11 @@
 
       REM *** SCROLL OFF SCREEN E.G. NO WRAP
 
-      REM *** ADD UNDO FOR EACH FRAME IN ANIMATE LINE / RECT MODE
-
       REM *** SCROLL FRAMES LAYER, HOW WOULD THIS INTERACT WITH DRAW FRAMES?
 
       REM *** IMPLEMENT ANIMATED CIRCLE (REDO CIRCLE ROUTINE)
 
-      REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE (partially done)
+      REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE, ADD MOVE FRAME OPTION (partially done)
 
       REM *** SPRITE MODE, EDIT SPRITES AND COPY TO FRAMES (in progress)
 
@@ -219,6 +217,7 @@
       spr_imphgt%=0
       spr_impbpp%=0
       spr_impofs%=0
+      spr_scroll%=1
 
       PROCloadscreen
 
@@ -230,6 +229,7 @@
 
       REM sprite buffer
       DIM sprite_buffer&(sprite_max%-1,239)
+      DIM sprsize{(sprite_max%-1) h%,v%}
       DIM spr_tmp&(2000)
       DIM sprlist{(2000) s%,f%,x%,y%}
 
@@ -1173,11 +1173,15 @@
               PROCloadspritefile(@tmp$+"SPRITEDATA.SPR")
               PROCdrawsprite
 
-            WHEN 33,34,35,36,37 : REM CLS
+            WHEN 33,34,35 : REM CLS
               FOR S%=0 TO 239
                 sprite_buffer&(sprite_cur%,S%)=32
               NEXT
               PROCdrawsprite
+
+            WHEN 37,38,39 : REM SCROLL MODE
+              spr_scroll%=(spr_scroll%+1) AND 1
+              PROCspritemenu(0)
 
           ENDCASE
         WHEN 5
@@ -1186,16 +1190,37 @@
               PROCsavespritefile(@tmp$+"SPRITEDATA.SPR")
 
             WHEN 33,34,35,36,37 : REM SCROLL LEFT
-              FOR S%=0 TO 11
-                spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20)
-              NEXT
-              FOR S%=0 TO 238
-                sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%+1)
-              NEXT
-              FOR S%=0 TO 11
-                sprite_buffer&(sprite_cur%,S%*20+19)=spr_tmp&(S%)
-              NEXT
-              PROCdrawsprite
+
+              IF spr_scroll%=1 THEN
+                REM CHAR MODE
+                FOR S%=0 TO 11
+                  spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20)
+                NEXT
+                FOR S%=0 TO 238
+                  sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%+1)
+                NEXT
+                FOR S%=0 TO 11
+                  sprite_buffer&(sprite_cur%,S%*20+19)=spr_tmp&(S%)
+                NEXT
+                PROCdrawsprite
+              ELSE
+                REM PIX MODE
+
+                FOR Y%=0 TO 35
+                  FOR X%=0 TO 39
+                    CASE X% OF
+                      WHEN 0 : REM SAVE FIRST COL
+                        spr_tmp&(0)=FNpoint(20,(35-Y%)+15)
+                        PROCpoint(20+X%,(35-Y%)+15,FNpoint(21+X%,(35-Y%)+15))
+                      WHEN 39 : REM PLOT LAST COL
+                        PROCpoint(20+X%,(35-Y%)+15,spr_tmp&(0))
+                      OTHERWISE : REM SHIFT PIXELS LEFT
+                        PROCpoint(20+X%,(35-Y%)+15,FNpoint(21+X%,(35-Y%)+15))
+                    ENDCASE
+                  NEXT
+                NEXT
+                PROCsavesprite(sprite_cur%)
+              ENDIF
 
           ENDCASE
 
@@ -1226,17 +1251,39 @@
               PROCspritemenu(0)
 
             WHEN 33,34,35,36,37 : REM SCROLL RIGHT
-              FOR S%=0 TO 11
-                spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20+19)
-              NEXT
-              FOR S%=239 TO 1 STEP -1
-                sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%-1)
-              NEXT
-              FOR S%=0 TO 11
-                sprite_buffer&(sprite_cur%,S%*20)=spr_tmp&(S%)
-              NEXT
-              PROCdrawsprite
+              IF spr_scroll%=1 THEN
+                REM CHAR MODE
+                FOR S%=0 TO 11
+                  spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20+19)
+                NEXT
+                FOR S%=239 TO 1 STEP -1
+                  sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%-1)
+                NEXT
+                FOR S%=0 TO 11
+                  sprite_buffer&(sprite_cur%,S%*20)=spr_tmp&(S%)
+                NEXT
+                PROCdrawsprite
 
+              ELSE
+                REM PIX MODE
+
+                FOR Y%=0 TO 35
+                  FOR X%=39 TO 0 STEP -1
+                    CASE X% OF
+                      WHEN 0 : REM PLOT FIRST COL
+                        PROCpoint(20,(35-Y%)+15,spr_tmp&(0))
+                      WHEN 39 : REM SAVE LAST COL
+                        spr_tmp&(0)=FNpoint(20+X%,(35-Y%)+15)
+                        PROCpoint(20+X%,(35-Y%)+15,FNpoint(19+X%,(35-Y%)+15))
+
+                      OTHERWISE : REM SHIFT PIXELS RIGHT
+                        PROCpoint(20+X%,(35-Y%)+15,FNpoint(19+X%,(35-Y%)+15))
+                    ENDCASE
+                  NEXT
+                NEXT
+                PROCsavesprite(sprite_cur%)
+
+              ENDIF
           ENDCASE
 
         WHEN 9
@@ -1258,17 +1305,40 @@
                 PROCspritemenu(1)
               ENDIF
             WHEN 33,34,35,36,37 : REM SCROLL UP
-              FOR S%=0 TO 19
-                spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%)
-              NEXT
-              FOR S%=20 TO 239
-                sprite_buffer&(sprite_cur%,S%-20)=sprite_buffer&(sprite_cur%,S%)
-              NEXT
-              FOR S%=0 TO 19
-                sprite_buffer&(sprite_cur%,220+S%)=spr_tmp&(S%)
-              NEXT
-              PROCdrawsprite
+              IF spr_scroll%=1 THEN
+                REM CHAR MODE
 
+                FOR S%=0 TO 19
+                  spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%)
+                NEXT
+                FOR S%=20 TO 239
+                  sprite_buffer&(sprite_cur%,S%-20)=sprite_buffer&(sprite_cur%,S%)
+                NEXT
+                FOR S%=0 TO 19
+                  sprite_buffer&(sprite_cur%,220+S%)=spr_tmp&(S%)
+                NEXT
+                PROCdrawsprite
+              ELSE
+                REM PIX MODE
+
+                FOR X%=0 TO 39
+                  FOR Y%=35 TO 0 STEP -1
+                    CASE Y% OF
+                      WHEN 0 : REM PLOT FIRST ROW
+                        PROCpoint(20+X%,(35-Y%)+15,spr_tmp&(0))
+
+                      WHEN 35 : REM SAVE LAST ROW
+                        spr_tmp&(0)=FNpoint(20+X%,(35-Y%)+15)
+                        PROCpoint(20+X%,(35-Y%)+15,FNpoint(20+X%,(35-Y%)+16))
+
+                      OTHERWISE : REM SHIFT PIXELS UP
+                        PROCpoint(20+X%,(35-Y%)+15,FNpoint(20+X%,(35-Y%)+16))
+                    ENDCASE
+                  NEXT
+                NEXT
+                PROCsavesprite(sprite_cur%)
+
+              ENDIF
           ENDCASE
 
         WHEN 11
@@ -1278,16 +1348,38 @@
               PROCspritemenu(0)
 
             WHEN 33,34,35,36,37 : REM SCROLL DOWN
-              FOR S%=0 TO 19
-                spr_tmp&(S%)=sprite_buffer&(sprite_cur%,220+S%)
-              NEXT
-              FOR S%=239 TO 20 STEP -1
-                sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%-20)
-              NEXT
-              FOR S%=0 TO 19
-                sprite_buffer&(sprite_cur%,S%)=spr_tmp&(S%)
-              NEXT
-              PROCdrawsprite
+              IF spr_scroll%=1 THEN
+                FOR S%=0 TO 19
+                  spr_tmp&(S%)=sprite_buffer&(sprite_cur%,220+S%)
+                NEXT
+                FOR S%=239 TO 20 STEP -1
+                  sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%-20)
+                NEXT
+                FOR S%=0 TO 19
+                  sprite_buffer&(sprite_cur%,S%)=spr_tmp&(S%)
+                NEXT
+                PROCdrawsprite
+              ELSE
+                REM PIX MODE
+
+                FOR X%=0 TO 39
+                  FOR Y%=0 TO 35
+                    CASE Y% OF
+                      WHEN 0 : REM SAVE LAST ROW
+                        spr_tmp&(0)=FNpoint(20+X%,(35-Y%)+15)
+                        PROCpoint(20+X%,(35-Y%)+15,FNpoint(20+X%,(35-Y%)+14))
+
+                      WHEN 35 : REM PLOT FIRST ROW
+                        PROCpoint(20+X%,(35-Y%)+15,spr_tmp&(0))
+
+                      OTHERWISE : REM SHIFT PIXELS DOWN
+                        PROCpoint(20+X%,(35-Y%)+15,FNpoint(20+X%,(35-Y%)+14))
+                    ENDCASE
+                  NEXT
+                NEXT
+                PROCsavesprite(sprite_cur%)
+
+              ENDIF
 
           ENDCASE
 
@@ -1348,6 +1440,10 @@
         WHEN 17
           CASE TX% OF
             WHEN 1,2,3,4,5 : REM paste clip board to sprite
+              FOR S%=0 TO 239
+                sprite_buffer&(sprite_cur%,(S% MOD 12)*20+(S% DIV 12))=copy_buffer&(S%)
+              NEXT
+
 
             WHEN 33,34,35,36,37 : REM COPY TO NEXT SPRITE
               dst%=sprite_cur%+1
@@ -1360,10 +1456,10 @@
 
         WHEN 18 : REM PREV / NEXT SPRITE
           CASE TX% OF
-            WHEN 12,13,14,15,16
+            WHEN 9,10,11,12,13
               sprite_cur%-=1
               IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
-            WHEN 19,20,21,22,23
+            WHEN 17,18,19,20,21
               sprite_cur%+=1
               IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
 
@@ -1435,13 +1531,13 @@
               IF spr_frmy%<24 THEN spr_frmy%+=1
 
             WHEN 21 : REM H DECREMENT
-              IF spr_frmh%>1 THEN spr_frmh%-=1
+              IF spr_frmh%>-5 THEN spr_frmh%-=1
 
             WHEN 26 : REM H INCREMENT
               IF spr_frmh%<5 THEN spr_frmh%+=1
 
             WHEN 30 : REM V DECREMENT
-              IF spr_frmv%>1 THEN spr_frmv%-=1
+              IF spr_frmv%>-5 THEN spr_frmv%-=1
 
             WHEN 35 : REM V INCREMENT
               IF spr_frmv%<5 THEN spr_frmv%+=1
@@ -2850,37 +2946,29 @@
             gridsx%=(MX%-startx%)/GX%
             gridsy%=(MY%-starty%)/GY%
 
-            GCOL 3,15
-            FOR X%=0 TO GX%
-              LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
-            NEXT
-            FOR Y%=0 TO GY%
-              LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
-            NEXT
+            PROCupdategrid(startx%,starty%,gridsx%,gridsy%,GX%,GY%,3,15)
+            REM GCOL 3,15
+            REM FOR X%=0 TO GX%
+            REM LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
+            REM NEXT
+            REM FOR Y%=0 TO GY%
+            REM LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
+            REM NEXT
 
             REPEAT
               PROCREADMOUSE
               IF OLDMX%<>MX% OR OLDMY%<>MY% THEN
-                GCOL 3,15
-                FOR X%=0 TO GX%
-                  LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
-                NEXT
-                FOR Y%=0 TO GY%
-                  LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
-                NEXT
+                PROCupdategrid(startx%,starty%,gridsx%,gridsy%,GX%,GY%,3,15)
 
                 gridsx%=(MX%-startx%)/GX%
                 gridsy%=(MY%-starty%)/GY%
 
-                FOR X%=0 TO GX%
-                  LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
-                NEXT
-                FOR Y%=0 TO GY%
-                  LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
-                NEXT
+                PROCupdategrid(startx%,starty%,gridsx%,gridsy%,GX%,GY%,3,15)
 
                 OLDMX%=MX%
                 OLDMY%=MY%
+              ELSE
+                WAIT 4
               ENDIF
 
               REMPRINTTAB(0,3)"xs: ";RIGHT$("000"+STR$(startx%),4);" xe: ";RIGHT$("000"+STR$(gridsx%),4)
@@ -2888,18 +2976,47 @@
 
 
             UNTIL MB%=0
-            FOR X%=0 TO GX%
-              LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
-            NEXT
-            FOR Y%=0 TO GY%
-              LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
-            NEXT
+            x1%=MX%-startx%
+            y1%=MY%-starty%
+
+            REM option to move frame layout
+            PROCprint40(0,"Move frame?  Y   N")
+            GCOL 3,10
+            RECTANGLE FILL 376,960,108,40
+
+            GCOL 3,9
+            RECTANGLE FILL 504,960,108,40
+
+            PROCWAITMOUSE(4)
+            PROCWAITMOUSE(0)
+
+            IF TY%=0 AND TX%>11 AND TX%<15 THEN
+
+              REM move frame
+              REPEAT
+                PROCREADMOUSE
+                IF OLDMX%<>MX% OR OLDMY%<>MY% THEN
+                  PROCupdategrid(startx%,starty%,gridsx%,gridsy%,GX%,GY%,3,15)
+
+                  startx%=MX%
+                  starty%=MY%
+
+                  PROCupdategrid(startx%,starty%,gridsx%,gridsy%,GX%,GY%,3,15)
+                ELSE
+                  WAIT 4
+
+                ENDIF
+              UNTIL MB%=4
+              PROCWAITMOUSE(0)
+            ENDIF
+
+            PROCupdategrid(startx%,starty%,gridsx%,gridsy%,GX%,GY%,3,15)
 
             REM process selection(s)
+            x2%=startx%+x1%
+            y2%=starty%+y1%
             x1%=startx%
             y1%=starty%
-            x2%=MX%
-            y2%=MY%
 
             IF x1%>x2% THEN SWAP x1%,x2%
             IF y1%<y2% THEN SWAP y1%,y2%
@@ -3028,6 +3145,18 @@
       ENDPROC
 
       REM ##########################################################
+      REM update grid
+      DEF PROCupdategrid(startx%,starty%,gridsx%,gridsy%,GX%,GY%,GC1%,GC2%)
+      GCOL GC1%,GC2%
+      FOR X%=0 TO GX%
+        LINE startx%+X%*gridsx%,starty%,startx%+X%*gridsx%,starty%+gridsy%*GY%
+      NEXT
+      FOR Y%=0 TO GY%
+        LINE startx%,starty%+Y%*gridsy%,startx%+gridsx%*GX%,starty%+Y%*gridsy%
+      NEXT
+      ENDPROC
+
+      REM ##########################################################
       REM import picture to one or more frames
       DEF PROCimportsprite
 
@@ -3063,7 +3192,7 @@
 
         REPEAT
 
-          PROCprint40(0,"Select Sprite: "+RIGHT$("0"+STR$(sprite_cur%),2))
+          PROCprint40(0,"Select Sprite: "+RIGHT$("0"+STR$(sprite_cur%+1),2))
           GCOL 0,2
           RECTANGLE FILL 788,558,494,440
 
@@ -3165,7 +3294,7 @@
           IF x1%>x2% THEN SWAP x1%,x2%
           IF y1%>y2% THEN SWAP y1%,y2%
 
-          PROCprint40(0,"Processing selection, Sprite: "+STR$(sprite_cur%))
+          PROCprint40(0,"Processing selection, Sprite: "+STR$(sprite_cur%+1))
           REM A=GET
 
           x%=0
@@ -3200,7 +3329,7 @@
 
               REM reset selection
               startx%=-1
-              IF sprite_cur%<sprite_max% THEN
+              IF sprite_cur%<sprite_max%-1 THEN
                 sprite_cur%+=1
               ELSE
                 done%=1
@@ -3605,7 +3734,7 @@
         VDU 31,30,17,166
 
         REM        PRINTTAB(18,19)tb$;CHR$(157);tc$;">  ";CHR$(156);
-        PRINTTAB(11,18)tb$;CHR$(157);tc$;"<  ";CHR$(156);tb$;CHR$(157);tc$;">  ";CHR$(156);
+        PRINTTAB(9,18)tb$;CHR$(157);tc$;"<  ";CHR$(156);tb$;CHR$(157);tc$;">  ";CHR$(156);
 
         PRINTTAB(0,21)tb$;CHR$(157);tc$;"DRAW ALL  ";CHR$(156);tm$;CHR$(157);ty$;"UNDO ALL  ";CHR$(156);tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
 
@@ -3621,7 +3750,7 @@
         PRINTTAB(0,15)tc$;"COPY";
         PRINTTAB(0,17)tc$;"PASTE";
 
-        PRINTTAB(33,3)tc$;"CLS";
+        PRINTTAB(32,3)tc$;"CLS";
         PRINTTAB(32,5)tc$;"SCR-L";
         PRINTTAB(32,7)tc$;"SCR-R";
         PRINTTAB(32,9)tc$;"SCR-U";
@@ -3633,11 +3762,15 @@
 
         PROCdrawspritegrid
 
+        toolsel%=1:toolcursor%=15
+
       ENDIF
 
       REM REFRESH DYNAMIC AREAS
-      PRINTTAB(25,18)ty$;CHR$(157);tr$;RIGHT$(" "+STR$(sprite_cur%+1),2)+" ";CHR$(156);
-
+      PRINTTAB(24,18)ty$;CHR$(157);tr$;RIGHT$(" "+STR$(sprite_cur%+1),2)+" ";CHR$(156);
+      p$="CHR"
+      IF spr_scroll%=0 THEN p$="PIX"
+      PRINTTAB(36,3)tg$;p$;
       PRINTTAB(0,19)CHR$(129+spr_trns%);"TRANS";
       PRINTTAB(1,8)tb$;RIGHT$("000"+STR$(spr_lstcount%+1),4);
 
