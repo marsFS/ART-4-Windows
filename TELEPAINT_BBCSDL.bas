@@ -32,7 +32,7 @@
 
       REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE, ADD MOVE FRAME OPTION (partially done)
 
-      REM *** SPRITE MODE, EDIT SPRITES AND COPY TO FRAMES (in progress)
+      REM *** SPRITE MODE, EDIT SPRITES AND COPY TO FRAMES (in progress) 20x16 chars 40x48 pixels
 
       REM *** MENU DESIGN IN DIFFERENT MODE FOR MORE FLEXIBILITY
 
@@ -1122,6 +1122,47 @@
             PROCsavesprite(sprite_cur%)
 
           ENDIF
+        WHEN 2 : REM DITHER
+          CASE dither% OF
+            WHEN 0,1,2,3
+              D%=2^(dither%)
+              DA%=2
+              IF dither%=2 THEN DA%=4
+              IF dither%=3 THEN DA%=8
+
+              X%=(PX% DIV DA%)*DA%
+              Y%=(PY% DIV DA%)*DA%
+
+              IF PX%>19 AND PX%<60 AND PY%>8 AND PY%<57 THEN PROCpoint(X%,Y%,1-erase%)
+              IF PX%+D%>19 AND PX%+D%<60 AND PY%+D%>8 AND PY%+D%<57 THEN PROCpoint(X%+D%,Y%+D%,1-erase%)
+            WHEN 4
+              IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
+                char%=255-erase%*95 : REM SOLID BLOCK #255 / #160
+                VDU 31,TX%,TY%,char%
+              ENDIF
+          ENDCASE
+          REPEAT
+            PROCREADMOUSE
+            IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+              CASE dither% OF
+                WHEN 0,1,2,3
+                  X%=(PX% DIV DA%)*DA%
+                  Y%=(PY% DIV DA%)*DA%
+
+                  IF X%>19 AND X%<60 AND Y%>8 AND Y%<57 THEN PROCpoint(X%,Y%,1-erase%)
+                  IF X%+D%>19 AND X%+D%<60 AND Y%+D%>8 AND Y%+D%<57 THEN PROCpoint(X%+D%,Y%+D%,1-erase%)
+                WHEN 4
+                  IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
+                    char%=255-erase%*95 : REM SOLID BLOCK #255
+                    VDU 31,TX%,TY%,char%
+                  ENDIF
+              ENDCASE
+            ENDIF
+            OLD_PX%=PX%
+            OLD_PY%=PY%
+          UNTIL MB%=0
+
+          PROCsavesprite(sprite_cur%)
 
         WHEN 5: REM background colour
           IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
@@ -1456,10 +1497,10 @@
 
         WHEN 19 : REM PREV / NEXT SPRITE
           CASE TX% OF
-            WHEN 9,10,11,12,13
+            WHEN 11,12,13,14
               sprite_cur%-=1
               IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
-            WHEN 17,18,19,20,21
+            WHEN 17,18,19,20
               sprite_cur%+=1
               IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
 
