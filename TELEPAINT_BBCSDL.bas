@@ -3225,6 +3225,12 @@
         spr_imphgt%=import_buffer%!22
         spr_impbpp%=import_buffer%?28+(import_buffer%?29*256)
 
+        REM adjust for correct line byte width multiple of 4
+        line_wid%=spr_impwid%*3
+        WHILE line_wid% MOD 4<>0
+          line_wid%+=1
+        ENDWHILE
+
         REM        PRINTTAB(0,0)NAME$;"  F:";STR$(F%);"  ";
         REM        PRINTT$
         REM        PRINT"pOfs:";STR$(spr_impofs%)
@@ -3234,13 +3240,11 @@
         REM        PROCWAITMOUSE(4)
 
         IF T$="BM" AND spr_impofs%=54 AND spr_impbpp%=24 THEN
-          REM OSCLI "MDISPLAY "+STR$~import_buffer%
-
           FOR X%=0 TO 77
             FOR Y%=0 TO 71
               col%=0
               IF X%>-1 AND X%<spr_impwid% AND Y%>-1 AND Y%<spr_imphgt% THEN
-                ofs%=spr_impofs%+X%*3+Y%*spr_impwid%*3
+                ofs%=spr_impofs%+X%*3+Y%*line_wid%
                 col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
               ENDIF
               IF col%>0 THEN PROCpoint_buf(X%+2, 74-Y%, 1,F%)
@@ -3299,6 +3303,11 @@
         gridsx%=78
         gridsy%=94
 
+        REM adjust for correct byte width multiple of 4
+        line_wid%=spr_impwid%*3
+        WHILE line_wid% MOD 4<>0
+          line_wid%+=1
+        ENDWHILE
 
 
         REPEAT
@@ -3352,7 +3361,7 @@
                   REM IF POINT(X%,Y%)<>0 THEN
                   col%=0
                   IF X%>-1 AND X%<spr_impwid% AND Y%>-1 AND Y%<spr_imphgt% THEN
-                    ofs%=spr_impofs%+X%*3+Y%*spr_impwid%*3
+                    ofs%=spr_impofs%+X%*3+Y%*line_wid%
                     col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
                   ENDIF
                   IF col%>0 THEN
