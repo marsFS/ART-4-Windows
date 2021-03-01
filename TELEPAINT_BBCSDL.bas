@@ -2546,7 +2546,7 @@
       REM *** FRAMESAVE???
       menuext%=99
       CASE loadtype% OF
-        WHEN 0 : maxy%=22
+        WHEN 0 : maxy%=23
         WHEN 1 : maxy%=19
         WHEN 2 : maxy%=19
       ENDCASE
@@ -2572,6 +2572,7 @@
           PRINTTAB(15,18)tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
           PRINTTAB(4,20)tg$;"(*)";tw$;"ALL FRMS ";tg$;"( )";tw$;"SINGLE FRM";
           PRINTTAB(4,21)tg$;"(*)";tw$;"CLS ";tg$;"( )";tw$;"BACK ";tg$;"( )";tw$;"FORE";
+          PRINTTAB(4,22)tg$;"( )";tw$;"SERIES 78x72 : F0001.BMP"
 
         WHEN 1 : REM import bmp
           filetype$=".bmp"
@@ -2710,6 +2711,30 @@
                 PRINTTAB(25,21)CHR$(32-(opt2%=2)*10)
               ENDIF
 
+              REM import series
+              IF TY%=22 AND MACT%=22 THEN
+                CASE TX% OF
+                  WHEN 5,6,7 : GT%=(GT%+1) AND 1
+                ENDCASE
+                IF GT%=0 THEN
+                  filetype$=".bin"
+                ELSE
+                  filetype$=".bmp"
+                ENDIF
+                N% = FN_dirscan2(n$(), t&(), "dir *.*",filetype$)
+                SEL%=0
+                SELOLD%=0
+                SELY%=-1
+                INDEX%=1
+                INDEXOLD%=-1
+                FOR I%=INDEX% TO INDEX%+12
+                  PRINTTAB(6,4+I%)SPC(28);
+                NEXT
+
+                PRINTTAB(6,22)CHR$(32+GT%*10)
+              ENDIF
+
+
             WHEN 1 :
 
               REM grid size controls
@@ -2774,20 +2799,39 @@
           ENDIF
 
           IF F%<>-1 THEN
-            IF INSTR(n$(SEL%),"M7_") OR F%=-2 THEN
+            IF GT%=0 THEN
+              IF INSTR(n$(SEL%),"M7_") OR F%=-2 THEN
 
-              IF F%>0 THEN F$=curdir$+LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
-              FOR frame%=1 TO frame_max%
-                PROCloadbinaryfile(F$ + STR$(frame%)+".BIN")
-                PROCframesave(frame%)
-                REM WAIT 10
-              NEXT
-              PROCloadnextframe(1,0)
-            ELSE
-              IF RIGHT$(FNUPPER(n$(SEL%)),3)="BIN" THEN
-                PROCloadbinaryfile(curdir$+n$(SEL%))
-                PROCframesave(frame%)
+                IF F%>0 THEN F$=curdir$+LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
+                FOR frame%=1 TO frame_max%
+                  PROCloadbinaryfile(F$ + STR$(frame%)+".BIN")
+                  PROCframesave(frame%)
+                  REM WAIT 10
+                NEXT
+                PROCloadnextframe(1,0)
+              ELSE
+                IF RIGHT$(FNUPPER(n$(SEL%)),3)="BIN" THEN
+                  PROCloadbinaryfile(curdir$+n$(SEL%))
+                  PROCframesave(frame%)
+                ENDIF
               ENDIF
+
+            ELSE
+              REM import series
+              IF LEN(n$(SEL%))=9 THEN
+                F%=VAL(MID$(n$(SEL%),2,4))
+                F$=LEFT$(n$(SEL%),1)
+                PROCimportseries(F$,F%)
+                frame%=0
+                PROCloadnextframe(1,0)
+                menuext%=0
+
+              ELSE
+                COLOUR 9
+                PRINTTAB(0,0)"FILE NAME NOT CORRECT: E.G. F0001.BMP"
+                menuext%=94
+              ENDIF
+
             ENDIF
           ENDIF
 
