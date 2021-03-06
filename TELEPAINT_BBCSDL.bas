@@ -3261,44 +3261,57 @@
 
         NAME$=F$+RIGHT$("000"+STR$(S%),4)+".BMP"
 
-        OSCLI "LOAD """+curdir$+NAME$+""" "+STR$~import_buffer%+" +"+STR$1000000
+        fnum=OPENIN(curdir$+NAME$)
+        IF fnum<>0 THEN
+          CLOSE#fnum
 
-        T$=CHR$(import_buffer%?0)+CHR$(import_buffer%?1)
-        spr_impofs%=import_buffer%!10
-        spr_impwid%=import_buffer%!18
-        spr_imphgt%=import_buffer%!22
-        spr_impbpp%=import_buffer%?28+(import_buffer%?29*256)
+          OSCLI "LOAD """+curdir$+NAME$+""" "+STR$~import_buffer%+" +"+STR$1000000
 
-        REM adjust for correct line byte width multiple of 4
-        line_wid%=spr_impwid%*3
-        WHILE line_wid% MOD 4<>0
-          line_wid%+=1
-        ENDWHILE
+          T$=CHR$(import_buffer%?0)+CHR$(import_buffer%?1)
+          spr_impofs%=import_buffer%!10
+          spr_impwid%=import_buffer%!18
+          spr_imphgt%=import_buffer%!22
+          spr_impbpp%=import_buffer%?28+(import_buffer%?29*256)
 
-        REM        PRINTTAB(0,0)NAME$;"  F:";STR$(F%);"  ";
-        REM        PRINTT$
-        REM        PRINT"pOfs:";STR$(spr_impofs%)
-        REM        PRINT"pWid:";STR$(spr_impwid%)
-        REM        PRINT"pHgt:";STR$(spr_imphgt%)
-        REM        PRINT"pBpp:";STR$(spr_impbpp%)
-        REM        PROCWAITMOUSE(4)
+          REM adjust for correct line byte width multiple of 4
+          line_wid%=spr_impwid%*3
+          WHILE line_wid% MOD 4<>0
+            line_wid%+=1
+          ENDWHILE
 
-        IF T$="BM" AND spr_impofs%=54 AND spr_impbpp%=24 THEN
-          FOR X%=0 TO 77
-            FOR Y%=0 TO 71
-              col%=0
-              IF X%>-1 AND X%<spr_impwid% AND Y%>-1 AND Y%<spr_imphgt% THEN
-                ofs%=spr_impofs%+X%*3+Y%*line_wid%
-                col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
-              ENDIF
-              IF col%>0 THEN PROCpoint_buf(X%+2, 74-Y%, 1,F%)
+          REM        PRINTTAB(0,0)NAME$;"  F:";STR$(F%);"  ";
+          REM        PRINTT$
+          REM        PRINT"pOfs:";STR$(spr_impofs%)
+          REM        PRINT"pWid:";STR$(spr_impwid%)
+          REM        PRINT"pHgt:";STR$(spr_imphgt%)
+          REM        PRINT"pBpp:";STR$(spr_impbpp%)
+          REM        PROCWAITMOUSE(4)
+
+          IF T$="BM" AND spr_impofs%=54 AND spr_impbpp%=24 THEN
+            FOR X%=0 TO 77
+              FOR Y%=0 TO 71
+                col%=0
+                IF X%>-1 AND X%<spr_impwid% AND Y%>-1 AND Y%<spr_imphgt% THEN
+                  ofs%=spr_impofs%+X%*3+Y%*line_wid%
+                  col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                ENDIF
+                IF col%>0 THEN PROCpoint_buf(X%+2, 74-Y%, 1,F%)
+              NEXT
             NEXT
-          NEXT
 
+          ELSE
+            PRINTTAB(0,0)"INCORRECT IMAGE FORMAT"
+            PRINT"BMP MUST BE 24bpp"
+            PRINT""
+            PRINT"CLICK MOUSE TO CONTINUE."
+            PROCWAITMOUSE(4)
+            PROCWAITMOUSE(0)
+            EXIT FOR
+          ENDIF
+          S%+=1
         ELSE
           EXIT FOR
         ENDIF
-        S%+=1
       NEXT
 
       ENDPROC
