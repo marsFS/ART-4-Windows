@@ -2526,7 +2526,7 @@
       REM loadfile - modified dirscan to include type array so files list can be displayed for mode 7
       REM loadtype determines the type of load / import function
       DEF PROCloadfile(loadtype%)
-      LOCAL I%,N%,L%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%,MACT%,maxy%,opt1%,opt2%,OGT%
+      LOCAL I%,N%,L%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%,MACT%,maxy%,opt1%,opt2%,GT%,OGT%
 
       REM n$ holds file and dir list of current folder
       REM t& holds type list for current folder, 0=special, 1=dir, 2=file
@@ -2581,7 +2581,6 @@
           PRINTTAB(1,21)tg$;"(*)";tw$;"SINGLE BOX CAPTURE"
           PRINTTAB(1,22)tg$;"( )";tw$;"GRID";tc$;"HOR";tw$;"-";ty$;"10";tw$;"+ ";tc$;"VER";tw$;"-";ty$;"02";tw$"+"
           PRINTTAB(1,23)tg$;"( )";tw$;"SERIES 78x72 FORMAT: F0001.BMP"
-          GT%=0
           GX%=10
           GY%=2
 
