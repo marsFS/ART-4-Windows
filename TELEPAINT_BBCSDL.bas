@@ -1482,9 +1482,9 @@
           CASE TX% OF
             WHEN 1,2,3,4,5 : REM paste clip board to sprite
               FOR S%=0 TO 319
-                sprite_buffer&(sprite_cur%,(S% MOD 12)*20+(S% DIV 16))=copy_buffer&(S%)
+                sprite_buffer&(sprite_cur%,(S% MOD 16)*20+(S% DIV 16))=copy_buffer&(S%)
               NEXT
-
+              PROCdrawsprite
 
             WHEN 33,34,35,36,37 : REM COPY TO NEXT SPRITE
               dst%=sprite_cur%+1
@@ -2820,8 +2820,14 @@
               IF LEN(n$(SEL%))=9 THEN
                 F%=VAL(MID$(n$(SEL%),2,4))
                 F$=LEFT$(n$(SEL%),1)
-                PROCimportseries(F$,F%)
-                frame%=0
+                CASE opt1% OF
+                  WHEN 0 : REM load full series
+                    PROCimportseries(F$,F%,1,frame_max%)
+                    frame%=0
+                  WHEN 1 :  REM load single frame
+                    PROCimportseries(F$,F%,frame%,frame%)
+                    frame%-=1
+                ENDCASE
                 PROCloadnextframe(1,0)
                 menuext%=0
 
@@ -2853,7 +2859,7 @@
               IF LEN(n$(SEL%))=9 THEN
                 F%=VAL(MID$(n$(SEL%),2,4))
                 F$=LEFT$(n$(SEL%),1)
-                PROCimportseries(F$,F%)
+                PROCimportseries(F$,F%,1,frame_max%)
               ELSE
                 COLOUR 9
                 PRINTTAB(0,0)"FILE NAME NOT CORRECT: E.G. F0001.BMP"
@@ -3252,11 +3258,11 @@
 
       REM ##########################################################
       REM import a series of 78x72 BMP images
-      DEF PROCimportseries(F$,S%)
+      DEF PROCimportseries(F$,S%,frmStart%,frmEnd%)
       LOCAL F%,NAME$
       REM OSCLI "DISPLAY """+curdir$+n$(SEL%)+""" 0,0"
 
-      FOR F%=1 TO frame_max%
+      FOR F%=frmStart% TO frmEnd%
 
         NAME$=F$+RIGHT$("000"+STR$(S%),4)+".BMP"
 
@@ -3294,7 +3300,11 @@
                   ofs%=spr_impofs%+X%*3+Y%*line_wid%
                   col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
                 ENDIF
-                IF col%>0 THEN PROCpoint_buf(X%+2, 74-Y%, 1,F%)
+                IF col%>0 THEN
+                  PROCpoint_buf(X%+2, 74-Y%, 1,F%)
+                ELSE
+                  PROCpoint_buf(X%+2, 74-Y%, 0,F%)
+                ENDIF
               NEXT
             NEXT
 
@@ -3937,7 +3947,7 @@
         PRINTTAB(32,16)tc$;"CPY >";
         PRINTTAB(32,18)tc$;"CPY <";
 
-        PROCdrawspritegrid
+        REM PROCdrawspritegrid
 
         toolsel%=1:toolcursor%=15
 
