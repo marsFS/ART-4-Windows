@@ -511,6 +511,19 @@
       ENDPROC
 
       REM ##########################################################
+      REM Read the point at the specified coordinates from specified sprite buffer (1=set, 0=cleared)
+      DEF FNpoint_sprbuf(x%,y%,s%)
+      LOCAL cx%,cy%,chr%,C%
+      REM Get character cell
+      cx% = x% DIV 2
+      cy% = (y% DIV 3)
+      chr%=sprite_buffer&(s%,cx%+cy%*20) AND &5F
+      C%=(x% AND 1)+(y% MOD 3)*2
+      C%=2^C% - (C%=5)*32
+      =SGN(chr% AND C%)
+
+
+      REM ##########################################################
       REM update grid
       DEF PROCdrawgrid
       LOCAL X%
@@ -4027,17 +4040,37 @@
       REM ##########################################################
       REM animation UI
       DEF PROCspriteanimation
-
+      LOCAL X%,Y%,DX,DY%,S%
       MODE 3 : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
 
       VDU 23,1,0;0;0;0; : REM Disable cursor
 
       FOR Y%=0 TO 3
         FOR X%=0 TO 11
-          RECTANGLE X%*96+8,Y%*96+8,90,90
-
+          S%=X%+Y%*12
+          DX%=X%*96
+          DY%=336-Y%*112
+          GCOL 0,4
+          IF S%<sprite_max% THEN
+            PROCdrawanimspr(S%,DX%+14,DY%+16)
+            GCOL 0,7
+          ENDIF
+          RECTANGLE DX%+8,DY%+8,90,106
         NEXT
       NEXT
+
+      PRINTTAB(0,3)"SET: 00  COUNT: 4  ALL FRAMES: Y"
+      PRINTTAB(0,4)"X: 10  Y: 10  XC: 00  YC: 00"
+      FOR X%=0 TO 3
+        S%=X%
+        DX%=X%*96
+        DY%=680
+        PROCdrawanimspr(S%,DX%+14,DY%+16)
+        GCOL 0,7
+        RECTANGLE DX%+8,DY%+8,90,106
+      NEXT
+
+
       A$="Sprite Animation"
       AN=PI*2
       VDU 5
@@ -4049,12 +4082,25 @@
           Y%=960+40*SIN(AN)
           MOVE X%*24+408,Y%
           PRINTMID$(A$,X%+1,1)
-          AN=AN+0.3
+          AN=AN+0.35
           IF AN>PI*2 THEN AN=AN-PI*2
         NEXT
         PROCREADMOUSE
         WAIT 10
-        REM        PRINTTAB(4,18)LEFT$(STR$(TX%)+"   ",4)
+
+        GCOL 0,4
+        RECTANGLE FILL 0,960,200,40
+
+        IF MX%>6 AND MX%<1156 AND MY%>6 AND MY%<450 THEN
+          SP%=(MX%-8) DIV 96+((448-MY%) DIV 112)*12
+        ELSE
+          SP%=-1
+        ENDIF
+        IF SP%>sprite_max%-1 THEN SP%=-1
+
+        GCOL 0,7
+        MOVE 0,998
+        PRINTSTR$(SP%);" ";STR$(MX%);",";STR$(MY%)
         REM PRINTTAB(4,19)LEFT$(STR$(TY%)+"   ",4)
       UNTIL MB%=4
       PROCWAITMOUSE(0)
@@ -4062,6 +4108,18 @@
       VDU 23,1,1;0;0;0; : REM Enable cursor
       ENDPROC
 
+      REM ##########################################################
+      REM draw pixel version of sprite for animation creator
+      DEF PROCdrawanimspr(s%,x%,y%)
+      LOCAL X%,Y%,C%
+      GCOL 0,7
+      FOR Y%=0 TO 47
+        FOR X%=0 TO 39
+          C%=FNpoint_sprbuf(X%,47-Y%,s%)
+          IF C% THEN PLOT x%+X%*2,y%+Y%*2
+        NEXT
+      NEXT
+      ENDPROC
 
       REM ##########################################################
       REM shape and special sub menu
