@@ -1326,17 +1326,66 @@
           CASE TX% OF
             WHEN 1,2,3,4,5 : REM VIEW SPRITE LIST
               IF spr_lstcount%>-1 THEN
-                CLS
-                FOR S%=0 TO spr_lstcount%
-                  PRINT"SPR: ";RIGHT$("0"+STR$(sprlist{(S%)}.s%+1),2);"  ";
-                  PRINT"FRM: ";RIGHT$("00"+STR$(sprlist{(S%)}.f%),3);"  ";
-                  PRINT"X: ";RIGHT$("0"+STR$(sprlist{(S%)}.x%),2);"  ";
-                  PRINT"Y: ";RIGHT$("0"+STR$(sprlist{(S%)}.y%),2)
-                NEXT
+                P%=0 : OP%=1 : X%=0
+                REPEAT
+                  IF OP%<>P% THEN
+                    OP%=P%
+                    CLS
+                    FOR S%=0 TO 23
+                      IF S%+P%*24<=spr_lstcount% THEN
+                        PRINT tb$;RIGHT$("00"+STR$(S%+P%*24),3);tw$;
+                        PRINT"SPR:";tg$;RIGHT$("0"+STR$(sprlist{(S%+P%*24)}.s%+1),2);tw$;" ";
+                        PRINT"FRM:";tg$;RIGHT$("00"+STR$(sprlist{(S%+P%*24)}.f%),3);tw$;" ";
+                        PRINT"X:";tg$;RIGHT$("0"+STR$(sprlist{(S%+P%*24)}.x%),2);tw$;" ";
+                        PRINT"Y:";tg$;RIGHT$("0"+STR$(sprlist{(S%+P%*24)}.y%),2)
+                      ENDIF
+                    NEXT
+                    PRINTTAB(0,24)tb$;CHR$(157);tc$;"<  ";CHR$(156);tb$;CHR$(157);tc$;">  ";CHR$(156);RIGHT$("00"+STR$(P%),3);tm$;CHR$(157);ty$;"CLEAR  ";CHR$(156);tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
+                  ENDIF
+                  PROCWAITMOUSE(4)
+                  PROCWAITMOUSE(0)
+                  IF TY%=24 THEN
+                    CASE TX% OF
+                      WHEN 1,2,3,4,5,6 : REM previous page
+                        IF P%>0 THEN P%-=1
+                      WHEN 8,9,10,11,12,13 : REM next page
+                        IF (P%+1)*24<spr_lstcount% THEN P%+=1
+                      WHEN 18,19,20,21,22,23,24,25,26 : REM clear list
+                        PROCprint40(9,"")
+                        PROCprint40(14,"")
+                        PRINTTAB(5,9)gy$;CHR$(232);STRING$(26,CHR$(172));CHR$(180);
+                        FOR L%=10 TO 13
+                          PROCprint40(L%,"")
+                          PRINTTAB(5,L%)gy$;CHR$(234);STRING$(25," ");gy$;CHR$(181);
+                        NEXT
+                        PRINTTAB(5,14)gy$;CHR$(170);STRING$(26,CHR$(172));CHR$(165);
 
-                PROCWAITMOUSE(4)
-                PROCWAITMOUSE(0)
+                        REM confirm clear list
+                        PRINTTAB(8,11)ty$;"CLEAR ENTIRE LIST?";
+                        PRINTTAB(8,12)tr$;CHR$(157);ty$;"CLEAR  ";CHR$(156);tb$;CHR$(157);tg$;"CANCEL  ";CHR$(156);
 
+                        PROCWAITMOUSE(4)
+                        PROCWAITMOUSE(0)
+                        IF TY%=12 THEN
+                          CASE TX% OF
+                            WHEN 9,10,11,12,13,14,15,16 : REM clear list
+                              spr_lstcount%=-1
+                              X%=1
+                            OTHERWISE
+                              OP%=-1
+                          ENDCASE
+                        ELSE
+                          OP%=-1
+                        ENDIF
+
+                      WHEN 29,30,31,32,33,34,35,36,37 : REM close window
+                        X%=1
+
+                    ENDCASE
+
+                  ENDIF
+
+                UNTIL X%=1
                 PROCdrawmenu
                 PROCspritemenu(1)
               ENDIF
@@ -1379,9 +1428,13 @@
 
         WHEN 10
           CASE TX% OF
-            WHEN 1,2,3,4,5 : REM clear sprite list
-              spr_lstcount%=-1
-              PROCspritemenu(0)
+            WHEN 1,2,3,4,5 : REM sprite animation screen (old clear sprite list)
+              PROCspriteanimation
+              PROCdrawmenu
+              PROCspritemenu(1)
+              PROCdrawsprite
+              REM spr_lstcount%=-1
+              REM PROCspritemenu(0)
 
             WHEN 33,34,35,36,37 : REM SCROLL DOWN
               IF spr_scroll%=1 THEN
@@ -2558,7 +2611,7 @@
       PRINTTAB(34,5)tg$;CHR$(94);
       PRINTTAB(34,16)tg$;"#";
       PRINTTAB(2,maxy%)gw$;CHR$(170);STRING$(31,CHR$(172));CHR$(165);
-      PRINTTAB(5,18)tb$;CHR$(157);tc$;"LOAD  ";CHR$(156);
+      PRINTTAB(5,18)tb$;CHR$(157);tc$;"LOAD  ";CHR$(156);"       ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
 
       CASE loadtype% OF
         WHEN 0 : REM bin files
@@ -2678,7 +2731,11 @@
           REM load and cancel buttons
           IF TY%=18 AND MACT%=18 THEN
             IF TX%>5 AND TX%<14 THEN F%=SEL%
-            IF TX%>15 AND TX%<34 AND loadtype%=0 THEN F%=-2
+            IF loadtype%=0 THEN
+              IF TX%>15 AND TX%<34 THEN F%=-2
+            ELSE
+              IF TX%>22 AND TX%<32 THEN F%=-1
+            ENDIF
           ENDIF
 
           CASE loadtype% OF
@@ -2988,7 +3045,7 @@
       PRINTTAB(9,14)gw$;CHR$(170);STRING$(18,CHR$(172));CHR$(165);CHR$(144+curcol%);
 
       REM READ FILES
-      PRINTTAB(13,12)tg$;"FILE SAVED!";
+      PRINTTAB(13,12)tg$;"FILES SAVED!";
 
       PROCWAITMOUSE(4)
 
@@ -3927,7 +3984,7 @@
         PRINTTAB(0,4)ty$;"SAVE";
         PRINTTAB(0,6)tg$;"ADD L";
         PRINTTAB(0,8)tg$;"VIEW L";
-        PRINTTAB(0,10)tg$;"CLR L";
+        PRINTTAB(0,10)tw$;"ANIM8";
         PRINTTAB(0,12)ty$;"IMPRT";
         PRINTTAB(0,14)tc$;"COPY";
         PRINTTAB(0,16)tc$;"PASTE";
@@ -3966,6 +4023,45 @@
       PROCdrawsprite
 
       ENDPROC
+
+      REM ##########################################################
+      REM animation UI
+      DEF PROCspriteanimation
+
+      MODE 3 : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
+
+      VDU 23,1,0;0;0;0; : REM Disable cursor
+
+      FOR Y%=0 TO 3
+        FOR X%=0 TO 11
+          RECTANGLE X%*96+8,Y%*96+8,90,90
+
+        NEXT
+      NEXT
+      A$="Sprite Animation"
+      AN=PI*2
+      VDU 5
+      REPEAT
+        GCOL 0,0
+        RECTANGLE FILL 400,880,400,118
+        FOR X%=0 TO LEN(A$)-1
+          GCOL 0,X% MOD 15+1
+          Y%=960+40*SIN(AN)
+          MOVE X%*24+408,Y%
+          PRINTMID$(A$,X%+1,1)
+          AN=AN+0.3
+          IF AN>PI*2 THEN AN=AN-PI*2
+        NEXT
+        PROCREADMOUSE
+        WAIT 10
+        REM        PRINTTAB(4,18)LEFT$(STR$(TX%)+"   ",4)
+        REM PRINTTAB(4,19)LEFT$(STR$(TY%)+"   ",4)
+      UNTIL MB%=4
+      PROCWAITMOUSE(0)
+      MODE 7
+      VDU 23,1,1;0;0;0; : REM Enable cursor
+      ENDPROC
+
 
       REM ##########################################################
       REM shape and special sub menu
