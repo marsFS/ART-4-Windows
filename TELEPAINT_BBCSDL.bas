@@ -973,16 +973,6 @@
 
       PROCWAITMOUSE(0)
       CASE TY% OF
-        WHEN 1
-          CASE TX% OF
-            WHEN 36,37,38,39 : REM showhelp
-              MODE7
-              menuext%=0
-              PROCdrawmenu
-              PROCshowhelp
-              menuext%=1
-              PROCspecialmenu(1)
-          ENDCASE
 
         WHEN 2
           CASE TX% OF
@@ -1082,19 +1072,24 @@
 
           REM showcodes%=(showcodes%+1) AND 1
 
-        WHEN 22 : REM SPRITE AND CLOSE BUTTTONS
-          IF TX%>6 AND TX%<18 THEN
+        WHEN 22 : REM SPRITE, HELP, CLOSE BUTTTONS
+          CASE TX% OF
+            WHEN 2,3,4,5,6,7,8,9,10,11,12
+              menuext%=2
+              PROCspritemenu(1)
 
-            menuext%=2
-            PROCspritemenu(1)
+            WHEN 17,18,19,20,21,22,23,24
+              MODE7
+              menuext%=0
+              PROCdrawmenu
+              PROCshowhelp
+              menuext%=1
+              PROCspecialmenu(1)
 
-          ENDIF
+            WHEN 29,30,31,32,33,34,35,36,37
+              PROCmenurestore
 
-          IF TX%>23 AND TX%<33 THEN
-            PROCmenurestore
-            REM *** DRAWFRAME??
-          ENDIF
-
+          ENDCASE
       ENDCASE
       IF shapesel%>-1 THEN toolsel%=4:toolcursor%=19
 
@@ -3992,12 +3987,12 @@
         PROCprint40(10,tg$+"( )"+tw$+"HORZ "+tg$+"( )"+tw$+"VERT"+tb$+"(LOCK PASTE POS)")
         D$=CHR$(129+showcodes%)
 
-        PRINTTAB(35,1)tm$;"HELP"
+        REM PRINTTAB(35,1)tm$;"HELP"
         PROCprint40(11,tg$+"( )"+tw$+"TEXT")
         PROCprint40(16,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
         PROCprint40(18,"  [ ] ; { } \ | : ' "" < > / ?"+tc$+"SPC CAP" )
 
-        PRINTTAB(6,22)tb$;CHR$(157);ty$;"SPRITES  ";CHR$(156);"    ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
+        PRINTTAB(1,22)tb$;CHR$(157);ty$;"SPRITES  ";CHR$(156);"  ";tm$;CHR$(157);ty$;"HELP  ";CHR$(156);"  ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
 
         PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
       ENDIF
