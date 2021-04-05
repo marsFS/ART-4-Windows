@@ -16,6 +16,7 @@ Current ART features (needs updating for each version):
 * ART_EXA_PB_xxx version has smaller screen footprint to suit mobile devices (EXA Gear)
 
 Current TelePaint features:
+* Requires BBC Basic for SDL 2.0
 * Configured for BBC Micro Mode 7 (40x25 chars, 78x72 sixels)
 * Save and load files in BIN and/or BMP format
 * Configure up to 100 frames and 48 sprites
