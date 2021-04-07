@@ -236,7 +236,7 @@
       DIM sprlist2{(99) s%(11),f%,r%,x%,y%,h%,v%}
 
       REM animation controls
-      animcontrols%=27
+      animcontrols%=32
       animx%=0
       DIM animrange{(animcontrols%) x1%,y1%,x2%,y2%}
 
@@ -276,8 +276,8 @@
       FOR s%=0 TO 99
         sprlist2{(s%)}.f%=1
         FOR ss%=0 TO 11
-          REM sprlist2{(s%)}.s%(ss%)=-1
-          sprlist2{(s%)}.s%(ss%)=(ss%+s%) MOD 9 -1
+          sprlist2{(s%)}.s%(ss%)=-1
+          REM sprlist2{(s%)}.s%(ss%)=(ss%+s%) MOD 9 -1
         NEXT
       NEXT
       IF frame_old%=-2 THEN PROCshowhelp
@@ -1673,7 +1673,7 @@
       REM ##########################################################
       REM animation UI
       DEF PROCspriteanimation
-      LOCAL X%,Y%,DX,DY%,S%,SP%,DONE%
+      LOCAL X%,Y%,DX,DY%,S%,SP%,DP%,DONE%
       REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
       MODE 6 : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
 
@@ -1684,10 +1684,10 @@
       VDU 5
 
       FOR X%=0 TO LEN(A$)-1
-        GCOL 0,1
+        GCOL 0,9
         MOVE X%*40+308,990
         PRINTMID$(A$,X%+1,1)
-        GCOL 0,3
+        GCOL 0,11
         MOVE X%*40+312,994
         PRINTMID$(A$,X%+1,1)
 
@@ -1710,6 +1710,7 @@
       NEXT
 
       REM selected sprite set layout
+      COLOUR 15
       PRINTTAB(0,3)"SET:"
       PRINTTAB(17,3)"COUNT:"
       PRINTTAB(0,7)"FRM:"
@@ -1724,55 +1725,71 @@
 
       REM SET
       animx%=240
-      PROCcontrolnum(0,"<<",animx%,880)
-      PROCcontrolnum(1,"<",animx%,880)
-      PROCcontrolnum(2,">",animx%,880)
-      PROCcontrolnum(3,">>",animx%,880)
+      PROCanimcontrol(0,"<<",animx%,880,8,14)
+      PROCanimcontrol(1,"<",animx%,880,8,14)
+      PROCanimcontrol(2,">",animx%,880,8,14)
+      PROCanimcontrol(3,">>",animx%,880,8,14)
 
       REM FRM
       animx%=272
-      PROCcontrolnum(4,"<<",animx%,720)
-      PROCcontrolnum(5,"<",animx%,720)
-      PROCcontrolnum(6,">",animx%,720)
-      PROCcontrolnum(7,">>",animx%,720)
+      PROCanimcontrol(4,"<<",animx%,720,8,14)
+      PROCanimcontrol(5,"<",animx%,720,8,14)
+      PROCanimcontrol(6,">",animx%,720,8,14)
+      PROCanimcontrol(7,">>",animx%,720,8,14)
 
       REM REP
       animx%=432
-      PROCcontrolnum(8,"<<",animx%,680)
-      PROCcontrolnum(9,"<",animx%,680)
-      PROCcontrolnum(10,">",animx%,680)
-      PROCcontrolnum(11,">>",animx%,680)
+      PROCanimcontrol(8,"<<",animx%,680,8,14)
+      PROCanimcontrol(9,"<",animx%,680,8,14)
+      PROCanimcontrol(10,">",animx%,680,8,14)
+      PROCanimcontrol(11,">>",animx%,680,8,14)
 
       REM X,H
       animx%=212
-      PROCcontrolnum(12,"<<",animx%,640)
-      PROCcontrolnum(13,"<",animx%,640)
-      PROCcontrolnum(14,">",animx%,640)
-      PROCcontrolnum(15,">>",animx%,640)
+      PROCanimcontrol(12,"<<",animx%,640,8,14)
+      PROCanimcontrol(13,"<",animx%,640,8,14)
+      PROCanimcontrol(14,">",animx%,640,8,14)
+      PROCanimcontrol(15,">>",animx%,640,8,14)
       animx%=752
-      PROCcontrolnum(16,"<<",animx%,640)
-      PROCcontrolnum(17,"<",animx%,640)
-      PROCcontrolnum(18,">",animx%,640)
-      PROCcontrolnum(19,">>",animx%,640)
+      PROCanimcontrol(16,"<<",animx%,640,8,14)
+      PROCanimcontrol(17,"<",animx%,640,8,14)
+      PROCanimcontrol(18,">",animx%,640,8,14)
+      PROCanimcontrol(19,">>",animx%,640,8,14)
 
       REM Y,V
       animx%=212
-      PROCcontrolnum(20,"<<",animx%,600)
-      PROCcontrolnum(21,"<",animx%,600)
-      PROCcontrolnum(22,">",animx%,600)
-      PROCcontrolnum(23,">>",animx%,600)
+      PROCanimcontrol(20,"<<",animx%,600,8,14)
+      PROCanimcontrol(21,"<",animx%,600,8,14)
+      PROCanimcontrol(22,">",animx%,600,8,14)
+      PROCanimcontrol(23,">>",animx%,600,8,14)
       animx%=752
-      PROCcontrolnum(24,"<<",animx%,600)
-      PROCcontrolnum(25,"<",animx%,600)
-      PROCcontrolnum(26,">",animx%,600)
-      PROCcontrolnum(27,">>",animx%,600)
+      PROCanimcontrol(24,"<<",animx%,600,8,14)
+      PROCanimcontrol(25,"<",animx%,600,8,14)
+      PROCanimcontrol(26,">",animx%,600,8,14)
+      PROCanimcontrol(27,">>",animx%,600,8,14)
+
+      REM menu
+      PROCanimcontrol(28,"LOAD",16,940,7,10)
+      PROCanimcontrol(29,"SAVE",160,940,7,10)
+      PROCanimcontrol(30,"PLOT",304,940,7,13)
+      PROCanimcontrol(31,"UNDO",448,940,7,8)
+      PROCanimcontrol(32,"EXIT",1120,940,7,9)
 
       REPEAT
         PROCREADMOUSE
         IF MB%=4 THEN
           IF MX%>6 AND MX%<1156 AND MY%>6 AND MY%<450 THEN
             SP%=(MX%-8) DIV 96+((448-MY%) DIV 112)*12
+
             REM handle sprite dragging
+            REPEAT
+              PROCREADMOUSE
+            UNTIL MB%=0
+            IF MX%>6 AND MX%<1156 AND MY%>724 AND MY%<838 THEN
+              DP%=(MX%-8) DIV 96
+              sprlist2{(spr_lstcount2%)}.s%(DP%)=SP%
+              PROCanimupdate(0)
+            ENDIF
           ELSE
             PROCWAITMOUSE(0)
             FOR X%=0 TO animcontrols%
@@ -1950,6 +1967,16 @@
                       PROCanimupdate(X%)
                     ENDIF
 
+                  WHEN 28 : REM load
+
+                  WHEN 29 : REM save
+
+                  WHEN 30 : REM plot
+
+                  WHEN 31 : REM plot
+
+                  WHEN 32 : REM exit
+                    DONE%=1
                 ENDCASE
 
                 EXIT FOR
@@ -1962,7 +1989,7 @@
           WAIT 2
         ENDIF
         IF SP%>sprite_max%-1 THEN SP%=-1
-        PRINTTAB(0,12)STR$(SP%);" ";STR$(MX%);",";STR$(MY%);"    "
+        PRINTTAB(0,12)STR$(SP%);" ";STR$(DP%);" ";STR$(MX%);",";STR$(MY%);"    "
       UNTIL DONE%=1
       PROCWAITMOUSE(0)
       MODE 7
@@ -1970,17 +1997,17 @@
       ENDPROC
 
       REM ##########################################################
-      REM display a number control box, Title, X, Y
-      DEF PROCcontrolnum(n%,t$,x%,y%)
+      REM display a number control box, Title, X, Y, border col, text col
+      DEF PROCanimcontrol(n%,t$,x%,y%,bc%,tc%)
       LOCAL l%,sx%,sy%
       VDU 5
       l%=LEN(t$)
       sx%=l%*32+8
-      sy%=28
-      GCOL 0,8
-      RECTANGLE x%,y%-sy%,sx%,sy%
+      sy%=32
+      GCOL 0,bc%
+      RECTANGLE x%,y%-sy%,sx%,sy%+4
       MOVE x%+8,y%
-      GCOL 0,6
+      GCOL 0,tc%
       PRINT t$
       VDU 4
 
@@ -1999,7 +2026,7 @@
       DEF PROCanimupdate(c%)
       LOCAL SPR%,I%,S%,DX%,DY%
       c%=c% DIV 4
-      COLOUR 3
+      COLOUR 11
 
       REM set
       IF c%=0 THEN
@@ -4453,7 +4480,7 @@
       REM draw pixel version of sprite for animation creator
       DEF PROCdrawanimspr(s%,x%,y%)
       LOCAL X%,Y%,C%
-      GCOL 0,7
+      GCOL 0,15
       FOR Y%=0 TO 47
         FOR X%=0 TO 39
           C%=FNpoint_sprbuf(X%,47-Y%,s%)
