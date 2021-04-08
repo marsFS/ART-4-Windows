@@ -236,7 +236,7 @@
       DIM sprlist2{(99) s%(11),f%,r%,x%,y%,h%,v%}
 
       REM animation controls
-      animcontrols%=32
+      animcontrols%=40
       animx%=0
       DIM animrange{(animcontrols%) x1%,y1%,x2%,y2%}
 
@@ -1679,101 +1679,8 @@
 
       VDU 23,1,0;0;0;0; : REM Disable cursor
 
-      REM header
-      A$="Sprite Animation"
-      VDU 5
-
-      FOR X%=0 TO LEN(A$)-1
-        GCOL 0,9
-        MOVE X%*40+308,990
-        PRINTMID$(A$,X%+1,1)
-        GCOL 0,11
-        MOVE X%*40+312,994
-        PRINTMID$(A$,X%+1,1)
-
-      NEXT
-      VDU 4
-
-      REM all sprites layout
-      FOR Y%=0 TO 3
-        FOR X%=0 TO 11
-          S%=X%+Y%*12
-          DX%=X%*96
-          DY%=336-Y%*112
-          GCOL 0,4
-          IF S%<sprite_max% THEN
-            PROCdrawanimspr(S%,DX%+14,DY%+16)
-            GCOL 0,7
-          ENDIF
-          RECTANGLE DX%+8,DY%+8,90,106
-        NEXT
-      NEXT
-
-      REM selected sprite set layout
-      COLOUR 15
-      PRINTTAB(0,3)"SET:"
-      PRINTTAB(17,3)"COUNT:"
-      PRINTTAB(0,7)"FRM:"
-      PRINTTAB(0,8)"REP:"
-      PRINTTAB(0,9)"X:"
-      PRINTTAB(17,9)"H:"
-      PRINTTAB(0,10)"Y:"
-      PRINTTAB(17,10)"V:"
+      PROCanimredraw
       PROCanimupdate(0)
-
-      REM GAP 88 DOUBLE BUTTON, 56 SINGLE BUTTON
-
-      REM SET
-      animx%=240
-      PROCanimcontrol(0,"<<",animx%,880,8,14)
-      PROCanimcontrol(1,"<",animx%,880,8,14)
-      PROCanimcontrol(2,">",animx%,880,8,14)
-      PROCanimcontrol(3,">>",animx%,880,8,14)
-
-      REM FRM
-      animx%=272
-      PROCanimcontrol(4,"<<",animx%,720,8,14)
-      PROCanimcontrol(5,"<",animx%,720,8,14)
-      PROCanimcontrol(6,">",animx%,720,8,14)
-      PROCanimcontrol(7,">>",animx%,720,8,14)
-
-      REM REP
-      animx%=432
-      PROCanimcontrol(8,"<<",animx%,680,8,14)
-      PROCanimcontrol(9,"<",animx%,680,8,14)
-      PROCanimcontrol(10,">",animx%,680,8,14)
-      PROCanimcontrol(11,">>",animx%,680,8,14)
-
-      REM X,H
-      animx%=212
-      PROCanimcontrol(12,"<<",animx%,640,8,14)
-      PROCanimcontrol(13,"<",animx%,640,8,14)
-      PROCanimcontrol(14,">",animx%,640,8,14)
-      PROCanimcontrol(15,">>",animx%,640,8,14)
-      animx%=752
-      PROCanimcontrol(16,"<<",animx%,640,8,14)
-      PROCanimcontrol(17,"<",animx%,640,8,14)
-      PROCanimcontrol(18,">",animx%,640,8,14)
-      PROCanimcontrol(19,">>",animx%,640,8,14)
-
-      REM Y,V
-      animx%=212
-      PROCanimcontrol(20,"<<",animx%,600,8,14)
-      PROCanimcontrol(21,"<",animx%,600,8,14)
-      PROCanimcontrol(22,">",animx%,600,8,14)
-      PROCanimcontrol(23,">>",animx%,600,8,14)
-      animx%=752
-      PROCanimcontrol(24,"<<",animx%,600,8,14)
-      PROCanimcontrol(25,"<",animx%,600,8,14)
-      PROCanimcontrol(26,">",animx%,600,8,14)
-      PROCanimcontrol(27,">>",animx%,600,8,14)
-
-      REM menu
-      PROCanimcontrol(28,"LOAD",16,940,7,10)
-      PROCanimcontrol(29,"SAVE",160,940,7,10)
-      PROCanimcontrol(30,"PLOT",304,940,7,13)
-      PROCanimcontrol(31,"UNDO",448,940,7,8)
-      PROCanimcontrol(32,"EXIT",1120,940,7,9)
 
       REPEAT
         PROCREADMOUSE
@@ -1975,8 +1882,19 @@
 
                   WHEN 31 : REM plot
 
-                  WHEN 32 : REM exit
+                  WHEN 32 : REM load
+
+                  WHEN 33 : REM save
+
+                  WHEN 34 : REM plot
+
+                  WHEN 35 : REM exit
                     DONE%=1
+
+                  WHEN 36 : REM put sprite in frame
+                    PROCanimput
+                    PROCanimredraw
+
                 ENDCASE
 
                 EXIT FOR
@@ -1984,7 +1902,6 @@
             NEXT
 
           ENDIF
-          SP%=-1
         ELSE
           WAIT 2
         ENDIF
@@ -2043,7 +1960,7 @@
 
           IF S%>-1 THEN
             SPR%+=1
-            PROCdrawanimspr(S%,DX%+14,DY%+16)
+            PROCdrawanimspr(S%,DX%+12,DY%+16)
             GCOL 0,7
           ELSE
             GCOL 0,4
@@ -2092,6 +2009,185 @@
         PRINTTAB(20,10)RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.v%),3);
       ENDIF
 
+      ENDPROC
+
+      REM ##########################################################
+      REM redraw sprite animation screen
+      DEF PROCanimredraw
+      LOCAL X%,Y%,DX%,DY%,S%,A$
+      REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
+      CLS
+
+      REM header
+      A$="Sprite Animation"
+      VDU 5
+
+      FOR X%=0 TO LEN(A$)-1
+        GCOL 0,9
+        MOVE X%*40+308,990
+        PRINTMID$(A$,X%+1,1)
+        GCOL 0,11
+        MOVE X%*40+312,994
+        PRINTMID$(A$,X%+1,1)
+
+      NEXT
+      VDU 4
+
+      REM all sprites layout
+      FOR Y%=0 TO 3
+        FOR X%=0 TO 11
+          S%=X%+Y%*12
+          DX%=X%*96
+          DY%=336-Y%*112
+          GCOL 0,4
+          IF S%<sprite_max% THEN
+            PROCdrawanimspr(S%,DX%+12,DY%+16)
+            GCOL 0,7
+          ENDIF
+          RECTANGLE DX%+8,DY%+8,90,106
+        NEXT
+      NEXT
+
+      REM selected sprite set layout
+      COLOUR 15
+      PRINTTAB(0,3)"SET:"
+      PRINTTAB(17,3)"COUNT:"
+      PRINTTAB(0,7)"FRM:"
+      PRINTTAB(0,8)"REP:"
+      PRINTTAB(0,9)"X:"
+      PRINTTAB(17,9)"H:"
+      PRINTTAB(0,10)"Y:"
+      PRINTTAB(17,10)"V:"
+
+      REM GAP 88 DOUBLE BUTTON, 56 SINGLE BUTTON
+
+      REM SET
+      animx%=240
+      PROCanimcontrol(0,"<<",animx%,880,8,14)
+      PROCanimcontrol(1,"<",animx%,880,8,14)
+      PROCanimcontrol(2,">",animx%,880,8,14)
+      PROCanimcontrol(3,">>",animx%,880,8,14)
+
+      REM FRM
+      animx%=272
+      PROCanimcontrol(4,"<<",animx%,720,8,14)
+      PROCanimcontrol(5,"<",animx%,720,8,14)
+      PROCanimcontrol(6,">",animx%,720,8,14)
+      PROCanimcontrol(7,">>",animx%,720,8,14)
+      REM place button
+      PROCanimcontrol(36,"PUT",animx%,720,7,10)
+
+
+      REM REP
+      animx%=432
+      PROCanimcontrol(8,"<<",animx%,680,8,14)
+      PROCanimcontrol(9,"<",animx%,680,8,14)
+      PROCanimcontrol(10,">",animx%,680,8,14)
+      PROCanimcontrol(11,">>",animx%,680,8,14)
+
+      REM X,H
+      animx%=212
+      PROCanimcontrol(12,"<<",animx%,640,8,14)
+      PROCanimcontrol(13,"<",animx%,640,8,14)
+      PROCanimcontrol(14,">",animx%,640,8,14)
+      PROCanimcontrol(15,">>",animx%,640,8,14)
+      animx%=752
+      PROCanimcontrol(16,"<<",animx%,640,8,14)
+      PROCanimcontrol(17,"<",animx%,640,8,14)
+      PROCanimcontrol(18,">",animx%,640,8,14)
+      PROCanimcontrol(19,">>",animx%,640,8,14)
+
+      REM Y,V
+      animx%=212
+      PROCanimcontrol(20,"<<",animx%,600,8,14)
+      PROCanimcontrol(21,"<",animx%,600,8,14)
+      PROCanimcontrol(22,">",animx%,600,8,14)
+      PROCanimcontrol(23,">>",animx%,600,8,14)
+      animx%=752
+      PROCanimcontrol(24,"<<",animx%,600,8,14)
+      PROCanimcontrol(25,"<",animx%,600,8,14)
+      PROCanimcontrol(26,">",animx%,600,8,14)
+      PROCanimcontrol(27,">>",animx%,600,8,14)
+
+      REM menu
+      animx%=16
+      PROCanimcontrol(28,"LOAD",animx%,940,7,10)
+      PROCanimcontrol(29,"SAVE",animx%,940,7,10)
+      PROCanimcontrol(30,"PLOT",animx%,940,7,13)
+      PROCanimcontrol(31,"UNDO",animx%,940,7,8)
+      PROCanimcontrol(32,"----",animx%,940,7,8)
+      PROCanimcontrol(33,"----",animx%,940,7,8)
+      PROCanimcontrol(34,"----",animx%,940,7,8)
+      PROCanimcontrol(35,"EXIT",1120,940,7,9)
+
+      ENDPROC
+
+      REM ##########################################################
+      REM place 1st sprite of a set in frame
+      DEF PROCanimput
+      LOCAL X%,Y%,OX%,OY%,C%,S%,F%,DONE%
+      CLS
+
+      REM draw frame
+      GCOL 0,7
+      F%=sprlist2{(spr_lstcount2%)}.f%
+      FOR Y%=3 TO 74
+        FOR X%=2 TO 79
+          C%=FNpoint_buf(X%,77-Y%,F%)
+          IF C% THEN RECTANGLE FILL X%*8+40*8,Y%*8+8,8,8
+        NEXT
+      NEXT
+
+      REM 40+80+1 (121) x 48+75+1 (124)
+      REM grid
+      GCOL 0,8
+      FOR X%=1 TO 124
+        LINE 0,X%*8,121*8,X%*8
+        IF X%<122 THEN
+          LINE X%*8,0,X%*8,124*8
+        ENDIF
+      NEXT
+
+      REM menu bar and first column
+      GCOL 0,3
+      RECTANGLE FILL 40*8,73*8,80*8,24
+      RECTANGLE FILL 40*8,8,16,72*8
+
+      X%=(MX% DIV 16)*16
+      Y%=((MY%+16) DIV 24)*24
+      IF X%<0 THEN X%=0
+      IF X%>120*8 THEN X%=120*8
+      IF Y%<0 THEN Y%=0
+      IF Y%>124*8 THEN Y%=124*8
+      OX%=X%
+      OY%=Y%
+      S%=sprlist2{(spr_lstcount2%)}.s%(0)
+      GCOL 3,10
+      PROCdrawanimspr2(S%,X%,Y%-47*8)
+      REPEAT
+        PROCREADMOUSE
+        X%=(MX% DIV 16)*16
+        Y%=((MY%+16) DIV 24)*24
+        IF X%<0 THEN X%=0
+        IF X%>120*8 THEN X%=120*8
+        IF Y%<0 THEN Y%=0
+        IF Y%>124*8 THEN Y%=124*8
+        IF OX%<>X% OR OY%<>Y% THEN
+          PROCdrawanimspr2(S%,OX%,OY%-47*8)
+          PROCdrawanimspr2(S%,X%,Y%-47*8)
+          OX%=X%
+          OY%=Y%
+        ENDIF
+        PRINTTAB(32,0)"MX:";STR$(MX% DIV 8);"  ";
+        PRINTTAB(32,1)"MY:";STR$(MY% DIV 8);"  ";
+        PRINTTAB(32,2)"PX:";STR$((MX% DIV 8)-40);"  ";
+        PRINTTAB(32,3)"PY:";STR$(76-(MY% DIV 8));"  ";
+        PRINTTAB(32,4)"CX:";STR$((X% DIV 16)-20);"  ";
+        PRINTTAB(32,5)"CY:";STR$(25-(Y% DIV 24));"  ";
+
+        WAIT 2
+      UNTIL DONE%=1
+      PROCWAITMOUSE(0)
       ENDPROC
 
       REM ##########################################################
@@ -4485,6 +4581,19 @@
         FOR X%=0 TO 39
           C%=FNpoint_sprbuf(X%,47-Y%,s%)
           IF C% THEN PLOT x%+X%*2,y%+Y%*2
+        NEXT
+      NEXT
+      ENDPROC
+
+      REM ##########################################################
+      REM draw pixel * 4 version of sprite for animation put in frame
+      DEF PROCdrawanimspr2(s%,x%,y%)
+      LOCAL X%,Y%,C%
+
+      FOR Y%=0 TO 47
+        FOR X%=0 TO 39
+          C%=FNpoint_sprbuf(X%,47-Y%,s%)
+          IF C% THEN RECTANGLE FILL x%+X%*8,y%+Y%*8,8,8
         NEXT
       NEXT
       ENDPROC
