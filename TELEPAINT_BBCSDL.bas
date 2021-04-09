@@ -1892,8 +1892,9 @@
                     DONE%=1
 
                   WHEN 36 : REM put sprite in frame
-                    PROCanimput
+                    PROCanimput(1)
                     PROCanimredraw
+                    PROCanimupdate(0)
 
                 ENDCASE
 
@@ -2124,7 +2125,7 @@
 
       REM ##########################################################
       REM place 1st sprite of a set in frame
-      DEF PROCanimput
+      DEF PROCanimput(G%)
       LOCAL X%,Y%,OX%,OY%,C%,S%,F%,DONE%
       CLS
 
@@ -2132,49 +2133,70 @@
       GCOL 0,7
       F%=sprlist2{(spr_lstcount2%)}.f%
       FOR Y%=3 TO 74
+        OY%=Y%*8-8
         FOR X%=2 TO 79
           C%=FNpoint_buf(X%,77-Y%,F%)
-          IF C% THEN RECTANGLE FILL X%*8+40*8,Y%*8+8,8,8
+          IF C% THEN RECTANGLE FILL X%*8+40*8,OY%,8,8
         NEXT
       NEXT
 
-      REM 40+80+1 (121) x 48+75+1 (124)
+      REM PIXEL GRID 40+80+2 (122) x 48+75+2 (125)
+      REM CHAR GRID
       REM grid
       GCOL 0,8
-      FOR X%=1 TO 124
-        LINE 0,X%*8,121*8,X%*8
-        IF X%<122 THEN
-          LINE X%*8,0,X%*8,124*8
-        ENDIF
-      NEXT
+      IF G%=0 THEN
+        FOR X%=1 TO 124
+          LINE 0,X%*8,122*8,X%*8
+          IF X%<123 THEN
+            LINE X%*8,0,X%*8,125*8
+          ENDIF
+        NEXT
+      ELSE
+        FOR X%=1 TO 61
+          LINE X%*16,0,X%*16,125*8
+          IF X%<42 THEN
+            LINE 0,X%*24-8,61*16,X%*24-8
+
+          ENDIF
+        NEXT
+
+      ENDIF
 
       REM menu bar and first column
       GCOL 0,3
-      RECTANGLE FILL 40*8,73*8,80*8,24
-      RECTANGLE FILL 40*8,8,16,72*8
+      RECTANGLE 40*8,16,80*8,75*8
+      RECTANGLE FILL 40*8,74*8,80*8,24
+      RECTANGLE FILL 40*8,16,16,72*8
 
       X%=(MX% DIV 16)*16
-      Y%=((MY%+16) DIV 24)*24
+      Y%=((MY%+8) DIV 24)*24
       IF X%<0 THEN X%=0
       IF X%>120*8 THEN X%=120*8
       IF Y%<0 THEN Y%=0
-      IF Y%>124*8 THEN Y%=124*8
+      IF Y%>123*8 THEN Y%=123*8
       OX%=X%
       OY%=Y%
       S%=sprlist2{(spr_lstcount2%)}.s%(0)
+      GCOL 3,4
+      RECTANGLE X%,Y%-46*8,40*8,48*8
       GCOL 3,10
-      PROCdrawanimspr2(S%,X%,Y%-47*8)
+      PROCdrawanimspr2(S%,X%,Y%-46*8)
       REPEAT
         PROCREADMOUSE
         X%=(MX% DIV 16)*16
-        Y%=((MY%+16) DIV 24)*24
+        Y%=((MY%+8) DIV 24)*24
         IF X%<0 THEN X%=0
         IF X%>120*8 THEN X%=120*8
         IF Y%<0 THEN Y%=0
-        IF Y%>124*8 THEN Y%=124*8
+        IF Y%>123*8 THEN Y%=123*8
         IF OX%<>X% OR OY%<>Y% THEN
-          PROCdrawanimspr2(S%,OX%,OY%-47*8)
-          PROCdrawanimspr2(S%,X%,Y%-47*8)
+          GCOL 3,4
+          RECTANGLE OX%,OY%-46*8,40*8,48*8
+          RECTANGLE X%,Y%-46*8,40*8,48*8
+
+          GCOL 3,10
+          PROCdrawanimspr2(S%,OX%,OY%-46*8)
+          PROCdrawanimspr2(S%,X%,Y%-46*8)
           OX%=X%
           OY%=Y%
         ENDIF
@@ -2185,9 +2207,15 @@
         PRINTTAB(32,4)"CX:";STR$((X% DIV 16)-20);"  ";
         PRINTTAB(32,5)"CY:";STR$(25-(Y% DIV 24));"  ";
 
+        IF MB%=4 THEN DONE%=1
+
         WAIT 2
       UNTIL DONE%=1
       PROCWAITMOUSE(0)
+      X%=(MX% DIV 16)*16
+      Y%=((MY%+8) DIV 24)*24
+      sprlist2{(spr_lstcount2%)}.x%=(X% DIV 16)-20
+      sprlist2{(spr_lstcount2%)}.y%=25-(Y% DIV 24)
       ENDPROC
 
       REM ##########################################################
@@ -4588,12 +4616,13 @@
       REM ##########################################################
       REM draw pixel * 4 version of sprite for animation put in frame
       DEF PROCdrawanimspr2(s%,x%,y%)
-      LOCAL X%,Y%,C%
+      LOCAL X%,Y%,YC%,C%
 
       FOR Y%=0 TO 47
+        YC%=y%+Y%*8
         FOR X%=0 TO 39
           C%=FNpoint_sprbuf(X%,47-Y%,s%)
-          IF C% THEN RECTANGLE FILL x%+X%*8,y%+Y%*8,8,8
+          IF C% THEN RECTANGLE FILL x%+X%*8,YC%,7,7
         NEXT
       NEXT
       ENDPROC
