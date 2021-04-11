@@ -1460,6 +1460,7 @@
               PROCdrawmenu
               PROCspritemenu(1)
               PROCdrawsprite
+              IF menuext%=77 THEN PROCmenurestore
               REM spr_lstcount%=-1
               REM PROCspritemenu(0)
 
@@ -1677,6 +1678,8 @@
       REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
       MODE 6 : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
 
+      REM VDU 19,7,16,167,167,167 : REM set colour 7 to slightly darker
+
       VDU 23,1,0;0;0;0; : REM Disable cursor
 
       PROCanimredraw
@@ -1692,7 +1695,7 @@
             REPEAT
               PROCREADMOUSE
             UNTIL MB%=0
-            IF MX%>6 AND MX%<1156 AND MY%>764 AND MY%<878 THEN
+            IF MX%>6 AND MX%<1156 AND MY%>776 AND MY%<890 THEN
               DP%=(MX%-8) DIV 96
               sprlist2{(spr_lstcount2%)}.s%(DP%)=SP%
               PROCanimupdate(0)
@@ -1755,6 +1758,11 @@
                     ENDIF
 
                   WHEN 8 : REM repeat dec 10
+                    IF sprlist2{(spr_lstcount2%)}.r%>0 THEN
+                      sprlist2{(spr_lstcount2%)}.r%-=10
+                      IF sprlist2{(spr_lstcount2%)}.r%<0 THEN sprlist2{(spr_lstcount2%)}.r%=0
+                      PROCanimupdate(X%)
+                    ENDIF
 
                   WHEN 9 : REM repeat dec 1
                     IF sprlist2{(spr_lstcount2%)}.r%>0 THEN
@@ -1763,12 +1771,17 @@
                     ENDIF
 
                   WHEN 10 : REM repeat inc
-                    IF sprlist2{(spr_lstcount2%)}.r%<5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.r%<20 THEN
                       sprlist2{(spr_lstcount2%)}.r%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 11 : REM repeat inc 10
+                    IF sprlist2{(spr_lstcount2%)}.r%<20 THEN
+                      sprlist2{(spr_lstcount2%)}.r%+=10
+                      IF sprlist2{(spr_lstcount2%)}.r%>20 THEN sprlist2{(spr_lstcount2%)}.r%=20
+                      PROCanimupdate(X%)
+                    ENDIF
 
                   WHEN 12 : REM x dec 10
                     IF sprlist2{(spr_lstcount2%)}.x%>-20 THEN
@@ -1784,41 +1797,41 @@
                     ENDIF
 
                   WHEN 14 : REM x inc
-                    IF sprlist2{(spr_lstcount2%)}.x%<98 THEN
+                    IF sprlist2{(spr_lstcount2%)}.x%<40 THEN
                       sprlist2{(spr_lstcount2%)}.x%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 15 : REM x inc 10
-                    IF sprlist2{(spr_lstcount2%)}.x%<98 THEN
+                    IF sprlist2{(spr_lstcount2%)}.x%<40 THEN
                       sprlist2{(spr_lstcount2%)}.x%+=10
-                      IF sprlist2{(spr_lstcount2%)}.x%>98 THEN sprlist2{(spr_lstcount2%)}.x%=98
+                      IF sprlist2{(spr_lstcount2%)}.x%>40 THEN sprlist2{(spr_lstcount2%)}.x%=40
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 16 : REM h dec 10
-                    IF sprlist2{(spr_lstcount2%)}.h%>-5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.h%>-10 THEN
                       sprlist2{(spr_lstcount2%)}.h%-=10
-                      IF sprlist2{(spr_lstcount2%)}.h%<-5 THEN sprlist2{(spr_lstcount2%)}.h%=-5
+                      IF sprlist2{(spr_lstcount2%)}.h%<-10 THEN sprlist2{(spr_lstcount2%)}.h%=-10
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 17 : REM h dec 1
-                    IF sprlist2{(spr_lstcount2%)}.h%>-5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.h%>-10 THEN
                       sprlist2{(spr_lstcount2%)}.h%-=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 18 : REM h inc 1
-                    IF sprlist2{(spr_lstcount2%)}.h%<5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.h%<10 THEN
                       sprlist2{(spr_lstcount2%)}.h%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 19 : REM h inc 10
-                    IF sprlist2{(spr_lstcount2%)}.h%<5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.h%<10 THEN
                       sprlist2{(spr_lstcount2%)}.h%+=10
-                      IF sprlist2{(spr_lstcount2%)}.h%>5 THEN sprlist2{(spr_lstcount2%)}.h%=5
+                      IF sprlist2{(spr_lstcount2%)}.h%>10 THEN sprlist2{(spr_lstcount2%)}.h%=10
                       PROCanimupdate(X%)
                     ENDIF
 
@@ -1842,35 +1855,35 @@
                     ENDIF
 
                   WHEN 23 : REM y inc 10
-                    IF sprlist2{(spr_lstcount2%)}.y%<41 THEN
+                    IF sprlist2{(spr_lstcount2%)}.y%<25 THEN
                       sprlist2{(spr_lstcount2%)}.y%+=10
-                      IF sprlist2{(spr_lstcount2%)}.y%>41 THEN sprlist2{(spr_lstcount2%)}.y%=41
+                      IF sprlist2{(spr_lstcount2%)}.y%>25 THEN sprlist2{(spr_lstcount2%)}.y%=25
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 24 : REM v dec 10
-                    IF sprlist2{(spr_lstcount2%)}.v%>-5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.v%>-10 THEN
                       sprlist2{(spr_lstcount2%)}.v%-=10
-                      IF sprlist2{(spr_lstcount2%)}.v%<-5 THEN sprlist2{(spr_lstcount2%)}.v%=-5
+                      IF sprlist2{(spr_lstcount2%)}.v%<-10 THEN sprlist2{(spr_lstcount2%)}.v%=-10
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 25 : REM v dec 1
-                    IF sprlist2{(spr_lstcount2%)}.v%>-5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.v%>-10 THEN
                       sprlist2{(spr_lstcount2%)}.v%-=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 26 : REM v inc 1
-                    IF sprlist2{(spr_lstcount2%)}.v%<5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.v%<10 THEN
                       sprlist2{(spr_lstcount2%)}.v%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 27 : REM v inc 10
-                    IF sprlist2{(spr_lstcount2%)}.v%<5 THEN
+                    IF sprlist2{(spr_lstcount2%)}.v%<10 THEN
                       sprlist2{(spr_lstcount2%)}.v%+=10
-                      IF sprlist2{(spr_lstcount2%)}.v%>5 THEN sprlist2{(spr_lstcount2%)}.v%=5
+                      IF sprlist2{(spr_lstcount2%)}.v%>10 THEN sprlist2{(spr_lstcount2%)}.v%=10
                       PROCanimupdate(X%)
                     ENDIF
 
@@ -1879,14 +1892,84 @@
                   WHEN 29 : REM save
 
                   WHEN 30 : REM plot
+                    PROCundosaveall
+                    FOR L%=0 TO 99
+                      IF sprlist2{(L%)}.s%(0)>-1 THEN
+                        REM iniital starting location and frame
+                        X%=sprlist2{(L%)}.x%
+                        Y%=sprlist2{(L%)}.y%
+                        F%=sprlist2{(L%)}.f%
 
-                  WHEN 31 : REM plot
+                        REM count sprites in this set
+                        C%=0
+                        REPEAT
+                          C%+=1
+                        UNTIL sprlist2{(L%)}.s%(C%)=-1 OR C%=11
+                        IF C%=11 AND sprlist2{(L%)}.s%(C%)>-1 THEN C%=12
 
-                  WHEN 32 : REM load
+                        REM plot at least 1 set
+                        FOR S%=0 TO C%-1
+                          IF F%<frame_max%+1 THEN
+                            PROCspritetoframe(F%,sprlist2{(L%)}.s%(S%),X%,Y%)
+                            X%+=sprlist2{(L%)}.h%
+                            Y%+=sprlist2{(L%)}.v%
+                            F%+=1
+                          ELSE
+                            EXIT FOR
+                          ENDIF
+                        NEXT
 
-                  WHEN 33 : REM save
+                        REM repeat set if required
+                        IF sprlist2{(L%)}.r%<>1 AND F%<frame_max% THEN
+                          R%=1
+                          REPEAT
+                            FOR S%=0 TO C%-1
+                              IF F%<frame_max%+1 THEN
+                                PROCspritetoframe(F%,sprlist2{(L%)}.s%(S%),X%,Y%)
+                                X%+=sprlist2{(L%)}.h%
+                                Y%+=sprlist2{(L%)}.v%
+                                F%+=1
+                              ELSE
+                                EXIT FOR
+                              ENDIF
+                            NEXT
 
-                  WHEN 34 : REM plot
+                            R%+=1
+                          UNTIL R%=sprlist2{(L%)}.r% OR F%>frame_max%
+                        ENDIF
+
+                      ENDIF
+                    NEXT
+                    DONE%=1
+                    menuext%=77
+
+                  WHEN 31 : REM undo
+                    PROCundorestoreall
+                    DONE%=1
+                    menuext%=77
+
+                  WHEN 32 : REM spare
+
+                  WHEN 33 : REM reset all sets
+                    IF FNclearset("RESET ALL SETS?")=1 THEN
+                      FOR s%=0 TO 99
+                        sprlist2{(s%)}.f%=1
+                        sprlist2{(s%)}.r%=0
+                        sprlist2{(s%)}.x%=0
+                        sprlist2{(s%)}.y%=0
+                        sprlist2{(s%)}.h%=0
+                        sprlist2{(s%)}.v%=0
+                        FOR ss%=0 TO 11
+                          sprlist2{(s%)}.s%(ss%)=-1
+                        NEXT
+                      NEXT
+                      spr_lstcount2%=0
+                    ENDIF
+                    PROCanimredraw
+                    PROCanimupdate(0)
+
+
+                  WHEN 34 : REM spare
 
                   WHEN 35 : REM exit
                     DONE%=1
@@ -1897,6 +1980,22 @@
                       PROCanimredraw
                       PROCanimupdate(0)
                     ENDIF
+
+                  WHEN 37 : REM clear this set
+                    IF FNclearset("RESET THIS SET?")=1 THEN
+                      sprlist2{(spr_lstcount2%)}.f%=1
+                      sprlist2{(spr_lstcount2%)}.r%=0
+                      sprlist2{(spr_lstcount2%)}.x%=0
+                      sprlist2{(spr_lstcount2%)}.y%=0
+                      sprlist2{(spr_lstcount2%)}.h%=0
+                      sprlist2{(spr_lstcount2%)}.v%=0
+                      FOR ss%=0 TO 11
+                        sprlist2{(spr_lstcount2%)}.s%(ss%)=-1
+                      NEXT
+
+                    ENDIF
+                    PROCanimredraw
+                    PROCanimupdate(0)
 
                 ENDCASE
 
@@ -1917,16 +2016,45 @@
       ENDPROC
 
       REM ##########################################################
-      REM display a number control box, Title, X, Y, border col, text col
-      DEF PROCanimcontrol(n%,t$,x%,y%,bc%,tc%)
+      REM display a warning for clearing sets
+      DEF FNclearset(t$)
+      LOCAL DONE%
+
+      GCOL 0,0
+      RECTANGLE FILL 240,300,800,400
+
+      GCOL 0,15
+      RECTANGLE 248,308,784,384
+      RECTANGLE 250,310,780,380
+
+      PROCgtext(t$,300,540,11,0)
+
+      PROCgtext(" RESET ",300,450,10,8)
+      PROCgtext(" CANCEL ",600,450,9,8)
+
+      PROCWAITMOUSE(4)
+      PROCWAITMOUSE(0)
+      IF MX%>298 AND MX%<524 AND MY%>410 AND MY%<500 THEN DONE%=1
+
+      =DONE%
+
+      REM ##########################################################
+      REM display a control button, Title, X, Y, border col, text col, fill col
+      DEF PROCanimcontrol(n%,t$,x%,y%,bc%,tc%,fc%)
       LOCAL l%,sx%,sy%
 
       l%=LEN(t$)
-      sx%=l%*32+8
-      sy%=32
+      sx%=l%*32+16
+      sy%=36
+
+      GCOL 0,fc%
+      RECTANGLE FILL x%+2,y%-sy%+6,sx%-4,sy%
+
       GCOL 0,bc%
-      RECTANGLE x%,y%-sy%,sx%,sy%+4
-      MOVE x%+8,y%
+
+      RECTANGLE x%,y%-sy%+4,sx%,sy%+4
+      RECTANGLE x%+2,y%-sy%+6,sx%-4,sy%
+      MOVE x%+12,y%+2
       GCOL 0,tc%
       VDU 5
       PRINT t$
@@ -1934,9 +2062,9 @@
 
       REM save control range
       animrange{(n%)}.x1%=x%-1
-      animrange{(n%)}.y1%=y%-sy%-1
+      animrange{(n%)}.y1%=y%-sy%+2
       animrange{(n%)}.x2%=x%+sx%
-      animrange{(n%)}.y2%=y%
+      animrange{(n%)}.y2%=y%+8
 
       animx%=animx%+sx%+16
 
@@ -1945,14 +2073,17 @@
       REM ##########################################################
       REM update animation screen details
       DEF PROCanimupdate(c%)
-      LOCAL SPR%,I%,S%,DX%,DY%
+      LOCAL SPR%,I%,S%,DX%,DY%,tc%,bc%
       c%=c% DIV 4
-      VDU 5
+
+      tc%=11
+      bc%=0
+
       REM set
       IF c%=0 THEN
 
         REM redraw sprites
-        DY%=764
+        DY%=776
         GCOL 0,0
         RECTANGLE FILL 4,DY%+4,1154,116
 
@@ -1971,17 +2102,15 @@
 
         NEXT
 
-        PROCgtext(RIGHT$("00"+STR$(spr_lstcount2%+1),3),5*32,19*40,15,7)
-        PROCgtext(RIGHT$("0"+STR$(SPR%),2),34*32,19*40,15,7)
+        PROCgtext(RIGHT$("00"+STR$(spr_lstcount2%+1),3),5*32,760,14,4)
+        PROCgtext(RIGHT$("0"+STR$(SPR%),2),34*32,760,tc%,bc%)
 
       ENDIF
 
-      GCOL 0,15
-      GCOL 135
 
       REM frm
       IF c%=1 OR c%=0 THEN
-        PROCgtext(RIGHT$("00"+STR$(sprlist2{(spr_lstcount2%)}.f%),3),5*32,18*40,15,7)
+        PROCgtext(RIGHT$("00"+STR$(sprlist2{(spr_lstcount2%)}.f%),3),5*32,708,tc%,bc%)
       ENDIF
 
       REM rep
@@ -1990,31 +2119,31 @@
           WHEN 0
             A$="ALL FRMS"
           WHEN 1
-            A$="001 FRM "
+            A$="001 SET "
           OTHERWISE
-            A$=RIGHT$("00"+STR$(sprlist2{(spr_lstcount2%)}.r%),3)+" FRMS"
+            A$=RIGHT$("00"+STR$(sprlist2{(spr_lstcount2%)}.r%),3)+" SETS"
         ENDCASE
-        PROCgtext(A$,5*32,17*40,15,7)
+        PROCgtext(A$,5*32,656,tc%,bc%)
       ENDIF
 
       REM X
       IF c%=3 OR c%=0 THEN
-        PROCgtext(RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.x%),3),3*32,16*40,15,7)
+        PROCgtext(RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.x%),3),3*32,552,tc%,bc%)
       ENDIF
 
       REM H
       IF c%=4 OR c%=0 THEN
-        PROCgtext(RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.h%),3),20*32,16*40,15,7)
+        PROCgtext(RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.h%),3),20*32,552,tc%,bc%)
       ENDIF
 
       REM Y
       IF c%=5 OR c%=0 THEN
-        PROCgtext(RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.y%),3),3*32,15*40,15,7)
+        PROCgtext(RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.y%),3),3*32,500,tc%,bc%)
       ENDIF
 
       REM V
       IF c%=6 OR c%=0 THEN
-        PROCgtext(RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.v%),3),20*32,15*40,15,7)
+        PROCgtext(RIGHT$("  "+STR$(sprlist2{(spr_lstcount2%)}.v%),3),20*32,500,tc%,bc%)
       ENDIF
       VDU 4
       ENDPROC
@@ -2022,10 +2151,15 @@
       REM ##########################################################
       REM redraw sprite animation screen
       DEF PROCanimredraw
-      LOCAL X%,Y%,DX%,DY%,S%,A$
+      LOCAL X%,Y%,DX%,DY%,S%,bc%,tc%,lc%,A$
       REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
-      GCOL 135
+
+      GCOL 128
       CLG
+
+      bc%=6 : REM control button colour
+      tc%=15 : REM parameter text colour
+      lc%=6 : REM label text colour
 
       REM header
       A$="Sprite Animation"
@@ -2053,21 +2187,23 @@
           GCOL 0,8
           IF S%<sprite_max% THEN
             PROCdrawanimspr(S%,DX%+12,DY%+16)
-            GCOL 0,7
+            GCOL 0,15
           ENDIF
           RECTANGLE DX%+8,DY%+8,90,106
         NEXT
       NEXT
 
       REM selected sprite set layout
-      PROCgtext("SET:",0,19*40,8,7)
-      PROCgtext("COUNT:",27*32,19*40,8,7)
-      PROCgtext("FRM:",0,18*40,8,7)
-      PROCgtext("REP:",0,17*40,8,7)
-      PROCgtext("X:",0,16*40,8,7)
-      PROCgtext("H:",17*32,16*40,8,7)
-      PROCgtext("Y:",0,15*40,8,7)
-      PROCgtext("V:",17*32,15*40,8,7)
+      PROCgtext("SET:",0,760,tc%,0)
+      PROCgtext("COUNT:",27*32,760,lc%,0)
+      PROCgtext("FRM:",0,708,tc%,0)
+      PROCgtext("REP:",0,656,tc%,0)
+      PROCgtext("START POS:",0,604,lc%,0)
+      PROCgtext("X:",0,552,tc%,0)
+      PROCgtext("Y:",0,500,tc%,0)
+      PROCgtext("DELTA PER FRAME:",17*32,604,lc%,0)
+      PROCgtext("H:",17*32,552,tc%,0)
+      PROCgtext("V:",17*32,500,tc%,0)
 
       VDU 4
 
@@ -2075,63 +2211,64 @@
 
       REM SET
       animx%=272
-      PROCanimcontrol(0,"<<",animx%,760,8,0)
-      PROCanimcontrol(1,"<",animx%,760,8,0)
-      PROCanimcontrol(2,">",animx%,760,8,0)
-      PROCanimcontrol(3,">>",animx%,760,8,0)
+      PROCanimcontrol(0,"<<",animx%,760,8,bc%,0)
+      PROCanimcontrol(1,"<",animx%,760,8,bc%,0)
+      PROCanimcontrol(2,">",animx%,760,8,bc%,0)
+      PROCanimcontrol(3,">>",animx%,760,8,bc%,0)
 
       REM put button
-      PROCanimcontrol(36,"PUT",18*32,760,8,5)
+      PROCanimcontrol(36,"PUT",animx%,760,7,14,4)
+      PROCanimcontrol(37,"CLR",animx%,760,7,1,0)
 
       REM FRM
       animx%=272
-      PROCanimcontrol(4,"<<",animx%,720,8,0)
-      PROCanimcontrol(5,"<",animx%,720,8,0)
-      PROCanimcontrol(6,">",animx%,720,8,0)
-      PROCanimcontrol(7,">>",animx%,720,8,0)
+      PROCanimcontrol(4,"<<",animx%,708,8,bc%,0)
+      PROCanimcontrol(5,"<",animx%,708,8,bc%,0)
+      PROCanimcontrol(6,">",animx%,708,8,bc%,0)
+      PROCanimcontrol(7,">>",animx%,708,8,bc%,0)
 
 
       REM REP
       animx%=432
-      PROCanimcontrol(8,"<<",animx%,680,8,0)
-      PROCanimcontrol(9,"<",animx%,680,8,0)
-      PROCanimcontrol(10,">",animx%,680,8,0)
-      PROCanimcontrol(11,">>",animx%,680,8,0)
+      PROCanimcontrol(8,"<<",animx%,656,8,bc%,0)
+      PROCanimcontrol(9,"<",animx%,656,8,bc%,0)
+      PROCanimcontrol(10,">",animx%,656,8,bc%,0)
+      PROCanimcontrol(11,">>",animx%,656,8,bc%,0)
 
       REM X,H
       animx%=212
-      PROCanimcontrol(12,"<<",animx%,640,8,0)
-      PROCanimcontrol(13,"<",animx%,640,8,0)
-      PROCanimcontrol(14,">",animx%,640,8,0)
-      PROCanimcontrol(15,">>",animx%,640,8,0)
+      PROCanimcontrol(12,"<<",animx%,552,8,bc%,0)
+      PROCanimcontrol(13,"<",animx%,552,8,bc%,0)
+      PROCanimcontrol(14,">",animx%,552,8,bc%,0)
+      PROCanimcontrol(15,">>",animx%,552,8,bc%,0)
       animx%=752
-      PROCanimcontrol(16,"<<",animx%,640,8,0)
-      PROCanimcontrol(17,"<",animx%,640,8,0)
-      PROCanimcontrol(18,">",animx%,640,8,0)
-      PROCanimcontrol(19,">>",animx%,640,8,0)
+      PROCanimcontrol(16,"<<",animx%,552,8,bc%,0)
+      PROCanimcontrol(17,"<",animx%,552,8,bc%,0)
+      PROCanimcontrol(18,">",animx%,552,8,bc%,0)
+      PROCanimcontrol(19,">>",animx%,552,8,bc%,0)
 
       REM Y,V
       animx%=212
-      PROCanimcontrol(20,"<<",animx%,600,8,0)
-      PROCanimcontrol(21,"<",animx%,600,8,0)
-      PROCanimcontrol(22,">",animx%,600,8,0)
-      PROCanimcontrol(23,">>",animx%,600,8,0)
+      PROCanimcontrol(20,"<<",animx%,500,8,bc%,0)
+      PROCanimcontrol(21,"<",animx%,500,8,bc%,0)
+      PROCanimcontrol(22,">",animx%,500,8,bc%,0)
+      PROCanimcontrol(23,">>",animx%,500,8,bc%,0)
       animx%=752
-      PROCanimcontrol(24,"<<",animx%,600,8,0)
-      PROCanimcontrol(25,"<",animx%,600,8,0)
-      PROCanimcontrol(26,">",animx%,600,8,0)
-      PROCanimcontrol(27,">>",animx%,600,8,0)
+      PROCanimcontrol(24,"<<",animx%,500,8,bc%,0)
+      PROCanimcontrol(25,"<",animx%,500,8,bc%,0)
+      PROCanimcontrol(26,">",animx%,500,8,bc%,0)
+      PROCanimcontrol(27,">>",animx%,500,8,bc%,0)
 
       REM menu
       animx%=16
-      PROCanimcontrol(28,"LOAD",animx%,940,8,2)
-      PROCanimcontrol(29,"SAVE",animx%,940,8,2)
-      PROCanimcontrol(30,"PLOT",animx%,940,8,5)
-      PROCanimcontrol(31,"UNDO",animx%,940,8,8)
-      PROCanimcontrol(32,"----",animx%,940,8,8)
-      PROCanimcontrol(33,"----",animx%,940,8,8)
-      PROCanimcontrol(34,"----",animx%,940,8,8)
-      PROCanimcontrol(35,"EXIT",1120,940,8,9)
+      PROCanimcontrol(28,"LOAD",animx%,940,7,15,0)
+      PROCanimcontrol(29,"SAVE",animx%,940,7,15,0)
+      PROCanimcontrol(30,"PLOT",animx%,940,7,14,4)
+      PROCanimcontrol(31,"UNDO",animx%,940,7,8,0)
+      PROCanimcontrol(32,"----",animx%,940,7,8,0)
+      PROCanimcontrol(33,"RSET",animx%,940,7,1,0)
+      REM PROCanimcontrol(34,"----",animx%,940,7,8,0)
+      PROCanimcontrol(35,"EXIT",1120,940,9,11,1)
 
       ENDPROC
 
@@ -2341,6 +2478,7 @@
             WHEN 0: REM line tool
               IF animateshape% THEN
                 PROCundosaveall
+                PROCdrawmenu
               ELSE
                 PROCundosave
               ENDIF
@@ -2378,6 +2516,7 @@
             WHEN 1: REM rectangle tool
               IF animateshape% THEN
                 PROCundosaveall
+                PROCdrawmenu
               ELSE
                 PROCundosave
               ENDIF
@@ -2924,7 +3063,7 @@
       ENDPROC
 
       REM ##########################################################
-      REM save current screen to undo buffer
+      REM save all screens to undo buffer
       DEF PROCundosaveall
       LOCAL U%,F%
 
@@ -2941,7 +3080,27 @@
 
         redo_count&(F%)=0
       NEXT
-      PROCdrawmenu
+
+      ENDPROC
+
+      REM ##########################################################
+      REM restore all screens from undo buffer
+      DEF PROCundorestoreall
+      LOCAL U%,F%
+
+      FOR F%=0 TO frame_max%-1
+        IF undo_count&(F%)>0 THEN
+          undo_count&(F%)-=1
+
+          undo_index%(F%)-=1
+          IF undo_index%(F%)<0 THEN undo_index%(F%)=undo_max%
+
+          FOR U%=0 TO 959
+            frame_buffer&(F%,U%)=undo_buffer&(F%,undo_index%(F%),U%)
+          NEXT
+        ENDIF
+
+      NEXT
 
       ENDPROC
 
@@ -4741,12 +4900,12 @@
 
       L%=LEN(t$)
       GCOL 0,bc%
-      RECTANGLE FILL x%,y%-32,L%*32-2,32
-
+      RECTANGLE FILL x%,y%-32,L%*32-2,38
+      VDU 5
       GCOL 0,tc%
       MOVE x%,y%
       PRINT t$
-
+      VDU 4
       ENDPROC
 
       REM ##########################################################
