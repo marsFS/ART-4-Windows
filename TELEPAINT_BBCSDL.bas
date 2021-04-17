@@ -1,26 +1,8 @@
-      REM      MODE 7
-      REM PRINT CHR$131 "This is MODE 7"
-      REM PRINT TAB(0,15) "This is still MODE 7"
-      REM OSCLI "DISPLAY """ + @lib$ + "../bbc256x.png"""
-
-      REM INSTALL @lib$+"aagfxlib"
-      REM MODE 7
-      REM PRINT CHR$131 "This is MODE 7"
-      REM PRINT TAB(0,15) "This is still MODE7"
-      REM PROC_aaline(0, 0, 1280, 1000, 4, &8000FF00, 0)
-
-      REM MODE 7
-      REM PRINT CHR$131 "This is MODE 7"
-      REM PRINT TAB(0,15) "This is still MODE 7"
-      REM SYS "SDL_SetRenderDrawColor", @memhdc%, 0, 255, 0, 255
-      REM SYS "SDL_RenderDrawLine", @memhdc%, 0, 500, 640, 0
-      REM *REFRESH
-
       REM *** TODO LIST ***
 
       REM *** INKEY(-256) MATRIX BRANYDY &4D (INCLUDE OTHERS?)
 
-      REM *** INVESTIGATE LOCAL VERSIONS OF LIBRARIES TO MAKE PROGRAM CROSS BASIC COMPATIBLE (DONE?? Need Soruk to Test)
+      REM *** CROSS BASIC COMPATIBILITY (SORUK FOR ADVICE AND TESTING)
 
       REM *** LOAD SCREEN SORT BY NEWEST, NEEDS WORK!
 
@@ -30,18 +12,32 @@
 
       REM *** IMPLEMENT ANIMATED CIRCLE (REDO CIRCLE ROUTINE)
 
-      REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE, ADD MOVE FRAME OPTION (partially done)
+      REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE, ADD MOVE FRAME OPTION (IN PROGRESS)
 
-      REM *** SPRITE MODE, EDIT SPRITES AND COPY TO FRAMES (in progress) 20x16 chars 40x48 pixels
+      REM *** SPRITES -  EDIT SPRITES AND COPY TO FRAMES (in progress) 20x16 chars 40x48 pixels
 
-      REM *** MENU DESIGN IN DIFFERENT MODE FOR MORE FLEXIBILITY
+      REM *** SPRITES - HOT KEYS. NEW: EARSE, OTHERS?  EXISTING: CURSORS NEXT / PREV SPRITE
+
+      REM *** SPRITES - ADD MASKING AND TRANSPARENCY FOR EACH SPRITE SET
+
+      REM *** MENU DESIGN IN DIFFERENT MODE FOR MORE FLEXIBILITY (IN PROGRESS)
+
+      REM *** FILE MENU ADD PAGE UP AND DOWN, SCROLL WHEEL AND HOTKEYS MAYBE?
 
       REM *** BUGS ***
-      REM     * IMPORT SPRITE IMAGE WIDTH ODD NUMBER CAUSES ANOMALY
+      REM     * IMPORT SPRITE IMAGE WIDTH ODD NUMBER CAUSES ANOMALY (FIXED!)
+
+      REM https://edit.tf/#0:<1167 BYTES FOR 25 ROWS>
 
       REM *** TODO LIST ***
 
       REM *** HELP SCREEN: MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
+
+      REM *** SPECIAL SUBMENU: MODE 6
+
+      REM *** SPRITE ANIMATION SCREEN: MODE 6
+
+      BB4W = INKEY$(-256) == "W"
 
       REM ALLOCATE 40MB FOR BUFFERS
       HIMEM = PAGE+40000000
@@ -49,7 +45,7 @@
       INSTALL @lib$+"sortlib"
       REM INSTALL @lib$+"aagfxlib"
 
-      version$="v0.18"
+      version$="v0.19"
 
       DEBUG%=0
 
@@ -71,7 +67,7 @@
       yMin%=2
       yMax%=75
 
-      REM fill bounds & BUFFER used with < and >
+      REM fill bounds & buffer used with < and >
       fxMin%=2
       fxMax%=80
       fyMin%=3
@@ -79,7 +75,7 @@
       fillmax%=255
       DIM fill{(fillmax%) x%,y%}
 
-      REM OLD PIXEL & MOUSE COORDS
+      REM old pixel, mouse, text coords, code display
       OLD_PX%=0
       OLD_PY%=0
       OLD_MX%=0
@@ -89,23 +85,30 @@
       newcode%=0
       oldcode%=0
 
-      REM MOUSE COORDS
+      REM mouse coords
       MX%=0
       MY%=0
       MB%=0
 
-      REM TEXT & PIXEL COORDS FOR CURRENT MOUSE READ LOCATION
+      REM text & pixel coords for current mouse location
       TX%=0
       TY%=0
       PX%=0
       PY%=0
 
-      REM TEXT INPUT COORDS
+      REM text input coords
       TEXTX%=0
       OTX%=0
       OTY%=0
 
-      REM TOOL VARS
+      REM special sub menu S1
+      S1W%=450 : REM menu width
+      S1H%=920 : REM menu height
+      S1X%=580 : REM menu start X
+      S1Y%=960-S1H% : REM menu start Y (offset 1 char down from top of screen)
+
+
+      REM tool and animation vars
       curcol%=7
       oldcol%=7
       bakcol%=0
@@ -119,6 +122,7 @@
       copylocky%=-1
       copylockxt%=0
       copylockyt%=0
+      colmode%=0        : REM column mode for fore and back tools
       shapesel%=-1
       toolcursor%=15
       animateshape%=0
@@ -133,7 +137,9 @@
       dither%=0
       frame%=1
       animation%=0
-      menuext%=0
+      menuext%=0         : REM current extended menu
+      menufrom%=0        : REM menu to return tO
+      menuadd%=0         : REM general var for control layout
       session%=0
       curdir$=@dir$
       cursave$=@dir$
@@ -196,7 +202,7 @@
       sopt{(9)}.x%=12
       sopt{(9)}.y%=9
 
-      REM loading screen options
+      REM loading screen and sprite vars
       menuext%=97
       frame_limit%=100
       frame_max%=8
@@ -222,10 +228,11 @@
 
       PROCloadscreen
 
+      REM current menu or screen showing
       menuext%=0
       sprite_old%=0
 
-      REM frame buffer
+      REM frame buffer 24x40 chars
       DIM frame_buffer&(frame_max%-1,959)
 
       REM 20x16 chars @320 bytes : 40x48 pixels @1920 bytes
@@ -235,10 +242,9 @@
       DIM sprlist{(2000) s%,f%,x%,y%}
       DIM sprlist2{(99) s%(11),f%,r%,x%,y%,h%,v%}
 
-      REM animation controls
-      animcontrols%=40
-      animx%=0
-      DIM animrange{(animcontrols%) x1%,y1%,x2%,y2%}
+      REM animation and menu controls - can be redfinable depending on current screen
+      controls%=40
+      DIM controlrange{(controls%) x1%,y1%,x2%,y2%}
 
       REM undo buffer
       undo_max%=99
@@ -312,13 +318,16 @@
               ELSE
 
                 CASE menuext% OF
-                  WHEN 1 : REM handle special / sub menu
-                    PROCspecialscreen
+                  WHEN 1 : REM handle keyboard and options screen
+                    PROCoptionshandler
 
-                  WHEN 2 : REM SPRITE EDITOR
-                    PROCspritescreen
+                  WHEN 2 : REM sprite editor
+                    PROCspritehandler
 
-                  OTHERWISE : REM MAIN DRAWING CANVAS
+                  WHEN 3 : REM sub menu 1
+                    PROCsub1handler
+
+                  OTHERWISE : REM main drawin canvas
                     PROCmaincanvas
 
                 ENDCASE
@@ -328,13 +337,6 @@
         ELSE : REM no mouse move or clicks detected
 
           PROCcheckkeyboard
-
-
-          REM FOR Y%=0 TO 24
-          REM PROC_aaline(0, Y%*40, 1280, Y%*40, 1, &90909000, 0)
-          REM  SYS "SDL_RenderDrawLine", @memhdc%, 0, Y%*20, 639, Y%*20
-          REM NEXT
-          REM *REFRESH
 
           WAIT 2
 
@@ -402,7 +404,7 @@
       ENDPROC
 
       REM ##########################################################
-      REM WAIT FOR MOUSE TO BE A SPECIFIC BUTTON CLICK
+      REM wait for mouse to be a specific button clicked
       DEF PROCWAITMOUSE(M%)
       REPEAT
         PROCREADMOUSE
@@ -411,9 +413,22 @@
       ENDPROC
 
       REM ##########################################################
-      REM WAIT FOR NO KEY INPUT
+      REM wait for no key input
       DEF PROCWAITNOKEY(K%,R%)
       REPEAT UNTIL INKEY(K%)=R%
+      ENDPROC
+
+      REM ##########################################################
+      REM change mode and preserve window location
+      DEF PROCchangemode(M%)
+      LOCAL xpos%,ypos%
+
+      SYS "SDL_GetWindowPosition", @hwnd%, ^xpos%, ^ypos%, @memhdc%
+
+      MODE M%
+
+      SYS "SDL_SetWindowPosition", @hwnd%, xpos%, ypos%, @memhdc%
+
       ENDPROC
 
       REM ##########################################################
@@ -923,6 +938,8 @@
       DEF PROCmenuhandler
       PROCWAITMOUSE(0)
 
+      IF menuext%=3 AND TX%<>19 THEN PROCmenurestore
+
       CASE TX% OF
         WHEN 0 : REM display control codes
           PROCmenucheck
@@ -953,15 +970,16 @@
 
         WHEN 18 : toolsel%=3:toolcursor%=TX% : REM fill
         WHEN 19 : REM shape / special menu
-          IF menuext%<>1 THEN
-            REM IF menuext%>0 THEN PROCmenurestore
+          IF menuext%<>3 THEN
+            IF menuext%=0 THEN PROCframesave(frame%)
+            menufrom%=menuext%
+            menuext%=3
             REM PROCmenusave
             REM *** SAVEFRAME???
-            menuext%=1
-            PROCspecialmenu(1)
+
+            PROCinits1menu
           ELSE
             PROCmenurestore
-            REM *** DRAWFRAME??
           ENDIF
 
         WHEN 21 : erase%=(erase%+1) AND 1 : REM toggle erase tool
@@ -990,13 +1008,13 @@
       IF TX%<>19 AND menuext%=1 THEN PROCmenurestore
       IF toolsel%<>4 THEN shapesel%=-1
 
-      PROCdrawmenu
+      IF menuext%<>3 THEN PROCdrawmenu
 
       ENDPROC
 
       REM ##########################################################
       REM SPECIAL DIALOG
-      DEF PROCspecialscreen
+      DEF PROCoptionshandler
 
       PROCWAITMOUSE(0)
       CASE TY% OF
@@ -1106,12 +1124,13 @@
               PROCspritemenu(1)
 
             WHEN 17,18,19,20,21,22,23,24
+
               MODE7
               menuext%=0
               PROCdrawmenu
               PROCshowhelp
               menuext%=1
-              PROCspecialmenu(1)
+              PROCoptionsmenu(1)
 
             WHEN 29,30,31,32,33,34,35,36,37
               PROCmenurestore
@@ -1120,13 +1139,13 @@
       ENDCASE
       IF shapesel%>-1 THEN toolsel%=4:toolcursor%=19
 
-      IF menuext%=1 THEN PROCspecialmenu(0)
+      IF menuext%=1 THEN PROCoptionsmenu(0)
 
       ENDPROC
 
       REM ##########################################################
       REM SPRITE EDITOR DIALOG
-      DEF PROCspritescreen
+      DEF PROCspritehandler
       CASE toolsel% OF
         WHEN 1: REM PAINT TOOL
           IF PX%>19 AND PX%<60 AND PY%>8 AND PY%<57 THEN
@@ -1672,11 +1691,143 @@
       ENDPROC
 
       REM ##########################################################
+      REM shape and special sub menu
+      DEF PROCsub1handler
+      LOCAL DONE%,X%
+
+      PROCWAITMOUSE(0)
+
+      IF MX%>S1X% AND MX%<S1X%+S1W% AND MY%>S1Y% AND MY%<S1Y%+S1H% THEN
+        FOR X%=0 TO controls%
+          IF MX%>controlrange{(X%)}.x1% AND MX%<controlrange{(X%)}.x2% AND MY%>controlrange{(X%)}.y1% AND MY%<controlrange{(X%)}.y2% THEN
+            EXIT FOR
+          ENDIF
+        NEXT
+
+        CASE X% OF
+          WHEN 0 : REM line
+            shapesel%=0
+
+          WHEN 1 : REM box
+            shapesel%=1
+
+          WHEN 2 : REM circle
+            shapesel%=2
+
+          WHEN 3 : REM text
+            shapesel%=7
+
+          WHEN 4 : REM flash
+            shapesel%=3
+
+          WHEN 5 : REM double
+            shapesel%=6
+
+          WHEN 6 : REM separated
+            shapesel%=4
+
+          WHEN 7 : REM hold
+            shapesel%=5
+
+          WHEN 8 : REM show grid
+            gridshow%=(gridshow%+1) AND 1
+
+          WHEN 9 : REM animate lines
+            animateshape%=(animateshape%+1) AND 1
+
+          WHEN 10 : REM column mode
+            REM old shapesel%  8 & 9
+            colmode%=(colmode%+1) AND 1
+
+          WHEN 11 : REM fix x paste pos
+            copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
+
+          WHEN 12 : REM fix y paste pos
+            copylockyt%=(copylockyt%+1) AND 1 :REM lock vertical paste pos
+
+        ENDCASE
+
+        IF X%>=0 AND X%<17 THEN
+          PROCs1update(X%)
+
+          REM tool selected
+          IF X%>=0 AND X%<8 AND shapesel%>-1 THEN
+            toolsel%=4:toolcursor%=19
+            DONE%=1
+          ENDIF
+
+          REM other menus
+          IF X%>12 THEN
+            DONE%=1
+          ENDIF
+
+
+        ENDIF
+      ELSE
+        DONE%=1
+      ENDIF
+      REM IF SP%>sprite_max%-1 THEN SP%=-1
+      REM PRINTTAB(0,1)STR$(X%);" "; STR$(DONE%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
+      REM PROCWAITMOUSE(4)
+      REM PROCWAITMOUSE(0)
+
+      IF DONE%=1 THEN
+        PROCWAITMOUSE(0)
+
+        PROCchangemode(7)
+
+        CASE X% OF
+          WHEN 13 : REM keyboard and options screen
+            menuext%=1
+            PROCoptionsmenu(1)
+            PROCdrawmenu
+
+          WHEN 14 : REM sprites screen
+            menuext%=2
+            PROCspritemenu(1)
+            PROCdrawmenu
+
+          WHEN 15 : REM edit.tf export
+            frame%-=1
+            PROCloadnextframe(1,0)
+            PROCmenurestore
+            REM PROCdrawgrid
+            PROCexport_edittf
+
+          WHEN 16 : REM help screen
+            PROCdrawmenu
+            PROCshowhelp
+            PROCmenurestore
+
+          OTHERWISE
+            CASE menufrom% OF
+              WHEN 1
+                menuext%=1
+                PROCoptionsmenu(1)
+                PROCdrawmenu
+
+              WHEN 2
+                menuext%=2
+                PROCspritemenu(1)
+                PROCdrawmenu
+
+              OTHERWISE
+                PROCmenurestore
+                PROCdrawmenu
+                REM PROCdrawgrid
+
+            ENDCASE
+        ENDCASE
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
       REM animation UI
       DEF PROCanimscreen
       LOCAL X%,Y%,DX,DY%,S%,SP%,DP%,DONE%
       REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
-      MODE 6 : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
+      PROCchangemode(6) : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
 
       REM VDU 19,7,16,167,167,167 : REM set colour 7 to slightly darker
 
@@ -1702,8 +1853,8 @@
             ENDIF
           ELSE
             PROCWAITMOUSE(0)
-            FOR X%=0 TO animcontrols%
-              IF MX%>animrange{(X%)}.x1% AND MX%<animrange{(X%)}.x2% AND MY%>animrange{(X%)}.y1% AND MY%<animrange{(X%)}.y2% THEN
+            FOR X%=0 TO controls%
+              IF MX%>controlrange{(X%)}.x1% AND MX%<controlrange{(X%)}.x2% AND MY%>controlrange{(X%)}.y1% AND MY%<controlrange{(X%)}.y2% THEN
                 CASE X% OF
                   WHEN 0 : REM set dec 10
                     IF spr_lstcount2%>0 THEN
@@ -2011,7 +2162,7 @@
         REM PRINTTAB(0,12)STR$(SP%);" ";STR$(DP%);" ";STR$(MX%);",";STR$(MY%);"    "
       UNTIL DONE%=1
       PROCWAITMOUSE(0)
-      MODE 7
+      PROCchangemode(7)
       VDU 23,1,1;0;0;0; : REM Enable cursor
       ENDPROC
 
@@ -2061,12 +2212,12 @@
       VDU 4
 
       REM save control range
-      animrange{(n%)}.x1%=x%-1
-      animrange{(n%)}.y1%=y%-sy%+2
-      animrange{(n%)}.x2%=x%+sx%
-      animrange{(n%)}.y2%=y%+8
+      controlrange{(n%)}.x1%=x%-1
+      controlrange{(n%)}.y1%=y%-sy%+2
+      controlrange{(n%)}.x2%=x%+sx%
+      controlrange{(n%)}.y2%=y%+8
 
-      animx%=animx%+sx%+16
+      menuadd%=menuadd%+sx%+16
 
       ENDPROC
 
@@ -2210,64 +2361,64 @@
       REM GAP 88 DOUBLE BUTTON, 56 SINGLE BUTTON
 
       REM SET
-      animx%=272
-      PROCanimcontrol(0,"<<",animx%,760,8,bc%,0)
-      PROCanimcontrol(1,"<",animx%,760,8,bc%,0)
-      PROCanimcontrol(2,">",animx%,760,8,bc%,0)
-      PROCanimcontrol(3,">>",animx%,760,8,bc%,0)
+      menuadd%=272
+      PROCanimcontrol(0,"<<",menuadd%,760,8,bc%,0)
+      PROCanimcontrol(1,"<",menuadd%,760,8,bc%,0)
+      PROCanimcontrol(2,">",menuadd%,760,8,bc%,0)
+      PROCanimcontrol(3,">>",menuadd%,760,8,bc%,0)
 
       REM put button
-      PROCanimcontrol(36,"PUT",animx%,760,7,14,4)
-      PROCanimcontrol(37,"CLR",animx%,760,7,1,0)
+      PROCanimcontrol(36,"PUT",menuadd%,760,7,14,4)
+      PROCanimcontrol(37,"CLR",menuadd%,760,7,1,0)
 
       REM FRM
-      animx%=272
-      PROCanimcontrol(4,"<<",animx%,708,8,bc%,0)
-      PROCanimcontrol(5,"<",animx%,708,8,bc%,0)
-      PROCanimcontrol(6,">",animx%,708,8,bc%,0)
-      PROCanimcontrol(7,">>",animx%,708,8,bc%,0)
+      menuadd%=272
+      PROCanimcontrol(4,"<<",menuadd%,708,8,bc%,0)
+      PROCanimcontrol(5,"<",menuadd%,708,8,bc%,0)
+      PROCanimcontrol(6,">",menuadd%,708,8,bc%,0)
+      PROCanimcontrol(7,">>",menuadd%,708,8,bc%,0)
 
 
       REM REP
-      animx%=432
-      PROCanimcontrol(8,"<<",animx%,656,8,bc%,0)
-      PROCanimcontrol(9,"<",animx%,656,8,bc%,0)
-      PROCanimcontrol(10,">",animx%,656,8,bc%,0)
-      PROCanimcontrol(11,">>",animx%,656,8,bc%,0)
+      menuadd%=432
+      PROCanimcontrol(8,"<<",menuadd%,656,8,bc%,0)
+      PROCanimcontrol(9,"<",menuadd%,656,8,bc%,0)
+      PROCanimcontrol(10,">",menuadd%,656,8,bc%,0)
+      PROCanimcontrol(11,">>",menuadd%,656,8,bc%,0)
 
       REM X,H
-      animx%=212
-      PROCanimcontrol(12,"<<",animx%,552,8,bc%,0)
-      PROCanimcontrol(13,"<",animx%,552,8,bc%,0)
-      PROCanimcontrol(14,">",animx%,552,8,bc%,0)
-      PROCanimcontrol(15,">>",animx%,552,8,bc%,0)
-      animx%=752
-      PROCanimcontrol(16,"<<",animx%,552,8,bc%,0)
-      PROCanimcontrol(17,"<",animx%,552,8,bc%,0)
-      PROCanimcontrol(18,">",animx%,552,8,bc%,0)
-      PROCanimcontrol(19,">>",animx%,552,8,bc%,0)
+      menuadd%=212
+      PROCanimcontrol(12,"<<",menuadd%,552,8,bc%,0)
+      PROCanimcontrol(13,"<",menuadd%,552,8,bc%,0)
+      PROCanimcontrol(14,">",menuadd%,552,8,bc%,0)
+      PROCanimcontrol(15,">>",menuadd%,552,8,bc%,0)
+      menuadd%=752
+      PROCanimcontrol(16,"<<",menuadd%,552,8,bc%,0)
+      PROCanimcontrol(17,"<",menuadd%,552,8,bc%,0)
+      PROCanimcontrol(18,">",menuadd%,552,8,bc%,0)
+      PROCanimcontrol(19,">>",menuadd%,552,8,bc%,0)
 
       REM Y,V
-      animx%=212
-      PROCanimcontrol(20,"<<",animx%,500,8,bc%,0)
-      PROCanimcontrol(21,"<",animx%,500,8,bc%,0)
-      PROCanimcontrol(22,">",animx%,500,8,bc%,0)
-      PROCanimcontrol(23,">>",animx%,500,8,bc%,0)
-      animx%=752
-      PROCanimcontrol(24,"<<",animx%,500,8,bc%,0)
-      PROCanimcontrol(25,"<",animx%,500,8,bc%,0)
-      PROCanimcontrol(26,">",animx%,500,8,bc%,0)
-      PROCanimcontrol(27,">>",animx%,500,8,bc%,0)
+      menuadd%=212
+      PROCanimcontrol(20,"<<",menuadd%,500,8,bc%,0)
+      PROCanimcontrol(21,"<",menuadd%,500,8,bc%,0)
+      PROCanimcontrol(22,">",menuadd%,500,8,bc%,0)
+      PROCanimcontrol(23,">>",menuadd%,500,8,bc%,0)
+      menuadd%=752
+      PROCanimcontrol(24,"<<",menuadd%,500,8,bc%,0)
+      PROCanimcontrol(25,"<",menuadd%,500,8,bc%,0)
+      PROCanimcontrol(26,">",menuadd%,500,8,bc%,0)
+      PROCanimcontrol(27,">>",menuadd%,500,8,bc%,0)
 
       REM menu
-      animx%=16
-      PROCanimcontrol(28,"LOAD",animx%,940,7,15,0)
-      PROCanimcontrol(29,"SAVE",animx%,940,7,15,0)
-      PROCanimcontrol(30,"PLOT",animx%,940,7,14,4)
-      PROCanimcontrol(31,"UNDO",animx%,940,7,8,0)
-      PROCanimcontrol(32,"----",animx%,940,7,8,0)
-      PROCanimcontrol(33,"RSET",animx%,940,7,1,0)
-      REM PROCanimcontrol(34,"----",animx%,940,7,8,0)
+      menuadd%=16
+      PROCanimcontrol(28,"LOAD",menuadd%,940,7,15,0)
+      PROCanimcontrol(29,"SAVE",menuadd%,940,7,15,0)
+      PROCanimcontrol(30,"PLOT",menuadd%,940,7,14,4)
+      PROCanimcontrol(31,"UNDO",menuadd%,940,7,8,0)
+      PROCanimcontrol(32,"----",menuadd%,940,7,8,0)
+      PROCanimcontrol(33,"RSET",menuadd%,940,7,1,0)
+      REM PROCanimcontrol(34,"----",menuadd%,940,7,8,0)
       PROCanimcontrol(35,"EXIT",1120,940,9,11,1)
 
       ENDPROC
@@ -2629,42 +2780,73 @@
 
         WHEN 5: REM background colour
           PROCundosave
-          IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
-            IF erase% THEN
-              VDU 31,TX%,TY%,156
-            ELSE
-              VDU 31,TX%,TY%,(curcol%+144),157
-            ENDIF
-          ENDIF
-          REPEAT
-            PROCREADMOUSE
-            IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-              IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
+
+          IF colmode%=1 THEN
+            PROCWAITMOUSE(4)
+            PROCWAITMOUSE(0)
+
+            IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
+              FOR Y%=1 TO 24
                 IF erase% THEN
-                  VDU 31,TX%,TY%,156
+                  VDU 31,TX%,Y%,156
                 ELSE
-                  VDU 31,TX%,TY%,(curcol%+144),157
+                  VDU 31,TX%,Y%,(curcol%+144),157
                 ENDIF
+              NEXT
+            ENDIF
+          ELSE
+            IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
+              IF erase% THEN
+                VDU 31,TX%,TY%,156
+              ELSE
+                VDU 31,TX%,TY%,(curcol%+144),157
               ENDIF
             ENDIF
-            OLD_TX%=TX%
-            OLD_TY%=TY%
-          UNTIL MB%=0
+            REPEAT
+              PROCREADMOUSE
+              IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                IF TX%<39 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
+                  IF erase% THEN
+                    VDU 31,TX%,TY%,156
+                  ELSE
+                    VDU 31,TX%,TY%,(curcol%+144),157
+                  ENDIF
+                ENDIF
+              ENDIF
+              OLD_TX%=TX%
+              OLD_TY%=TY%
+            UNTIL MB%=0
+          ENDIF
+
           PROCframesave(frame%)
           IF animation% THEN PROCloadnextframe(1,0)
 
         WHEN 6: REM foreground colour
           PROCundosave
 
-          IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
-          REPEAT
-            PROCREADMOUSE
-            IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-              IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
-              OLD_TX%=TX%
-              OLD_TY%=TY%
-            ENDIF
-          UNTIL MB%=0
+          IF colmode%=1 THEN
+            PROCWAITMOUSE(4)
+            PROCWAITMOUSE(0)
+
+            FOR Y%=1 TO 24
+              IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN
+                VDU 31,TX%,Y%,(curcol%+144-textfore%*16)
+              ELSE
+                EXIT FOR
+              ENDIF
+            NEXT
+          ELSE
+            IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+            REPEAT
+              PROCREADMOUSE
+              IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
+                IF TX%<40 AND TX%>-1 AND TY%>0 AND TY%<25 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                OLD_TX%=TX%
+                OLD_TY%=TY%
+              ENDIF
+            UNTIL MB%=0
+          ENDIF
+
           PROCframesave(frame%)
           IF animation% THEN PROCloadnextframe(1,0)
 
@@ -3242,8 +3424,11 @@
       REM menu buffer restore frame
       DEF PROCmenurestore
 
-      IF menuext%<>0 THEN menuext%=0
+      IF menuext%=3 THEN PROCchangemode(7)
+      menuext%=0
+
       PROCframerestore(frame%)
+      PROCdrawmenu
 
       ENDPROC
 
@@ -3252,8 +3437,10 @@
       DEF PROCmenucheck
 
       IF menuext%<>0 THEN
+        IF menuext%=3 THEN PROCchangemode(7)
         menuext%=0
         PROCframerestore(frame%)
+        PROCdrawmenu
       ENDIF
 
       ENDPROC
@@ -3641,7 +3828,7 @@
           ENDIF
 
         WHEN 1 : REM import bmp
-          MODE 6
+          PROCchangemode(6)
           VDU 23,1,0;0;0;0; : REM Disable cursor
 
           IF F%=-1 THEN
@@ -3669,7 +3856,7 @@
           ENDIF
 
         WHEN 2 : REM import sprite from bmp
-          MODE 6
+          PROCchangemode(6)
           VDU 23,1,0;0;0;0; : REM Disable cursor
 
           IF F%=-1 THEN
@@ -4049,7 +4236,7 @@
 
       ENDCASE
       PROCWAITMOUSE(0)
-      MODE 7
+      PROCchangemode(7)
       frame%=0
       PROCloadnextframe(1,0)
       menuext%=0
@@ -4334,7 +4521,7 @@
 
       ENDIF
       PROCWAITMOUSE(0)
-      MODE 7
+      PROCchangemode(7)
       menuext%=2
 
 
@@ -4382,7 +4569,7 @@
       PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
 
       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
-      MODE 6
+      PROCchangemode(6)
       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
 
       VDU 23,1,0;0;0;0; : REM Disable cursor
@@ -4522,7 +4709,7 @@
         REM PRINTTAB(4,19)LEFT$(STR$(TY%)+"   ",4)
       UNTIL MB%=4
       PROCWAITMOUSE(0)
-      MODE 7
+      PROCchangemode(7)
       frame%-=1
       PROCloadnextframe(1,0)
       VDU 23,1,1;0;0;0; : REM Enable cursor
@@ -4567,7 +4754,7 @@
       showcodes%=0
       PROCframesave(frame%)
       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
-      MODE 6
+      PROCchangemode(6)
       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
       GCOL 3,8
 
@@ -4685,7 +4872,7 @@
         PROCREADMOUSE
       UNTIL MB%=4
       PROCWAITMOUSE(0)
-      MODE 7
+      PROCchangemode(7)
       frame%-=1
       PROCloadnextframe(1,0)
 
@@ -4801,8 +4988,86 @@
       ENDPROC
 
       REM ##########################################################
+      REM shape and special sub menu updater
+      DEF PROCs1update(C%)
+
+      menuadd%=932
+      PROCmenutext(0,"LINE       ",S1X%+20,menuadd%,14,(shapesel%=0)*-4)
+      PROCmenutext(1,"BOX        ",S1X%+20,menuadd%,14,(shapesel%=1)*-4)
+      PROCmenutext(2,"CIRCLE     ",S1X%+20,menuadd%,14,(shapesel%=2)*-4)
+      PROCmenutext(3,"TEXT       ",S1X%+20,menuadd%,14,(shapesel%=7)*-4)
+
+      IF C%=-1 THEN
+        GCOL 0,8
+        RECTANGLE S1X%+20,menuadd%,S1W%-40,2
+      ENDIF
+
+      menuadd%-=24
+      PROCmenutext(4,"FLSH (136) ",S1X%+20,menuadd%,14,(shapesel%=3)*-4)
+      PROCmenutext(5,"DBLH (141) ",S1X%+20,menuadd%,14,(shapesel%=6)*-4)
+      PROCmenutext(6,"SEPR (154) ",S1X%+20,menuadd%,14,(shapesel%=4)*-4)
+      PROCmenutext(7,"HOLD (158) ",S1X%+20,menuadd%,14,(shapesel%=5)*-4)
+
+      IF C%=-1 THEN
+        GCOL 0,8
+        RECTANGLE S1X%+20,menuadd%,S1W%-40,2
+      ENDIF
+
+      menuadd%-=24
+
+      REM update options
+      PROCgtext(CHR$(78+11*gridshow%),S1X%+404,menuadd%,9+gridshow%,0)
+      PROCgtext(CHR$(78+11*animateshape%),S1X%+404,menuadd%-48,9+animateshape%,0)
+      PROCgtext(CHR$(78+11*colmode%),S1X%+404,menuadd%-96,9+colmode%,0)
+      PROCgtext(CHR$(78+11*copylockxt%),S1X%+404,menuadd%-144,9+copylockxt%,0)
+      PROCgtext(CHR$(78+11*copylockyt%),S1X%+404,menuadd%-192,9+copylockyt%,0)
+
+      IF C%=-1 THEN
+        PROCmenutext(8,"SHOW GRID  ",S1X%+20,menuadd%,11,0)
+        PROCmenutext(9,"ANIM8 LINES",S1X%+20,menuadd%,11,0)
+        PROCmenutext(10,"COLUMN MODE",S1X%+20,menuadd%,11,0)
+        PROCmenutext(11,"PASTE FIX X",S1X%+20,menuadd%,11,0)
+        PROCmenutext(12,"PASTE FIX Y",S1X%+20,menuadd%,11,0)
+
+        GCOL 0,8
+        RECTANGLE S1X%+20,menuadd%,S1W%-40,2
+
+        menuadd%-=24
+        PROCmenutext(13,"KBRD & OPTS",S1X%+20,menuadd%,10,(C%=13)*-4)
+        PROCmenutext(14,"SPRITES    ",S1X%+20,menuadd%,10,(C%=14)*-4)
+        PROCmenutext(15,"EDIT.TF    ",S1X%+20,menuadd%,10,(C%=15)*-4)
+        PROCmenutext(16,"HELP       ",S1X%+20,menuadd%,10,(C%=16)*-4)
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
+      REM initialise shape and special sub menu
+      DEF PROCinits1menu
+
+      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
+      PROCchangemode(6)
+
+      VDU 23,1,0;0;0;0; : REM Disable cursor
+
+      OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
+
+
+      GCOL 0,0
+      RECTANGLE FILL S1X%,S1Y%,S1W%,S1H%
+
+      GCOL 0,15
+      RECTANGLE S1X%+8,S1Y%+8,S1W%-16,S1H%-16
+      RECTANGLE S1X%+10,S1Y%+10,S1W%-20,S1H%-20
+
+      PROCs1update(-1)
+
+      ENDPROC
+
+
+      REM ##########################################################
       REM shape and special sub menu
-      DEF PROCspecialmenu(R%)
+      DEF PROCoptionsmenu(R%)
 
       REM REDRAW EVERYTHING
       IF R%=1 THEN
@@ -4906,6 +5171,38 @@
       MOVE x%,y%
       PRINT t$
       VDU 4
+
+      l%=LEN(t$)
+      sx%=l%*32+16
+      sy%=36
+
+      ENDPROC
+
+      REM ##########################################################
+      REM print menu text at graphics pos x,y, text col, bg col, save control range
+      DEF PROCmenutext(n%,t$,x%,y%,tc%,bc%)
+      LOCAL X%,Y%,L%,sx%,sy%
+
+      L%=LEN(t$)
+      sx%=L%*32-2
+      sy%=38
+
+      GCOL 0,bc%
+      RECTANGLE FILL x%,y%-32,sx%,sy%
+      VDU 5
+      GCOL 0,tc%
+      MOVE x%+4,y%
+      PRINT t$
+      VDU 4
+      menuadd%-=48
+
+
+      REM save control range
+      controlrange{(n%)}.x1%=x%-1
+      controlrange{(n%)}.y1%=y%-sy%+2
+      controlrange{(n%)}.x2%=x%+sx%
+      controlrange{(n%)}.y2%=y%+8
+
       ENDPROC
 
       REM ##########################################################
@@ -4949,8 +5246,60 @@
 
 
       REM ***********************************************************************
-      REM LIB FUNCTIONS - imported instead of INSTALL
+      REM LIB FUNCTIONS - imported and other functions added
       REM ***********************************************************************
+
+      DEF FNget(P%) = GET(P% MOD 40, P% DIV 40) AND &7F
+
+      REM Export the current frame to edit.tf:
+      REM Modified to allow all 25 rows to be encoded for EDIT.TF - added loop and shift variables
+      DEF PROCexport_edittf
+      LOCAL I%,L%,S%,N%,X%,Y%,t%%,h$,s$
+      s$ = "0:"
+      h$ = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+      X%=POS:Y%=VPOS:VDU30
+      S%=42
+      FOR N% = 0 TO 25*40 STEP 6
+        L%=5
+        REM adjust loops and shift vars for last 4 bytes of screen memory
+        IF N%=996 THEN
+          L%=3
+          S%=28
+        ENDIF
+        FOR I% = 0 TO L%
+          t%% = t%% <<< 7
+          t%% OR= FNget(N%+I%)
+        NEXT
+        L%+=1
+        FOR I% = 0 TO L%
+          t%% = t%% <<< 6
+          s$ += MID$(h$,((t%% >> S%) AND &3F) + 1,1)
+        NEXT
+      NEXT
+      VDU31,X%,Y%
+      PROCopenurl("https://edit.tf#" + s$)
+      REM F% = OPENOUT(@tmp$ + "EDITTF.txt")
+      REM PRINT#F%,s$
+      REM CLOSE#F%
+
+      ENDPROC
+
+      REM Open a URL in the default browser:
+      DEF PROCopenurl(url$)
+      IF BB4W THEN
+        SYS "ShellExecute", @hwnd%, "open", url$, 0, 0, 1
+      ELSE
+        CASE @platform% AND &F OF
+          WHEN 0:
+            SYS "system", "start " + url$ + "&"
+          WHEN 1:
+            SYS "system", "xdg-open " + url$ + "&"
+          WHEN 2:
+            SYS "system", "open " + url$ + "&"
+        ENDCASE
+      ENDIF
+      ENDPROC
+
 
       REM Scan a directory and return list of directory and file names
       REM Modified to return a type list instead of prefixing folder / file icon
@@ -5163,3 +5512,22 @@
 
       ENDPROC
 
+      REM for future reference
+
+      REM      MODE 7
+      REM PRINT CHR$131 "This is MODE 7"
+      REM PRINT TAB(0,15) "This is still MODE 7"
+      REM OSCLI "DISPLAY """ + @lib$ + "../bbc256x.png"""
+
+      REM INSTALL @lib$+"aagfxlib"
+      REM MODE 7
+      REM PRINT CHR$131 "This is MODE 7"
+      REM PRINT TAB(0,15) "This is still MODE7"
+      REM PROC_aaline(0, 0, 1280, 1000, 4, &8000FF00, 0)
+
+      REM MODE 7
+      REM PRINT CHR$131 "This is MODE 7"
+      REM PRINT TAB(0,15) "This is still MODE 7"
+      REM SYS "SDL_SetRenderDrawColor", @memhdc%, 0, 255, 0, 255
+      REM SYS "SDL_RenderDrawLine", @memhdc%, 0, 500, 640, 0
+      REM *REFRESH
