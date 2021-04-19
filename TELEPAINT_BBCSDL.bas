@@ -2348,6 +2348,7 @@
                         sprlist2{(s%)}.y%=0
                         sprlist2{(s%)}.h%=0
                         sprlist2{(s%)}.v%=0
+                        sprlist2{(s%)}.m%=0
                         FOR ss%=0 TO 11
                           sprlist2{(s%)}.s%(ss%)=-1
                         NEXT
@@ -2378,6 +2379,7 @@
                       sprlist2{(spr_lstcount2%)}.y%=0
                       sprlist2{(spr_lstcount2%)}.h%=0
                       sprlist2{(spr_lstcount2%)}.v%=0
+                      sprlist2{(spr_lstcount2%)}.m%=0
                       FOR ss%=0 TO 11
                         sprlist2{(spr_lstcount2%)}.s%(ss%)=-1
                       NEXT
