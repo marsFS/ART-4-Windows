@@ -204,6 +204,22 @@
       sopt{(9)}.x%=12
       sopt{(9)}.y%=9
 
+      REM plot mode for sprite sets
+      DIM plotmode$(2)
+      plotmode$(0)="NORMAL"
+      plotmode$(1)="TRANSP"
+      plotmode$(2)="MASKED"
+
+      REM dither pattern data
+      DIM pat%(17,15)
+      RESTORE
+      FOR I%=0 TO 17
+        FOR H%=0 TO 15
+          READ pat%(I%,H%)
+        NEXT
+      NEXT
+
+
       REM loading screen and sprite vars
       menuext%=97
       frame_limit%=100
@@ -242,7 +258,7 @@
       DIM sprsize{(sprite_max%-1) h%,v%}
       DIM spr_tmp&(2000)
       DIM sprlist{(2000) s%,f%,x%,y%}
-      DIM sprlist2{(99) s%(11),f%,r%,x%,y%,h%,v%}
+      DIM sprlist2{(99) s%(11),f%,r%,x%,y%,h%,v%,m%}
 
       REM animation and menu controls - can be redfinable depending on current screen
       controls%=40
@@ -423,13 +439,30 @@
       REM ##########################################################
       REM change mode and preserve window location
       DEF PROCchangemode(M%)
-      LOCAL xpos%,ypos%
+      LOCAL C%
 
-      SYS "SDL_GetWindowPosition", @hwnd%, ^xpos%, ^ypos%, @memhdc%
+      @vdu.m.a& = M%
+      CLS
 
-      MODE M%
+      CASE M% OF
+        WHEN 6
+          @vdu.m.b& = 15
+          COLOUR 8,63,63,63
+          COLOUR 9,255,0,0
+          COLOUR 10,0,255,0
+          COLOUR 11,255,255,0
+          COLOUR 12,0,0,255
+          COLOUR 13,255,0,255
+          COLOUR 14,0,255,255
+          COLOUR 15,255,255,255
 
-      SYS "SDL_SetWindowPosition", @hwnd%, xpos%, ypos%, @memhdc%
+        WHEN 7
+          @vdu.m.b& = 7
+          VDU 23,1,1;0;0;0; : REM Enable cursor
+          VDU 4
+
+      ENDCASE
+      *REFRESH
 
       ENDPROC
 
@@ -707,6 +740,58 @@
           PROCbresenham_buf(x1%,y2%-1,x1%,y1%+1,m%)
         ENDIF
       ENDIF
+      ENDPROC
+
+      REM ##########################################################
+      REM rectangle with gradient
+      DEF PROCrectangle_g(x1%,y1%,x2%,y2%,d%)
+
+      LOCAL lx%,ly%,dc%,gR,gRd,gAdd,dv%,p%
+
+      REM Calculate direction vector, gradient value And gradient Default values
+      dv%=1 : gR=0 : gRd=0
+      IF x1%>x2% THEN
+        SWAP x1%,x2%
+        IF d%=0 THEN dv%=-1
+      ENDIF
+      IF y1%>y2% THEN
+        SWAP y1%,y2%
+        IF d%=1 THEN dv%=-1
+      ENDIF
+      IF dv%=-1 THEN
+        gR=17.9: gRd=17.9
+      ENDIF
+
+      IF d%=1 THEN
+        gAdd=18/(y2%-y1%)*dv%
+      ELSE
+        gAdd=18/(x2%-x1%)*dv%
+      ENDIF
+      FOR lx%=x1% TO x2%
+        IF d% THEN gR=gRd
+        FOR ly%=y1% TO y2%
+          REM range check, set pattern colour and plot
+          IF lx%>xMin% AND lx%<xMax% AND ly%>yMin% AND ly%<yMax% THEN
+            p%=lx% MOD 4+(ly% MOD 4)*4
+            dc%=pat%(INT(gR),p%)
+          ENDIF
+
+          PROCpoint(lx%,ly%,dc%)
+
+          IF d%=1 THEN
+            gR+=gAdd
+            IF gR>17.9 THEN gR=17.9
+            IF gR<0 THEN gR=0
+          ENDIF
+
+        NEXT
+        IF d%=0 THEN
+          gR+=gAdd
+          IF gR>17.9 THEN gR=17.8
+          IF gR<0 THEN gR=0
+        ENDIF
+      NEXT
+
       ENDPROC
 
       REM ##########################################################
@@ -994,7 +1079,7 @@
         WHEN 15 : toolsel%=1:toolcursor%=TX% : REM paint
         WHEN 16 : REM dither & scale merged
           IF toolsel%=2 THEN
-            dither%=(dither%+1) MOD 5:toolsel%=2:toolcursor%=16
+            dither%=(dither%+1) MOD 7:toolsel%=2:toolcursor%=16
           ENDIF
           toolcursor%=TX%
           toolsel%=2
@@ -1163,7 +1248,7 @@
 
             WHEN 17,18,19,20,21,22,23,24
 
-              MODE7
+              PROCchangemode(7)
               menuext%=0
               PROCdrawmenu
               PROCshowhelp
@@ -2301,6 +2386,10 @@
                     PROCanimredraw
                     PROCanimupdate(0)
 
+                  WHEN 38 : REM change plot mode
+                    sprlist2{(spr_lstcount2%)}.m%=(sprlist2{(spr_lstcount2%)}.m%+1) MOD 3
+                    PROCanimcontrol(38,plotmode$(sprlist2{(spr_lstcount2%)}.m%),760+192,656,8,15,4)
+
                 ENDCASE
 
                 EXIT FOR
@@ -2333,8 +2422,8 @@
 
       PROCgtext(t$,300,540,11,0)
 
-      PROCgtext(" RESET ",300,450,10,8)
-      PROCgtext(" CANCEL ",600,450,9,8)
+      PROCgtext(" RESET ",300,450,10,4)
+      PROCgtext(" CANCEL ",600,450,3,9)
 
       PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
@@ -2408,6 +2497,8 @@
 
         PROCgtext(RIGHT$("00"+STR$(spr_lstcount2%+1),3),5*32,760,14,4)
         PROCgtext(RIGHT$("0"+STR$(SPR%),2),34*32,760,tc%,bc%)
+
+        PROCanimcontrol(38,plotmode$(sprlist2{(spr_lstcount2%)}.m%),760+192,656,8,15,4)
 
       ENDIF
 
@@ -2502,6 +2593,7 @@
       PROCgtext("COUNT:",27*32,760,lc%,0)
       PROCgtext("FRM:",0,708,tc%,0)
       PROCgtext("REP:",0,656,tc%,0)
+      PROCgtext("MODE:",760,656,tc%,0)
       PROCgtext("START POS:",0,604,lc%,0)
       PROCgtext("X:",0,552,tc%,0)
       PROCgtext("Y:",0,500,tc%,0)
@@ -2538,6 +2630,7 @@
       PROCanimcontrol(9,"<",menuadd%,656,8,bc%,0)
       PROCanimcontrol(10,">",menuadd%,656,8,bc%,0)
       PROCanimcontrol(11,">>",menuadd%,656,8,bc%,0)
+      PROCanimcontrol(38,plotmode$(sprlist2{(spr_lstcount2%)}.m%),760+192,656,8,15,4)
 
       REM X,H
       menuadd%=212
@@ -2712,6 +2805,12 @@
                 char%=255-erase%*95 : REM SOLID BLOCK #255
                 VDU 31,TX%,TY%,char%
               ENDIF
+            WHEN 5
+              PROCrectangle_g(2,3,79,74,0)
+
+            WHEN 6
+              PROCrectangle_g(2,3,79,74,1)
+
           ENDCASE
           REPEAT
             PROCREADMOUSE
@@ -5021,9 +5120,7 @@
         NEXT
       NEXT
 
-      REPEAT
-        PROCREADMOUSE
-      UNTIL MB%=4
+      PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
       PROCchangemode(7)
       frame%-=1
@@ -5321,7 +5418,7 @@
       RECTANGLE FILL x%,y%-32,L%*32-2,38
       VDU 5
       GCOL 0,tc%
-      MOVE x%,y%
+      MOVE x%,y%+2
       PRINT t$
       VDU 4
 
@@ -5664,6 +5761,27 @@
       NEXT
 
       ENDPROC
+
+      REM patternData
+      DATA 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+      DATA 0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0
+      DATA 0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0
+      DATA 0,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0
+      DATA 0,0,0,0,1,0,1,0,0,0,0,0,1,0,1,0
+      DATA 0,0,0,0,1,0,1,0,0,1,0,0,1,0,1,0
+      DATA 0,0,0,1,1,0,1,0,0,1,0,0,1,0,1,0
+      DATA 0,0,0,1,1,0,1,0,0,1,0,1,1,0,1,0
+      DATA 0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0
+      DATA 1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1
+      DATA 1,1,1,0,0,1,0,1,1,0,1,0,0,1,0,1
+      DATA 1,1,1,0,0,1,0,1,1,0,1,1,0,1,0,1
+      DATA 1,1,1,1,0,1,0,1,1,0,1,1,0,1,0,1
+      DATA 1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1
+      DATA 1,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1
+      DATA 1,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1
+      DATA 1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1
+      DATA 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+
 
       REM for future reference
 
