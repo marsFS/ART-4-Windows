@@ -1,7 +1,11 @@
 # ART-4-Windows
 ART 4 Windows is a retro drawing utility, original written in BBC Basic for Windows and latest version is written in Pure Basic compiled to EXE
 
-Current Versions:
+Current Executable Versions:
+* ART4EVA_PB_007_x86.exe - Windows compatible executable
+* TELEPAINT_BBCSDL.zip - Windows compatible executable and library files
+
+Current Source Versions:
 * ART4EVA_PB_007_x86.pb - Current version of Art program developed in Pure Basic, Mode 2, animated colours, import / export
 * TELEPAINT_BBCSDL.bbc - BBC SDL Mode 7 Art program, animated frames, sprites, import / export
 * ART4SDL_PORTRAIT_001.bbc - BBC SDL version of Art modified to work in portrait mode specifically for iPad (based on ART4WIN_024.bbc)
@@ -19,4 +23,6 @@ Current TelePaint features:
 * Requires BBC Basic for SDL 2.0
 * Configured for BBC Micro Mode 7 (40x25 chars, 78x72 sixels)
 * Save and load files in BIN and/or BMP format
-* Configure up to 100 frames and 48 sprites
+* Configure up to 100 animation frames and 48 sprites
+* Gradient fills
+* Import sprites and BMP files (specific format required)
