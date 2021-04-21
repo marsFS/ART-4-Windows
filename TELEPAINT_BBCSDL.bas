@@ -6,7 +6,11 @@
 
       REM *** LOAD SCREEN SORT BY NEWEST, NEEDS WORK!
 
+      REM *** LOAD SCREEN USABILITY
+
       REM *** SCROLL OFF SCREEN E.G. NO WRAP
+
+      REM *** FILE MENU ADD PAGE UP AND DOWN, SCROLL WHEEL AND HOTKEYS MAYBE?
 
       REM *** SCROLL FRAMES LAYER, HOW WOULD THIS INTERACT WITH DRAW FRAMES?
 
@@ -14,20 +18,16 @@
 
       REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE, ADD MOVE FRAME OPTION (IN PROGRESS)
 
-      REM *** SPRITES -  EDIT SPRITES AND COPY TO FRAMES (in progress) 20x16 chars 40x48 pixels
+      REM *** SPRITES - EDIT SPRITES AND COPY TO FRAMES (in progress) 20x16 chars 40x48 pixels
 
       REM *** SPRITES - HOT KEYS. NEW: EARSE, OTHERS?  EXISTING: CURSORS NEXT / PREV SPRITE
 
       REM *** SPRITES - ADD MASKING AND TRANSPARENCY FOR EACH SPRITE SET
 
-      REM *** MENU DESIGN IN DIFFERENT MODE FOR MORE FLEXIBILITY (IN PROGRESS)
-
-      REM *** FILE MENU ADD PAGE UP AND DOWN, SCROLL WHEEL AND HOTKEYS MAYBE?
+      REM *** GRADIENTS - ADD min, max, weight (in progress)
 
       REM *** BUGS ***
       REM     * IMPORT SPRITE IMAGE WIDTH ODD NUMBER CAUSES ANOMALY (FIXED!)
-
-      REM https://edit.tf/#0:<1167 BYTES FOR 25 ROWS>
 
       REM *** TODO LIST ***
 
@@ -37,6 +37,8 @@
 
       REM *** SPRITE ANIMATION SCREEN: MODE 6
 
+      REM *** https://edit.tf/#0:<1167 BYTES FOR 25 ROWS>
+
       BB4W = INKEY$(-256) == "W"
 
       REM ALLOCATE 40MB FOR BUFFERS
@@ -45,7 +47,7 @@
       INSTALL @lib$+"sortlib"
       REM INSTALL @lib$+"aagfxlib"
 
-      version$="v0.19"
+      version$="v0.20"
 
       DEBUG%=0
 
@@ -107,6 +109,12 @@
       S1X%=580 : REM menu start X
       S1Y%=960-S1H% : REM menu start Y (offset 1 char down from top of screen)
 
+      REM fill sub menu S1
+      S2W%=450 : REM menu width
+      S2H%=920 : REM menu height
+      S2X%=540 : REM menu start X
+      S2Y%=960-S2H% : REM menu start Y (offset 1 char down from top of screen)
+
       REM drawing region for point command, changes for sprite menu
 
 
@@ -152,6 +160,7 @@
       gridx%=10
       gridy%=2
       gridshow%=1
+      pc%=0
 
       REM colour string constants
       tr$=CHR$(129) : REM alphanumeric red
@@ -345,6 +354,9 @@
                   WHEN 3 : REM sub menu 1
                     PROCsub1handler
 
+                  WHEN 4 : REM sub menu 2
+                    PROCsub2handler
+
                   OTHERWISE : REM main drawin canvas
                     PROCmaincanvas
 
@@ -354,7 +366,7 @@
 
         ELSE : REM no mouse move or clicks detected
 
-          PROCcheckkeyboard
+          PROCkeyboardhandler
 
           WAIT 2
 
@@ -441,11 +453,13 @@
       DEF PROCchangemode(M%)
       LOCAL C%
 
+      REM set internal mode and clearscreen
       @vdu.m.a& = M%
       CLS
 
       CASE M% OF
         WHEN 6
+          REM icrease colour index and set palette
           @vdu.m.b& = 15
           COLOUR 8,63,63,63
           COLOUR 9,255,0,0
@@ -455,6 +469,8 @@
           COLOUR 13,255,0,255
           COLOUR 14,0,255,255
           COLOUR 15,255,255,255
+
+          VDU 23,1,0;0;0;0; : REM Disable cursor
 
         WHEN 7
           @vdu.m.b& = 7
@@ -665,6 +681,26 @@
       ENDPROC
 
       REM ##########################################################
+      REM line routine using pattern template
+      DEF PROCbresenham_p(x1%,y1%,x2%,y2%,m%,p%)
+      LOCAL dx%, dy%, sx%, sy%, e
+      dx% = ABS(x2% - x1%) : sx% = SGN(x2% - x1%)
+      dy% = ABS(y2% - y1%) : sy% = SGN(y2% - y1%)
+      IF dx% > dy% e = dx% / 2 ELSE e = dy% / 2
+      REPEAT
+        PROCpoint(x1%,y1%,pat%(p%,pc%))
+        pc%=(pc%+1-(RND(10)=1)) MOD 16
+        IF x1% = x2% IF y1% = y2% EXIT REPEAT
+        IF dx% > dy% THEN
+          x1% += sx% : e -= dy% : IF e < 0 e += dx% : y1% += sy%
+        ELSE
+          y1% += sy% : e -= dx% : IF e < 0 e += dy% : x1% += sx%
+        ENDIF
+      UNTIL FALSE
+      ENDPROC
+
+
+      REM ##########################################################
       REM LINE ROUTINE FOR BUFFER USE m% TO PERFORM 0=ERASE / 1=DRAW / 2=EOR
       DEF PROCbresenham_buf(x1%,y1%,x2%,y2%,m%)
       LOCAL dx%, dy%, sx%, sy%, e
@@ -787,9 +823,115 @@
         NEXT
         IF d%=0 THEN
           gR+=gAdd
-          IF gR>17.9 THEN gR=17.8
+          IF gR>17.9 THEN gR=17.9
           IF gR<0 THEN gR=0
         ENDIF
+      NEXT
+
+      ENDPROC
+
+      REM ##########################################################
+      REM diabonal gradient
+      DEF PROCdiagonal_g(x1%,y1%,min%,max%)
+      LOCAL h%,v%,l%,d%,x2%,y2%,gR,gAdd
+
+      REM determine left or right
+      IF x1%=0 THEN
+        h%=1
+        x2%=0
+      ELSE
+        h%=-1
+        x1%=79
+        x2%=79
+      ENDIF
+
+      REM determine up or down
+      IF y1%=0 THEN
+        v%=1
+        y2%=0
+      ELSE
+        v%=-1
+        y1%=74
+        y2%=74
+      ENDIF
+
+      REM preset gradient value
+      gR=min%
+      gAdd=18/150
+      IF min%>max% THEN gAdd=-gAdd
+      pc%=0
+
+      REM define direction
+      IF h%=1 AND v%=1 THEN d%=0
+      IF h%=-1 AND v%=1 THEN d%=1
+      IF h%=-1 AND v%=-1 THEN d%=2
+      IF h%=1 AND v%=-1 THEN d%=3
+
+      REM main loop 79+74
+      FOR l%=0 TO 152
+        CASE d% OF
+          WHEN 0 : REM top left
+            IF y1%<74 THEN
+              y1%+=v%
+            ELSE
+              x1%+=h%
+            ENDIF
+
+            IF x2%<79 THEN
+              x2%+=h%
+            ELSE
+              y2%+=v%
+            ENDIF
+
+          WHEN 1 : REM top right
+            IF y2%<74 THEN
+              y2%+=v%
+            ELSE
+              x2%+=h%
+            ENDIF
+
+            IF x1%>0 THEN
+              x1%+=h%
+            ELSE
+              y1%+=v%
+            ENDIF
+
+
+          WHEN 2 : REM bottom right
+            IF y2%>0 THEN
+              y2%+=v%
+            ELSE
+              x2%+=h%
+            ENDIF
+
+            IF x1%>0 THEN
+              x1%+=h%
+            ELSE
+              y1%+=v%
+            ENDIF
+
+          WHEN 3 : REM bottom left
+            IF y1%>0 THEN
+              y1%+=v%
+            ELSE
+              x1%+=h%
+            ENDIF
+
+            IF x2%<79 THEN
+              x2%+=h%
+            ELSE
+              y2%+=v%
+            ENDIF
+
+        ENDCASE
+        gR+=gAdd
+        IF gR>max% OR gR<min% THEN gAdd=-gAdd
+        IF gR>17.9 THEN gR=17.9
+        IF gR<0 THEN gR=0
+        PROCbresenham_p(x1%,y1%,x2%,y2%,1-erase%,gR)
+        REM PRINTTAB(0,0)STR$(x1%);",";STR$(y1%);" : ";STR$(x2%);",";STR$(y2%);" : ";STR$(gR);"    ";
+        REM A=GET
+
       NEXT
 
       ENDPROC
@@ -972,8 +1114,108 @@
       ENDPROC
 
       REM ##########################################################
+      REM MENU HANDLER
+      DEF PROCmenuhandler
+      PROCWAITMOUSE(0)
+
+      IF menuext%=3 AND TX%<>19 THEN PROCmenurestore
+      IF menuext%=4 AND TX%<>18 THEN PROCmenurestore
+
+      CASE TX% OF
+        WHEN 0 : REM display control codes
+          PROCmenucheck
+          PROCcontrolcodes
+
+        WHEN 1,2,3,4,5,6,7,8,9,10,11,12,13,14 : REM colour selector
+          oldcol%=curcol%
+          curcol%=(TX%+1) DIV 2
+
+          IF curcol%=oldcol% THEN
+            textfore%=(textfore%+1) AND 1
+          ENDIF
+
+        WHEN 15 : toolsel%=1:toolcursor%=TX% : REM paint
+        WHEN 16 : REM dither & scale merged
+          IF toolsel%=2 THEN
+            dither%=(dither%+1) MOD 7:toolsel%=2:toolcursor%=16
+          ENDIF
+          toolcursor%=TX%
+          toolsel%=2
+
+        WHEN 17 : REM copy
+          IF toolsel%=7 THEN
+            copypaste%=(copypaste%+1) AND 1
+          ELSE
+            toolsel%=7:toolcursor%=TX%
+          ENDIF
+
+        WHEN 18 : REM fill menu
+          IF menuext%<>4 THEN
+            IF menuext%=0 THEN PROCframesave(frame%)
+            menufrom%=menuext%
+            menuext%=4
+
+            PROCinits2menu
+          ELSE
+            PROCmenurestore
+          ENDIF
+
+        WHEN 19 : REM shape / special menu
+          IF menuext%<>3 THEN
+            IF menuext%=0 THEN PROCframesave(frame%)
+            menufrom%=menuext%
+            menuext%=3
+
+            PROCinits1menu
+          ELSE
+            PROCmenurestore
+          ENDIF
+
+        WHEN 21 : erase%=(erase%+1) AND 1 : REM toggle erase tool
+
+        WHEN 23 : PROCmenucheck : PROCundorestore : REM undo PROCmenurestore:
+        WHEN 25 : PROCmenucheck : PROCredorestore : REM redo PROCmenurestore:
+
+        WHEN 27 : PROCmenucheck : PROCclearscreen:toolsel%=1:toolcursor%=15 : REM clearscreen PROCmenurestore:
+        WHEN 28 : toolsel%=5:toolcursor%=TX% : REM background colour
+        WHEN 29 : toolsel%=6:toolcursor%=TX% : REM foreground colour
+
+        WHEN 31 : PROCmenucheck : PROCloadfile(0) : REM load file dialog - 0 load bin file PROCmenurestore:
+        WHEN 32 : PROCmenucheck : PROCsavefile : REM save frames to file PROCmenurestore:
+
+        WHEN 34 : animation%=(animation%+1) AND 1 : REM toggle frame animation advance tool
+
+          REM                  WHEN 36 : REM frame%
+        WHEN 36,37 : PROCmenucheck : PROCloadnextframe(-1,1) : REM save current frame and display previous frame in sequence PROCmenurestore:
+        WHEN 38 : PROCmenucheck : PROCloadnextframe(1,1) : REM save current frame and display next frame in sequence  PROCmenurestore:
+        WHEN 39 : PROCmenucheck : PROCplay : REM save current frame and play all frames in a loop  PROCmenurestore:
+
+
+      ENDCASE
+
+      REM hide shape menu if another menu item was clicked
+
+      IF toolsel%<>4 THEN shapesel%=-1
+
+      CASE menuext% OF
+        WHEN 1 : REM keyboard and options
+          IF TX%<>19 THEN PROCmenurestore
+
+        WHEN 3 : REM sub menu 1
+
+        WHEN 4 : REM sub menu 2
+
+        OTHERWISE
+          PROCdrawmenu
+      ENDCASE
+
+
+      ENDPROC
+
+
+      REM ##########################################################
       REM check keyboard
-      DEF PROCcheckkeyboard
+      DEF PROCkeyboardhandler
 
       CASE menuext% OF
         WHEN 0 : REM keyboard handler
@@ -1053,85 +1295,6 @@
       ENDCASE
 
       PROCWAITNOKEY(0,-1)
-
-      ENDPROC
-
-      REM ##########################################################
-      REM MENU HANDLER
-      DEF PROCmenuhandler
-      PROCWAITMOUSE(0)
-
-      IF menuext%=3 AND TX%<>19 THEN PROCmenurestore
-
-      CASE TX% OF
-        WHEN 0 : REM display control codes
-          PROCmenucheck
-          PROCcontrolcodes
-
-        WHEN 1,2,3,4,5,6,7,8,9,10,11,12,13,14 : REM colour selector
-          oldcol%=curcol%
-          curcol%=(TX%+1) DIV 2
-
-          IF curcol%=oldcol% THEN
-            textfore%=(textfore%+1) AND 1
-          ENDIF
-
-        WHEN 15 : toolsel%=1:toolcursor%=TX% : REM paint
-        WHEN 16 : REM dither & scale merged
-          IF toolsel%=2 THEN
-            dither%=(dither%+1) MOD 7:toolsel%=2:toolcursor%=16
-          ENDIF
-          toolcursor%=TX%
-          toolsel%=2
-
-        WHEN 17 : REM copy
-          IF toolsel%=7 THEN
-            copypaste%=(copypaste%+1) AND 1
-          ELSE
-            toolsel%=7:toolcursor%=TX%
-          ENDIF
-
-        WHEN 18 : toolsel%=3:toolcursor%=TX% : REM fill
-        WHEN 19 : REM shape / special menu
-          IF menuext%<>3 THEN
-            IF menuext%=0 THEN PROCframesave(frame%)
-            menufrom%=menuext%
-            menuext%=3
-            REM PROCmenusave
-            REM *** SAVEFRAME???
-
-            PROCinits1menu
-          ELSE
-            PROCmenurestore
-          ENDIF
-
-        WHEN 21 : erase%=(erase%+1) AND 1 : REM toggle erase tool
-
-        WHEN 23 : PROCmenucheck : PROCundorestore : REM undo PROCmenurestore:
-        WHEN 25 : PROCmenucheck : PROCredorestore : REM redo PROCmenurestore:
-
-        WHEN 27 : PROCmenucheck : PROCclearscreen:toolsel%=1:toolcursor%=15 : REM clearscreen PROCmenurestore:
-        WHEN 28 : toolsel%=5:toolcursor%=TX% : REM background colour
-        WHEN 29 : toolsel%=6:toolcursor%=TX% : REM foreground colour
-
-        WHEN 31 : PROCmenucheck : PROCloadfile(0) : REM load file dialog - 0 load bin file PROCmenurestore:
-        WHEN 32 : PROCmenucheck : PROCsavefile : REM save frames to file PROCmenurestore:
-
-        WHEN 34 : animation%=(animation%+1) AND 1 : REM toggle frame animation advance tool
-
-          REM                  WHEN 36 : REM frame%
-        WHEN 36,37 : PROCmenucheck : PROCloadnextframe(-1,1) : REM save current frame and display previous frame in sequence PROCmenurestore:
-        WHEN 38 : PROCmenucheck : PROCloadnextframe(1,1) : REM save current frame and display next frame in sequence  PROCmenurestore:
-        WHEN 39 : PROCmenucheck : PROCplay : REM save current frame and play all frames in a loop  PROCmenurestore:
-
-
-      ENDCASE
-
-      REM hide shape menu if another menu item was clicked
-      IF TX%<>19 AND menuext%=1 THEN PROCmenurestore
-      IF toolsel%<>4 THEN shapesel%=-1
-
-      IF menuext%<>3 THEN PROCdrawmenu
 
       ENDPROC
 
@@ -1931,18 +2094,23 @@
       REM ##########################################################
       REM shape and special sub menu
       DEF PROCsub1handler
-      LOCAL DONE%,X%
+      LOCAL DONE%,L%,C%
 
       PROCWAITMOUSE(0)
-
+      C%=-1
       IF MX%>S1X% AND MX%<S1X%+S1W% AND MY%>S1Y% AND MY%<S1Y%+S1H% THEN
-        FOR X%=0 TO controls%
-          IF MX%>controlrange{(X%)}.x1% AND MX%<controlrange{(X%)}.x2% AND MY%>controlrange{(X%)}.y1% AND MY%<controlrange{(X%)}.y2% THEN
+        FOR L%=0 TO controls%
+          IF controlrange{(L%)}.x1%>-1 THEN
+            IF MX%>controlrange{(L%)}.x1% AND MX%<controlrange{(L%)}.x2% AND MY%>controlrange{(L%)}.y1% AND MY%<controlrange{(L%)}.y2% THEN
+              C%=L%
+              EXIT FOR
+            ENDIF
+          ELSE
             EXIT FOR
           ENDIF
         NEXT
 
-        CASE X% OF
+        CASE C% OF
           WHEN 0 : REM line
             shapesel%=0
 
@@ -1985,17 +2153,17 @@
 
         ENDCASE
 
-        IF X%>=0 AND X%<17 THEN
-          PROCs1update(X%)
+        IF C%>=0 AND C%<17 THEN
+          PROCs1update(C%)
 
           REM tool selected
-          IF X%>=0 AND X%<8 AND shapesel%>-1 THEN
+          IF C%>=0 AND C%<8 AND shapesel%>-1 THEN
             toolsel%=4:toolcursor%=19
             DONE%=1
           ENDIF
 
           REM other menus
-          IF X%>12 THEN
+          IF C%>12 THEN
             DONE%=1
           ENDIF
 
@@ -2005,7 +2173,7 @@
         DONE%=1
       ENDIF
       REM IF SP%>sprite_max%-1 THEN SP%=-1
-      REM PRINTTAB(0,1)STR$(X%);" "; STR$(DONE%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
+      REM PRINTTAB(0,1)STR$(C%);" "; STR$(DONE%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
       REM PROCWAITMOUSE(4)
       REM PROCWAITMOUSE(0)
 
@@ -2014,7 +2182,7 @@
 
         PROCchangemode(7)
 
-        CASE X% OF
+        CASE C% OF
           WHEN 13 : REM sprites screen
             menuext%=2
             PROCspritemenu(1)
@@ -2061,6 +2229,112 @@
       ENDPROC
 
       REM ##########################################################
+      REM fill sub menu
+      DEF PROCsub2handler
+      LOCAL DONE%,L%,C%
+
+      PROCWAITMOUSE(0)
+      C%=-1
+
+      IF MX%>S2X% AND MX%<S2X%+S2W% AND MY%>S2Y% AND MY%<S2Y%+S2H% THEN
+
+        FOR L%=0 TO controls%
+          IF controlrange{(L%)}.x1%>-1 THEN
+            IF MX%>controlrange{(L%)}.x1% AND MX%<controlrange{(L%)}.x2% AND MY%>controlrange{(L%)}.y1% AND MY%<controlrange{(L%)}.y2% THEN
+              C%=L%
+              EXIT FOR
+            ENDIF
+          ELSE
+            EXIT FOR
+          ENDIF
+        NEXT
+
+        CASE C% OF
+          WHEN 0 : REM flood fill
+            toolsel%=3
+            toolcursor%=18
+          OTHERWISE
+            toolsel%=1
+            toolcursor%=15
+
+        ENDCASE
+
+        IF C%>=0 AND C%<13 THEN
+          PROCs2update(C%)
+          DONE%=1
+        ENDIF
+      ELSE
+        DONE%=1
+      ENDIF
+      REM IF SP%>sprite_max%-1 THEN SP%=-1
+      REM PRINTTAB(0,1)STR$(C%);" "; STR$(DONE%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
+      REM PROCWAITMOUSE(4)
+      REM PROCWAITMOUSE(0)
+
+      IF DONE%=1 THEN
+        PROCWAITMOUSE(0)
+
+        PROCchangemode(7)
+
+        CASE C% OF
+          WHEN 1,2,3,4,5,6,7,8
+            PROCmenurestore
+            PROCdrawmenu
+            PROCundosave
+
+            CASE C% OF
+              WHEN 1 : REM gradient left to right
+                PROCrectangle_g(2,3,79,74,0)
+              WHEN 2 : REM gradient right to left
+                PROCrectangle_g(79,3,2,74,0)
+              WHEN 3 : REM gradient top to bottom
+                PROCrectangle_g(2,3,79,74,1)
+              WHEN 4 : REM gradient bottom to top
+                PROCrectangle_g(2,74,79,3,1)
+              WHEN 5 : REM gradient top left to bottom right
+                PROCdiagonal_g(0,0,0,18)
+              WHEN 6 : REM gradient top right to bottom left
+                PROCdiagonal_g(1,0,0,18)
+              WHEN 7 : REM gradient bottom right to top left
+                PROCdiagonal_g(1,1,0,18)
+              WHEN 8 : REM gradient bottom left to top right
+                PROCdiagonal_g(0,1,0,18)
+
+            ENDCASE
+          WHEN 9 : REM keyboard and options screen
+            menuext%=1
+            PROCoptionsmenu(1)
+            PROCdrawmenu
+
+          WHEN 10 : REM help screen
+            PROCdrawmenu
+            PROCshowhelp
+            PROCmenurestore
+
+          OTHERWISE
+            CASE menufrom% OF
+              WHEN 1
+                menuext%=1
+                PROCoptionsmenu(1)
+                PROCdrawmenu
+
+              WHEN 2
+                menuext%=2
+                PROCspritemenu(1)
+                PROCdrawmenu
+
+              OTHERWISE
+                PROCmenurestore
+                PROCdrawmenu
+                REM PROCdrawgrid
+
+            ENDCASE
+        ENDCASE
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
       REM animation UI
       DEF PROCanimscreen
       LOCAL X%,Y%,DX,DY%,S%,SP%,DP%,DONE%
@@ -2069,7 +2343,7 @@
 
       REM VDU 19,7,16,167,167,167 : REM set colour 7 to slightly darker
 
-      VDU 23,1,0;0;0;0; : REM Disable cursor
+
 
       PROCanimredraw
       PROCanimupdate(0)
@@ -2607,7 +2881,10 @@
 
       REM GAP 88 DOUBLE BUTTON, 56 SINGLE BUTTON
 
-      REM SET
+
+      PROCresetcontrols
+
+      REM set
       menuadd%=272
       PROCanimcontrol(0,"<<",menuadd%,760,8,bc%,0)
       PROCanimcontrol(1,"<",menuadd%,760,8,bc%,0)
@@ -2808,10 +3085,8 @@
                 VDU 31,TX%,TY%,char%
               ENDIF
             WHEN 5
-              PROCrectangle_g(2,3,79,74,0)
 
             WHEN 6
-              PROCrectangle_g(2,3,79,74,1)
 
           ENDCASE
           REPEAT
@@ -3138,9 +3413,6 @@
       REM CLEARSCREEN DIALOG
       DEF PROCclearscreen
       LOCAL I%,L%,A$,B$,C$,cls%,fix%,done%,col_old%,bak_old%,h_old%,v_old%,hindex%,vindex%,skip%,skip_old%
-
-      REM PROCmenusave
-      REM *** FRAMESAVE??
 
       menuext%=99
       cls%=1
@@ -3665,20 +3937,10 @@
       ENDPROC
 
       REM ##########################################################
-      REM menu buffer save frame
-      DEF PROCmenusave
-      LOCAL U%
-      FOR U%=0 TO 959
-        menu_buffer&(U%)=GET(U% MOD 40,U% DIV 40+1)
-      NEXT
-
-      ENDPROC
-
-      REM ##########################################################
       REM menu buffer restore frame
       DEF PROCmenurestore
 
-      IF menuext%=3 THEN PROCchangemode(7)
+      IF menuext%=3 OR menuext%=4 THEN PROCchangemode(7)
       menuext%=0
 
       PROCframerestore(frame%)
@@ -3763,7 +4025,7 @@
       REM loadfile - modified dirscan to include type array so files list can be displayed for mode 7
       REM loadtype determines the type of load / import function
       DEF PROCloadfile(loadtype%)
-      LOCAL I%,N%,L%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%,MACT%,maxy%,opt1%,opt2%,GT%,OGT%
+      LOCAL I%,N%,L%,M%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%,MACT%,maxy%,opt1%,opt2%,GT%,OGT%,reload%
 
       REM n$ holds file and dir list of current folder
       REM t& holds type list for current folder, 0=special, 1=dir, 2=file
@@ -3778,57 +4040,60 @@
       c%(1)=134
       c%(2)=135
 
+      REM top of load window
+      M%=3
+
       PROCWAITMOUSE(0)
-      REM PROCmenusave
-      REM *** FRAMESAVE???
       menuext%=99
       CASE loadtype% OF
-        WHEN 0 : maxy%=23
-        WHEN 1 : maxy%=19
-        WHEN 2 : maxy%=19
+        WHEN 0 : maxy%=M%+19
+        WHEN 1 : maxy%=M%+15
+        WHEN 2 : maxy%=M%+15
       ENDCASE
       REM      maxy%=22-loadtype%*3
       REM       PRINTTAB(0,1)STR$(maxy%)
 
-      FOR L%=4 TO maxy%
+      FOR L%=M% TO maxy%
         PROCprint40(L%,"")
       NEXT
 
-      FOR L%=5 TO maxy%-1
+      FOR L%=M%+1 TO maxy%-1
         PRINTTAB(2,L%)gw$;CHR$(234);STRING$(30," ");gw$;CHR$(181);
       NEXT
-      PRINTTAB(34,5)tg$;CHR$(94);
-      PRINTTAB(34,16)tg$;"#";
+      PRINTTAB(34,M%+3)tg$;"-";
+      PRINTTAB(34,M%+4)tg$;"#";
+      PRINTTAB(34,M%+11)tg$;"#";
+      PRINTTAB(34,M%+12)tg$;"+";
       PRINTTAB(2,maxy%)gw$;CHR$(170);STRING$(31,CHR$(172));CHR$(165);
-      PRINTTAB(5,18)tb$;CHR$(157);tc$;"LOAD  ";CHR$(156);"       ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
+      PRINTTAB(5,M%+14)tb$;CHR$(157);tc$;"LOAD  ";CHR$(156);"       ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
 
       CASE loadtype% OF
         WHEN 0 : REM bin files
           filetype$=".bin"
-          PRINTTAB(2,4)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
-          PRINTTAB(15,18)tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
-          PRINTTAB(4,20)tg$;"(*)";tw$;"ALL FRMS ";tg$;"( )";tw$;"SINGLE FRM";
-          PRINTTAB(4,21)tg$;"(*)";tw$;"CLS ";tg$;"( )";tw$;"BACK ";tg$;"( )";tw$;"FORE";
-          PRINTTAB(4,22)tg$;"( )";tw$;"SERIES 78x72 : F0001.BMP"
+          PRINTTAB(2,M%)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
+          PRINTTAB(15,M%+14)tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
+          PRINTTAB(4,M%+16)tg$;"(*)";tw$;"ALL FRMS ";tg$;"( )";tw$;"SINGLE FRM";
+          PRINTTAB(4,M%+17)tg$;"(*)";tw$;"CLS ";tg$;"( )";tw$;"BACK ";tg$;"( )";tw$;"FORE";
+          PRINTTAB(4,M%+18)tg$;"( )";tw$;"SERIES 78x72 : F0001.BMP"
 
         WHEN 1 : REM import bmp
           filetype$=".bmp"
-          PRINTTAB(2,4)gw$;CHR$(232);STRING$(9,CHR$(172));tg$;"IMPORT FILE";gw$;STRING$(9,CHR$(172));CHR$(180);
-          PRINTTAB(15,18)CHR$(156);
-          PRINTTAB(1,21)tg$;"(*)";tw$;"SINGLE BOX CAPTURE"
-          PRINTTAB(1,22)tg$;"( )";tw$;"GRID";tc$;"HOR";tw$;"-";ty$;"10";tw$;"+ ";tc$;"VER";tw$;"-";ty$;"02";tw$"+"
-          PRINTTAB(1,23)tg$;"( )";tw$;"SERIES 78x72 FORMAT: F0001.BMP"
+          PRINTTAB(2,M%)gw$;CHR$(232);STRING$(9,CHR$(172));tg$;"IMPORT FILE";gw$;STRING$(9,CHR$(172));CHR$(180);
+          PRINTTAB(15,M%+14)CHR$(156);
+          PRINTTAB(1,M%+17)tg$;"(*)";tw$;"SINGLE BOX CAPTURE"
+          PRINTTAB(1,M%+18)tg$;"( )";tw$;"GRID";tc$;"HOR";tw$;"-";ty$;"10";tw$;"+ ";tc$;"VER";tw$;"-";ty$;"02";tw$"+"
+          PRINTTAB(1,M%+19)tg$;"( )";tw$;"SERIES 78x72 FORMAT: F0001.BMP"
           GX%=10
           GY%=2
 
         WHEN 2 : REM import bmp to sprite
           filetype$=".bmp"
-          PRINTTAB(2,4)gw$;CHR$(232);STRING$(8,CHR$(172));tg$;"SPRITE IMPORT";gw$;STRING$(8,CHR$(172));CHR$(180);
-          PRINTTAB(15,18)CHR$(156);
+          PRINTTAB(2,M%)gw$;CHR$(232);STRING$(8,CHR$(172));tg$;"SPRITE IMPORT";gw$;STRING$(8,CHR$(172));CHR$(180);
+          PRINTTAB(15,M%+14)CHR$(156);
 
       ENDCASE
 
-      N% = FN_dirscan2(n$(), t&(), "dir *.*", filetype$)
+      N% = FN_dirscan2(n$(), t&(), "dir *.*", filetype$,opt1%)
       F%=0
       S%=0
       SEL%=0
@@ -3838,8 +4103,9 @@
       INDEXOLD%=1
       MACT%=-1
 
+
       FOR I%=INDEX% TO INDEX%+11
-        IF I%<N%+1 THEN PRINTTAB(6,4+I%)CHR$(c%(t&(I%)));LEFT$(n$(I%),24);
+        IF I%<N%+1 THEN PRINTTAB(6,M%+I%)CHR$(c%(t&(I%)));LEFT$(n$(I%),24);
       NEXT
 
       REPEAT
@@ -3849,7 +4115,7 @@
         IF MB%=4 THEN
           IF MACT%=-1 THEN MACT%=TY%
 
-          IF MACT%>4 AND MACT%<17 THEN
+          IF MACT%>M% AND MACT%<M%+13 THEN
             IF TX%>4 AND TX%<34 THEN
               IF TY%<>OLD_TY% THEN INDEX%-=SGN(TY%-OLD_TY%)
               IF INDEX%>N%-11 THEN INDEX%=N%-11
@@ -3857,7 +4123,7 @@
               IF SELY%=-1 THEN SELY%=TY%
             ENDIF
           ELSE
-            IF TY%=22 AND loadtype%=1 THEN
+            IF TY%=M%+18 AND loadtype%=1 THEN
               CASE TX% OF
                 WHEN 15 : IF GX%>1 THEN GX%-=1
 
@@ -3867,8 +4133,8 @@
 
                 WHEN 32 : IF GY%<20 THEN GY%+=1
               ENDCASE
-              PRINTTAB(17,22)RIGHT$("0"+STR$(GX%),2)
-              PRINTTAB(29,22)RIGHT$("0"+STR$(GY%),2)
+              PRINTTAB(17,TY%)RIGHT$("0"+STR$(GX%),2)
+              PRINTTAB(29,TY%)RIGHT$("0"+STR$(GY%),2)
               WAIT 20
             ENDIF
           ENDIF
@@ -3877,10 +4143,19 @@
 
         REM detect touch release
         IF MB%=0 AND MACT%<>-1 THEN
-          IF MACT%=5 AND TX%=35 AND INDEX%>1 THEN INDEX%-=1
-          IF MACT%=16 AND TX%=35 AND INDEX%<N%-11 THEN INDEX%+=1
-          IF SELY%=TY% AND MACT%>4 AND MACT%<17 AND TX%>3 AND TX%<36 THEN
-            S%=TY%-5
+          IF MACT%=M%+3 AND TX%=35 AND INDEX%>1 THEN INDEX%-=1
+          IF MACT%=M%+12 AND TX%=35 AND INDEX%<N%-11 THEN INDEX%+=1
+          IF MACT%=M%+4 AND TX%=35 THEN
+            INDEX%-=10
+            IF INDEX%<1 THEN INDEX%=1
+          ENDIF
+          IF MACT%=M%+11 AND TX%=35 THEN
+            INDEX%+=10
+            IF INDEX%>N%-11 THEN INDEX%=N%-11
+          ENDIF
+
+          IF SELY%=TY% AND MACT%>M% AND MACT%<M%+13 AND TX%>3 AND TX%<36 THEN
+            S%=TY%-M%-1
             IF S%>-1 AND S%<12 THEN
               SEL%=S%+INDEX%
               IF SEL%<1 THEN SEL%=1
@@ -3898,27 +4173,17 @@
                 ELSE
                   S% = 3
                 ENDIF : RESTORE ERROR
-                IF S%=0 THEN
-                  N% = FN_dirscan2(n$(), t&(), "dir *.*",filetype$)
-                  SEL%=0
-                  SELOLD%=0
-                  SELY%=-1
-                  INDEX%=1
-                  INDEXOLD%=-1
-                  FOR I%=INDEX% TO INDEX%+12
-                    PRINTTAB(6,4+I%)SPC(28);
-                  NEXT
+                IF S%=0 THEN reload%=1
 
-                ENDIF
               ENDIF
             ENDIF
           ENDIF
 
           REM check for button and control clicks
-          IF TY%<1 THEN F%=-1
+          IF TY%=0 AND MACT%=0 THEN F%=-1
 
           REM load and cancel buttons
-          IF TY%=18 AND MACT%=18 THEN
+          IF TY%=M%+14 AND MACT%=TY% THEN
             IF TX%>5 AND TX%<14 THEN F%=SEL%
             IF loadtype%=0 THEN
               IF TX%>15 AND TX%<34 THEN F%=-2
@@ -3929,63 +4194,65 @@
 
           CASE loadtype% OF
             WHEN 0 :
-              REM load frame options
-              IF TY%=20 AND MACT%=20 THEN
+              REM load frame options - all frames or single frame
+              IF TY%=M%+16 AND MACT%=TY% THEN
                 CASE TX% OF
-                  WHEN 5,6,7 : opt1%=0
-                  WHEN 19,20,21 : opt1%=1
+                  WHEN 5,6,7
+                    opt1%=0
+                    reload%=1
+                  WHEN 19,20,21
+                    IF GT%=0 THEN
+                      opt1%=1
+                      reload%=1
+                    ENDIF
                 ENDCASE
-                PRINTTAB(6,20)CHR$(42-opt1%*10)
-                PRINTTAB(20,20)CHR$(32+opt1%*10)
+                PRINTTAB(6,TY%)CHR$(42-opt1%*10)
+                PRINTTAB(20,TY%)CHR$(32+opt1%*10)
               ENDIF
 
               REM load merge options
-              IF TY%=21 AND MACT%=21 THEN
+              IF TY%=M%+17 AND MACT%=TY% THEN
                 CASE TX% OF
                   WHEN 5,6,7 : opt2%=0
                   WHEN 14,15,16 : opt2%=1
                   WHEN 24,25,26 : opt2%=2
                 ENDCASE
-                PRINTTAB(6,21)CHR$(32-(opt2%=0)*10)
-                PRINTTAB(15,21)CHR$(32-(opt2%=1)*10)
-                PRINTTAB(25,21)CHR$(32-(opt2%=2)*10)
+                PRINTTAB(6,TY%)CHR$(32-(opt2%=0)*10)
+                PRINTTAB(15,TY%)CHR$(32-(opt2%=1)*10)
+                PRINTTAB(25,TY%)CHR$(32-(opt2%=2)*10)
               ENDIF
 
               REM import series
-              IF TY%=22 AND MACT%=22 THEN
+              IF TY%=M%+18 AND MACT%=TY% THEN
                 CASE TX% OF
-                  WHEN 5,6,7 : GT%=(GT%+1) AND 1
+                  WHEN 5,6,7
+                    GT%=(GT%+1) AND 1
+                    IF GT%=1 AND opt1%=1 THEN
+                      opt1%=0
+                      PRINTTAB(6,TY%-1)CHR$(42-opt1%*10)
+                      PRINTTAB(20,TY%-1)CHR$(32+opt1%*10)
+                    ENDIF
                 ENDCASE
                 IF GT%=0 THEN
                   filetype$=".bin"
                 ELSE
                   filetype$=".bmp"
                 ENDIF
-                N% = FN_dirscan2(n$(), t&(), "dir *.*",filetype$)
-                SEL%=0
-                SELOLD%=0
-                SELY%=-1
-                INDEX%=1
-                INDEXOLD%=-1
-                FOR I%=INDEX% TO INDEX%+12
-                  PRINTTAB(6,4+I%)SPC(28);
-                NEXT
-
-                PRINTTAB(6,22)CHR$(32+GT%*10)
+                reload%=1
+                PRINTTAB(6,M%+18)CHR$(32+GT%*10)
               ENDIF
-
 
             WHEN 1 :
 
               REM grid size controls
-              IF MACT%>20 THEN
+              IF MACT%>M%+16 THEN
                 OGT%=GT%
-                IF TY%=21 AND TX%>1 AND TX%<5 THEN GT%=0
-                IF TY%=22 AND TX%>1 AND TX%<5 THEN GT%=1
-                IF TY%=23 AND TX%>1 AND TX%<5 THEN GT%=2
+                IF TY%=M%+17 AND TX%>1 AND TX%<5 THEN GT%=0
+                IF TY%=M%+18 AND TX%>1 AND TX%<5 THEN GT%=1
+                IF TY%=M%+19 AND TX%>1 AND TX%<5 THEN GT%=2
                 IF OGT%<>GT% THEN
-                  PRINTTAB(3,21+GT%)"*"
-                  PRINTTAB(3,21+OGT%)" "
+                  PRINTTAB(3,M%+17+GT%)"*"
+                  PRINTTAB(3,M%+17+OGT%)" "
                 ENDIF
               ENDIF
 
@@ -3994,13 +4261,26 @@
           MACT%=-1
         ENDIF
 
+        IF reload%=1 THEN
+          N% = FN_dirscan2(n$(), t&(), "dir *.*",filetype$,opt1%)
+          SEL%=0
+          SELOLD%=0
+          SELY%=-1
+          INDEX%=1
+          INDEXOLD%=-1
+          FOR I%=INDEX% TO INDEX%+12
+            PRINTTAB(6,M%+I%)SPC(28);
+          NEXT
+          reload%=0
+        ENDIF
+
         REM IF SCROLLING DETECTED UPDATE FILE LIST AND SELECTED FILE INDEX
         IF INDEX%<>INDEXOLD% OR SELOLD%<>SEL% THEN
           FOR I%=0 TO 11
             K%=I%+INDEX%
             IF K%<N%+1 THEN
-              PRINTTAB(4,I%+5)SPC(28)
-              VDU 31,4,I%+5
+              PRINTTAB(4,I%+M%+1)SPC(28)
+              VDU 31,4,I%+M%+1
               IF SEL%=K% THEN
                 VDU 132,157
               ELSE
@@ -4083,7 +4363,6 @@
 
         WHEN 1 : REM import bmp
           PROCchangemode(6)
-          VDU 23,1,0;0;0;0; : REM Disable cursor
 
           IF F%=-1 THEN
             COLOUR 9
@@ -4111,7 +4390,6 @@
 
         WHEN 2 : REM import sprite from bmp
           PROCchangemode(6)
-          VDU 23,1,0;0;0;0; : REM Disable cursor
 
           IF F%=-1 THEN
             COLOUR 9
@@ -4224,8 +4502,6 @@
 
       PROCloadnextframe(1,0)
 
-      REM PROCmenusave
-      REM *** FRAMESAVE???
       menuext%=99
       PRINTTAB(9,10)gw$;CHR$(232);STRING$(18,CHR$(172));CHR$(180);CHR$(144+curcol%);
       FOR L%=11 TO 13
@@ -4826,8 +5102,6 @@
       PROCchangemode(6)
       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
 
-      VDU 23,1,0;0;0;0; : REM Disable cursor
-
       REM control code help
       GCOL 0,10
       PROChelpbox(0,0,1,10)
@@ -5294,13 +5568,39 @@
       ENDPROC
 
       REM ##########################################################
+      REM fill sub menu updater
+      DEF PROCs2update(C%)
+
+      menuadd%=932
+      PROCmenutext(0,"FILL       ",S2X%+20,menuadd%,14,(shapesel%=0)*-4)
+      PROCmenutext(1,"GRAD LEFT  ",S2X%+20,menuadd%,14,(shapesel%=1)*-4)
+      PROCmenutext(2,"GRAD RIGHT ",S2X%+20,menuadd%,14,(shapesel%=2)*-4)
+      PROCmenutext(3,"GRAD TOP   ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
+      PROCmenutext(4,"GRAD BOTTOM",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
+      PROCmenutext(5,"GRAD TOP-L ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
+      PROCmenutext(6,"GRAD TOP-R ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
+      PROCmenutext(7,"GRAD BOT-R ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
+      PROCmenutext(8,"GRAD BOT-L ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
+
+      IF C%=-1 THEN
+        GCOL 0,8
+        RECTANGLE S2X%+20,menuadd%,S2W%-40,2
+      ENDIF
+
+      menuadd%-=24
+
+      PROCmenutext(9,"KBRD & OPTS",S2X%+20,menuadd%,10,(C%=13)*-4)
+      PROCmenutext(10,"HELP       ",S2X%+20,menuadd%,10,(C%=16)*-4)
+
+      ENDPROC
+
+
+      REM ##########################################################
       REM initialise shape and special sub menu
       DEF PROCinits1menu
 
       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
       PROCchangemode(6)
-
-      VDU 23,1,0;0;0;0; : REM Disable cursor
 
       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
 
@@ -5312,10 +5612,39 @@
       RECTANGLE S1X%+8,S1Y%+8,S1W%-16,S1H%-16
       RECTANGLE S1X%+10,S1Y%+10,S1W%-20,S1H%-20
 
+      PROCresetcontrols
       PROCs1update(-1)
 
       ENDPROC
 
+      REM ##########################################################
+      REM initialise fill sub menu
+      DEF PROCinits2menu
+
+      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
+      PROCchangemode(6)
+
+      OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
+
+      GCOL 0,0
+      RECTANGLE FILL S2X%,S2Y%,S2W%,S2H%
+
+      GCOL 0,15
+      RECTANGLE S2X%+8,S2Y%+8,S2W%-16,S2H%-16
+      RECTANGLE S2X%+10,S2Y%+10,S2W%-20,S2H%-20
+
+      PROCresetcontrols
+      PROCs2update(-1)
+      ENDPROC
+
+      REM ##########################################################
+      REM initialise menu and button controls
+      DEF PROCresetcontrols
+      FOR I%=0 TO controls%
+        controlrange{(I%)}.x1%=-1
+      NEXT
+
+      ENDPROC
 
       REM ##########################################################
       REM shape and special sub menu
@@ -5555,7 +5884,7 @@
 
       REM Scan a directory and return list of directory and file names
       REM Modified to return a type list instead of prefixing folder / file icon
-      DEF FN_dirscan2(name$(), type&(), dircmd$, filter$)
+      DEF FN_dirscan2(name$(), type&(), dircmd$, filter$, opt%)
 
       REM removed reference to icon1$, icon2$
 
@@ -5600,7 +5929,15 @@
               IF d$<>"." IF d$<>".." IF filter$="" OR ASCd$<>&2E type&(N%) = 1 : N% += 1
             ELSE
               I% = INSTR(d$,".")
-              IF filter$="" OR INSTR(filter$,MID$(d$,I%)) type&(N%) = 2 : N% += 1
+              IF filter$="" OR INSTR(filter$,MID$(d$,I%)) THEN
+                IF opt%=0 THEN
+                  IF (RIGHT$(d$,6)="_1.bin" OR RIGHT$(d$,6)="01.bmp") THEN
+                    type&(N%) = 2 : N% += 1
+                  ENDIF
+                ELSE
+                  type&(N%) = 2 : N% += 1
+                ENDIF
+              ENDIF
             ENDIF : RESTORE ERROR
           ENDIF
           name$(N%) = MID$(a$,3)
