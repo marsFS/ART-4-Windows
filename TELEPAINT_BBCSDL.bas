@@ -10,13 +10,9 @@
 
       REM *** SCROLL OFF SCREEN E.G. NO WRAP
 
-      REM *** FILE MENU ADD PAGE UP AND DOWN, SCROLL WHEEL AND HOTKEYS MAYBE?
-
-      REM *** SCROLL FRAMES LAYER, HOW WOULD THIS INTERACT WITH DRAW FRAMES?
-
       REM *** IMPLEMENT ANIMATED CIRCLE (REDO CIRCLE ROUTINE)
 
-      REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE, ADD MOVE FRAME OPTION (IN PROGRESS)
+      REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE, ADD MOVE FRAME OPTION (needs work)
 
       REM *** SPRITES - EDIT SPRITES AND COPY TO FRAMES (in progress) 20x16 chars 40x48 pixels
 
@@ -26,14 +22,17 @@
 
       REM *** GRADIENTS - ADD min, max, weight (in progress)
 
-      REM *** BUGS ***
-      REM     * IMPORT SPRITE IMAGE WIDTH ODD NUMBER CAUSES ANOMALY (FIXED!)
+      REM *** END TODO LIST ***
 
-      REM *** TODO LIST ***
+      REM *** Added internal mode changes between Mode 6 and Mode 7 to eliminate screen repos
 
-      REM *** HELP SCREEN: MODE 6 TEXT: 40x25  PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
+      REM *** Internal Mode 6 uses Mode 7 font and needs colour index adjusted
 
-      REM *** SPECIAL SUBMENU: MODE 6
+      REM *** MODE 6 : TEXT: 40x25 (32x40 per char) PIXELS: 640x500 GU: 1280x1000 COLOURS: 16
+
+      REM *** HELP SCREEN: MODE 6
+
+      REM *** SPECIAL SUBMENUS: MODE 6
 
       REM *** SPRITE ANIMATION SCREEN: MODE 6
 
@@ -47,9 +46,9 @@
       INSTALL @lib$+"sortlib"
       REM INSTALL @lib$+"aagfxlib"
 
-      version$="v0.20"
+      version$="v0.21"
 
-      DEBUG%=0
+      DEBUG%=0 : REM for displaying mouse and other debug details while editing source
 
       MODE 7
 
@@ -317,7 +316,8 @@
 
       IF frame_old%=-3 THEN PROCimportimage
 
-      VDU 23,1,1;0;0;0; : REM Enable cursor
+      VDU 23,1,1;0;0;0;  : REM Enable cursor
+      VDU 23,0,10;0;0;0; : REM block cursor
 
       REM ##########################################################
       REM main loop starts here
@@ -1137,7 +1137,7 @@
         WHEN 15 : toolsel%=1:toolcursor%=TX% : REM paint
         WHEN 16 : REM dither & scale merged
           IF toolsel%=2 THEN
-            dither%=(dither%+1) MOD 7:toolsel%=2:toolcursor%=16
+            dither%=(dither%+1) MOD 5:toolsel%=2:toolcursor%=16
           ENDIF
           toolcursor%=TX%
           toolsel%=2
@@ -2253,16 +2253,19 @@
           WHEN 0 : REM flood fill
             toolsel%=3
             toolcursor%=18
+            DONE%=1
+
+          WHEN 9,10 : REM gradient type
+            PROCs2update(C%)
+          WHEN 11,12 : REM opts / help
+            DONE%=1
+
           OTHERWISE
             toolsel%=1
             toolcursor%=15
+            DONE%=1
 
         ENDCASE
-
-        IF C%>=0 AND C%<13 THEN
-          PROCs2update(C%)
-          DONE%=1
-        ENDIF
       ELSE
         DONE%=1
       ENDIF
@@ -3414,8 +3417,10 @@
       DEF PROCclearscreen
       LOCAL I%,L%,A$,B$,C$,cls%,fix%,done%,col_old%,bak_old%,h_old%,v_old%,hindex%,vindex%,skip%,skip_old%
 
+      VDU 23,1,0;0;0;0; : REM Disable cursor
+
       menuext%=99
-      cls%=1
+      cls%=0
       fix%=1
       skip%=3
       skip_old%=3
@@ -3432,7 +3437,7 @@
       NEXT
 
 
-      PRINTTAB(4,11)tb$;"OPTION:  ";tc$;"CLS:";tg$;"Y";tc$;" FIX:";tg$;"Y";
+      PRINTTAB(4,11)tb$;"OPTION:  ";tc$;"CLS:";tr$;"N";tc$;" FIX:";tg$;"Y";
       PRINTTAB(4,13)gg$;CHR$(157);tb$;"ALL FRAME  ";CHR$(156);" ";gg$;CHR$(157);tb$;"CUR FRAME  ";CHR$(156)
 
       PRINTTAB(4,14)tr$;STRING$(29,"-")
@@ -3568,6 +3573,7 @@
 
       CASE done% OF
         WHEN 1: REM new background / foreground all frames
+          PROCundosaveall
           PROCGR(curcol%,bakcol%,cls%)
           IF cls% THEN
             FOR frame%=1 TO frame_max%
@@ -3640,7 +3646,8 @@
           PROCframesave(frame%)
 
       ENDCASE
-      REMPROCloadnextframe(1,0)
+
+      VDU 23,1,1;0;0;0;  : REM Enable cursor
 
       ENDPROC
 
@@ -4042,6 +4049,8 @@
 
       REM top of load window
       M%=3
+
+      VDU 23,1,0;0;0;0;  : REM disable cursor
 
       PROCWAITMOUSE(0)
       menuext%=99
@@ -4449,6 +4458,8 @@
 
 
       ENDCASE
+
+      VDU 23,1,1;0;0;0;  : REM Enable cursor
 
       ENDPROC
 
@@ -5570,27 +5581,43 @@
       REM ##########################################################
       REM fill sub menu updater
       DEF PROCs2update(C%)
+      LOCAL P%,L%
 
       menuadd%=932
-      PROCmenutext(0,"FILL       ",S2X%+20,menuadd%,14,(shapesel%=0)*-4)
-      PROCmenutext(1,"GRAD LEFT  ",S2X%+20,menuadd%,14,(shapesel%=1)*-4)
-      PROCmenutext(2,"GRAD RIGHT ",S2X%+20,menuadd%,14,(shapesel%=2)*-4)
-      PROCmenutext(3,"GRAD TOP   ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
-      PROCmenutext(4,"GRAD BOTTOM",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
-      PROCmenutext(5,"GRAD TOP-L ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
-      PROCmenutext(6,"GRAD TOP-R ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
-      PROCmenutext(7,"GRAD BOT-R ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
-      PROCmenutext(8,"GRAD BOT-L ",S2X%+20,menuadd%,14,(shapesel%=7)*-4)
+      PROCmenutext(0,"FILL       ",S2X%+20,menuadd%,14,(toolsel%=3)*-4)
+      PROCmenutext(1,"GRAD LEFT  ",S2X%+20,menuadd%,14,0)
+      PROCmenutext(2,"GRAD RIGHT ",S2X%+20,menuadd%,14,0)
+      PROCmenutext(3,"GRAD TOP   ",S2X%+20,menuadd%,14,0)
+      PROCmenutext(4,"GRAD BOTTOM",S2X%+20,menuadd%,14,0)
+      PROCmenutext(5,"GRAD TOP-L ",S2X%+20,menuadd%,14,0)
+      PROCmenutext(6,"GRAD TOP-R ",S2X%+20,menuadd%,14,0)
+      PROCmenutext(7,"GRAD BOT-R ",S2X%+20,menuadd%,14,0)
+      PROCmenutext(8,"GRAD BOT-L ",S2X%+20,menuadd%,14,0)
 
       IF C%=-1 THEN
         GCOL 0,8
         RECTANGLE S2X%+20,menuadd%,S2W%-40,2
+
+        menuadd%-=24
+
+        PROCmenutext(9,"           ",S2X%+20,menuadd%,11,0)
+
+        FOR P%=0 TO 35
+          FOR L%=0 TO 12
+            GCOL 0,pat%(P% DIV 2,P% MOD 4+(L% MOD 4)*4)*15
+            RECTANGLE FILL S2X%+20+P%*8,menuadd%-L%*4+60,6,2
+          NEXT
+        NEXT
+        PROCmenutext(10,"           ",S2X%+20,menuadd%,11,0)
+
+        GCOL 0,8
+        RECTANGLE S2X%+20,menuadd%,S2W%-40,2
+
+        menuadd%-=24
+
+        PROCmenutext(11,"KBRD & OPTS",S2X%+20,menuadd%,10,(C%=13)*-4)
+        PROCmenutext(12,"HELP       ",S2X%+20,menuadd%,10,(C%=16)*-4)
       ENDIF
-
-      menuadd%-=24
-
-      PROCmenutext(9,"KBRD & OPTS",S2X%+20,menuadd%,10,(C%=13)*-4)
-      PROCmenutext(10,"HELP       ",S2X%+20,menuadd%,10,(C%=16)*-4)
 
       ENDPROC
 
