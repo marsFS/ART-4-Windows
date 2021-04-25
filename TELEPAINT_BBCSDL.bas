@@ -152,7 +152,12 @@
       session%=0
       curdir$=@dir$
       cursave$=@dir$
+      cursavedir$=@dir$
       lastsave$=""
+      save_bin%=1        : REM save bin flag
+      save_bmp%=0        : REM save bmp flag
+      save_spr%=1        : REM save spr flag - saves sprites and animation information
+      save_dat%=0        : REM save dat flag - saves sprites as DATA statements
       text$=""
       caps%=1
       showcodes%=0
@@ -317,7 +322,7 @@
       IF frame_old%=-3 THEN PROCimportimage
 
       VDU 23,1,1;0;0;0;  : REM Enable cursor
-      VDU 23,0,10;0;0;0; : REM block cursor
+      REM VDU 23,0,10;0;0;0; : REM block cursor
 
       REM ##########################################################
       REM main loop starts here
@@ -450,12 +455,11 @@
 
       REM ##########################################################
       REM change mode and preserve window location
-      DEF PROCchangemode(M%)
-      LOCAL C%
+      DEF PROCchangemode(M%,C%)
 
       REM set internal mode and clearscreen
       @vdu.m.a& = M%
-      CLS
+      IF C%=1 THEN CLS
 
       CASE M% OF
         WHEN 6
@@ -478,6 +482,7 @@
           VDU 4
 
       ENDCASE
+
       *REFRESH
 
       ENDPROC
@@ -1411,7 +1416,8 @@
 
             WHEN 17,18,19,20,21,22,23,24
 
-              PROCchangemode(7)
+              REM PROCchangemode(7,1)
+              CLS
               menuext%=0
               PROCdrawmenu
               PROCshowhelp
@@ -1432,7 +1438,7 @@
       REM ##########################################################
       REM SPRITE EDITOR DIALOG
       DEF PROCspritehandler
-      LOCAL textx%
+      LOCAL textx%,D$
 
       IF PX%>19 AND PX%<60 AND PY%>8 AND PY%<57 THEN
         CASE toolsel% OF
@@ -1652,8 +1658,12 @@
           WHEN 2
             CASE TX% OF
               WHEN 1,2,3,4,5 : REM LOAD
-                PROCloadspritefile(@tmp$+"SPRITEDATA.SPR")
+                PROCloadfile(3)
+                menuext%=2
+                PROCdrawmenu
+                PROCspritemenu(1)
                 PROCdrawsprite
+
 
               WHEN 33,34,35 : REM CLS
                 FOR S%=0 TO 319
@@ -1669,7 +1679,17 @@
           WHEN 4
             CASE TX% OF
               WHEN 1,2,3,4,5 : REM SAVE
-                PROCsavespritefile(@tmp$+"SPRITEDATA.SPR")
+                IF session%=0 THEN
+                  D$=FNgetdate
+                  cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
+                  OSCLI "MD """+cursave$+cursavedir$+""""
+                  OSCLI "CD """+cursave$+cursavedir$+""""
+                  session%=1
+                  cursave$=cursave$+cursavedir$+"/"
+
+                ENDIF
+
+                PROCsavespritefile(cursave$+"SPRITEDATA",1,0)
 
               WHEN 33,34,35,36,37 : REM SCROLL LEFT
 
@@ -2180,7 +2200,7 @@
       IF DONE%=1 THEN
         PROCWAITMOUSE(0)
 
-        PROCchangemode(7)
+        PROCchangemode(7,1)
 
         CASE C% OF
           WHEN 13 : REM sprites screen
@@ -2277,7 +2297,7 @@
       IF DONE%=1 THEN
         PROCWAITMOUSE(0)
 
-        PROCchangemode(7)
+        PROCchangemode(7,1)
 
         CASE C% OF
           WHEN 1,2,3,4,5,6,7,8
@@ -2342,7 +2362,7 @@
       DEF PROCanimscreen
       LOCAL X%,Y%,DX,DY%,S%,SP%,DP%,DONE%
       REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
-      PROCchangemode(6) : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
+      PROCchangemode(6,1) : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
 
       REM VDU 19,7,16,167,167,167 : REM set colour 7 to slightly darker
 
@@ -2683,7 +2703,7 @@
         REM PRINTTAB(0,12)STR$(SP%);" ";STR$(DP%);" ";STR$(MX%);",";STR$(MY%);"    "
       UNTIL DONE%=1
       PROCWAITMOUSE(0)
-      PROCchangemode(7)
+      PROCchangemode(7,1)
       VDU 23,1,1;0;0;0; : REM Enable cursor
       ENDPROC
 
@@ -3947,7 +3967,7 @@
       REM menu buffer restore frame
       DEF PROCmenurestore
 
-      IF menuext%=3 OR menuext%=4 THEN PROCchangemode(7)
+      IF menuext%=3 OR menuext%=4 THEN PROCchangemode(7,1)
       menuext%=0
 
       PROCframerestore(frame%)
@@ -3960,7 +3980,7 @@
       DEF PROCmenucheck
 
       IF menuext%<>0 THEN
-        IF menuext%=3 THEN PROCchangemode(7)
+        IF menuext%=3 THEN PROCchangemode(7,1)
         menuext%=0
         PROCframerestore(frame%)
         PROCdrawmenu
@@ -3970,16 +3990,39 @@
 
       REM ##########################################################
       REM save sprite file
-      DEF PROCsavespritefile(F$)
+      DEF PROCsavespritefile(F$,S%,D%)
       LOCAL f%,u%,c%
 
-      f%=OPENOUT(F$)
-      FOR c%=0 TO sprite_max%-1
-        FOR u%=0 TO 319
-          BPUT#f%,sprite_buffer&(c%,u%)
+      IF S%=1 THEN
+        f%=OPENOUT(F$+".SPR")
+        FOR c%=0 TO sprite_max%-1
+          FOR u%=0 TO 319
+            BPUT#f%,sprite_buffer&(c%,u%)
+          NEXT
         NEXT
-      NEXT
-      CLOSE#f%
+        CLOSE#f%
+      ENDIF
+      IF D%=1 THEN
+        A$=""
+        f%=OPENOUT(F$+".TXT")
+        FOR c%=0 TO sprite_max%-1
+          PRINT#f%,"REM SPR: "+STR$(c%)+"  W: 13  H: 15"
+          BPUT#f%,10
+          FOR Y%=0 TO 14
+            A$=""
+            FOR X%=0 TO 12
+              A$+=STR$(FNpoint_sprbuf(X%+2,Y%,c%))
+              IF X%<12 THEN A$+=","
+            NEXT
+            PRINT#f%,"DATA "+A$
+            BPUT#f%,10
+          NEXT
+          PRINT#f%,""
+          BPUT#f%,10
+        NEXT
+        CLOSE#f%
+      ENDIF
+
       ENDPROC
 
       REM ##########################################################
@@ -4058,6 +4101,7 @@
         WHEN 0 : maxy%=M%+19
         WHEN 1 : maxy%=M%+15
         WHEN 2 : maxy%=M%+15
+        WHEN 3 : maxy%=M%+15
       ENDCASE
       REM      maxy%=22-loadtype%*3
       REM       PRINTTAB(0,1)STR$(maxy%)
@@ -4099,6 +4143,14 @@
           filetype$=".bmp"
           PRINTTAB(2,M%)gw$;CHR$(232);STRING$(8,CHR$(172));tg$;"SPRITE IMPORT";gw$;STRING$(8,CHR$(172));CHR$(180);
           PRINTTAB(15,M%+14)CHR$(156);
+          opt1%=1
+
+        WHEN 3 : REM load spr sprite
+          filetype$=".spr"
+          PRINTTAB(2,M%)gw$;CHR$(232);STRING$(8,CHR$(172));tg$;"LOAD SPR FILE";gw$;STRING$(8,CHR$(172));CHR$(180);
+          PRINTTAB(15,M%+14)CHR$(156);
+          opt1%=1
+
 
       ENDCASE
 
@@ -4371,7 +4423,7 @@
           ENDIF
 
         WHEN 1 : REM import bmp
-          PROCchangemode(6)
+          PROCchangemode(6,1)
 
           IF F%=-1 THEN
             COLOUR 9
@@ -4398,7 +4450,7 @@
           ENDIF
 
         WHEN 2 : REM import sprite from bmp
-          PROCchangemode(6)
+          PROCchangemode(6,1)
 
           IF F%=-1 THEN
             COLOUR 9
@@ -4456,6 +4508,8 @@
 
           ENDIF
 
+        WHEN 3 : REM load spr
+          PROCloadspritefile(curdir$+n$(SEL%))
 
       ENDCASE
 
@@ -4466,9 +4520,173 @@
       REM ##########################################################
       REM save all frames to file, create session folder if not already exists
       DEF PROCsavefile
+      LOCAL D$,DONE%,OG%
+
       PROCWAITMOUSE(0)
 
       PROCframesave(frame%)
+
+      REM turn off grid and save state
+      OG%=gridshow%
+      gridshow%=0
+
+      PROCchangemode(6,0)
+
+      D$=FNgetdate
+
+      IF session%=0 THEN cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
+
+      PROCsaveupdate(1,LEFT$(cursavedir$+"                        ",24))
+
+      REPEAT
+        PROCREADMOUSE
+
+        IF MB%=4 THEN
+
+          PROCWAITMOUSE(0)
+
+          FOR L%=0 TO controls%
+            IF controlrange{(L%)}.x1%>-1 THEN
+              IF MX%>controlrange{(L%)}.x1% AND MX%<controlrange{(L%)}.x2% AND MY%>controlrange{(L%)}.y1% AND MY%<controlrange{(L%)}.y2% THEN
+                C%=L%
+                EXIT FOR
+              ENDIF
+            ELSE
+              EXIT FOR
+            ENDIF
+          NEXT
+
+          CASE C% OF
+            WHEN 2 : REM bin
+              save_bin%=(save_bin%+1) AND 1
+              PROCsaveupdate(0,"BIN")
+
+            WHEN 3 : REM bmp
+              save_bmp%=(save_bmp%+1) AND 1
+              PROCsaveupdate(0,"BMP")
+
+            WHEN 4 : REM spr
+              save_spr%=(save_spr%+1) AND 1
+              PROCsaveupdate(0,"SPR")
+
+            WHEN 5 : REM dat
+              save_dat%=(save_dat%+1) AND 1
+              PROCsaveupdate(0,"DAT")
+
+            WHEN 0 : REM save
+              DONE%=1
+
+            WHEN 1 : REM cancel
+              DONE%=2
+
+          ENDCASE
+          IF save_bin%+save_bmp%+save_spr%+save_dat%=0 THEN
+            save_bin%=1
+            PROCsaveupdate(0,"BIN")
+          ENDIF
+
+        ELSE
+          WAIT 2
+        ENDIF
+
+      UNTIL DONE%>0
+
+      PROCchangemode(7,1)
+
+      IF DONE%=1 THEN
+        REM create and change to session folder, strip off seconds value
+        IF session%=0 THEN
+          OSCLI "MD """+cursave$+cursavedir$+""""
+          OSCLI "CD """+cursave$+cursavedir$+""""
+          session%=1
+          cursave$=cursave$+cursavedir$+"/"
+        ENDIF
+
+        REM update last session file
+        f%=OPENOUT(@dir$+"telepaint_pref.ini")
+        IF f% THEN
+          PRINT#f%,cursave$+"M7_" + D$
+          CLOSE#f%
+        ENDIF
+
+        CLS
+
+        REM save frames
+        frame%=frame_max%
+        FOR I%=1 TO frame_max%
+          PROCloadnextframe(1,0)
+          IF save_bin%=1 THEN PROCsavebinaryfile(cursave$+"M7_" + D$ + "_" + STR$(frame%)+".BIN")
+          IF save_bmp%=1 OSCLI "SCREENSAVE """+cursave$+"M7_" + D$ + "_" + STR$(frame%)+".BMP"" 0,0,1280,1000"
+          WAIT 10
+        NEXT
+
+        PROCloadnextframe(1,0)
+
+        IF save_spr%=1 OR save_dat%=1 THEN PROCsavespritefile(cursave$+"SPRITEDATA",save_spr%,save_dat%)
+
+        menuext%=99
+        PRINTTAB(9,10)gw$;CHR$(232);STRING$(18,CHR$(172));CHR$(180);CHR$(144+curcol%);
+        FOR L%=11 TO 13
+          PRINTTAB(9,L%)gw$;CHR$(234);STRING$(17," ");gw$;CHR$(181);CHR$(144+curcol%);
+        NEXT
+        PRINTTAB(9,14)gw$;CHR$(170);STRING$(18,CHR$(172));CHR$(165);CHR$(144+curcol%);
+
+        REM READ FILES
+        PRINTTAB(13,12)tg$;"FILES SAVED!";
+
+        PROCWAITMOUSE(4)
+
+        PROCWAITMOUSE(0)
+      ENDIF
+
+      gridshow%=OG%
+
+      PROCmenurestore
+
+
+      ENDPROC
+
+      REM ##########################################################
+      REM update save screen options
+      DEF PROCsaveupdate(M%,D$)
+      LOCAL SX%,SY%,SW%,SH%,TY%
+
+      SX%=100: SY%=100
+      SW%=1078 : SH%=800
+      TY%=SY%+SH%
+
+      IF M%=1 THEN
+        PROCresetcontrols
+
+        GCOL 0,0
+        RECTANGLE FILL SX%,SY%,SW%,SH%
+        GCOL 0,15
+        RECTANGLE SX%+8,SY%+8,SW%-16,SH%-16
+        RECTANGLE SX%+10,SY%+10,SW%-20,SH%-20
+        REM t$,x%,y%,tc%,bc%
+        PROCgtext(" SAVE FILE OPTIONS ",SX%+236,TY%-40,10,0)
+        PROCgtext("PROJECT NAME: ",SX%+40,TY%-100,3,0)
+        PROCgtext("SAVE BIN:",SX%+40,TY%-208,15,0)
+        PROCgtext("SAVE BMP:",SX%+40,TY%-256,15,0)
+        PROCgtext("SAVE SPR:",SX%+40,TY%-304,15,0)
+        PROCgtext("SAVE TXT:",SX%+40,TY%-352,15,0)
+        PROCgtext("(SPR PIXEL DATA)",SX%+500,TY%-352,4,0)
+        PROCanimcontrol(0,"  SAVE  ",SX%+100,SY%+100,12,10,4)
+        PROCanimcontrol(1," CANCEL ",SX%+700,SY%+100,9,11,1)
+      ENDIF
+
+      PROCgtext(D$,SX%+40,TY%-144,15,4)
+
+      PROCanimcontrol(2," "+CHR$(78+save_bin%*11)+" ",SX%+340,TY%-208,8,11+4*save_bin%,1+save_bin%)
+      PROCanimcontrol(3," "+CHR$(78+save_bmp%*11)+" ",SX%+340,TY%-256,8,11+4*save_bmp%,1+save_bmp%)
+      PROCanimcontrol(4," "+CHR$(78+save_spr%*11)+" ",SX%+340,TY%-304,8,11+4*save_spr%,1+save_spr%)
+      PROCanimcontrol(5," "+CHR$(78+save_dat%*11)+" ",SX%+340,TY%-352,8,11+4*save_dat%,1+save_dat%)
+
+      ENDPROC
+
+      REM ##########################################################
+      REM return date for file operations
+      DEF FNgetdate
       LOCAL D$,M$,T$,TMP$
 
       M$="JanFebMarAprMayJunJulAugSepOctNovDec"
@@ -4478,59 +4696,7 @@
       TMP$=STR$(INSTR(M$,MID$(T$,8,3)) DIV 3+1)
       TMP$=RIGHT$("0"+TMP$,2)
       D$=MID$(T$,12,4)+TMP$+MID$(T$,5,2)+"_"+MID$(T$,17,2)+MID$(T$,20,2)+MID$(T$,23,2)
-
-      REM create and change to session folder, strip off seconds value
-      IF session%=0 THEN
-        TMP$="M7_"+LEFT$(D$,LEN(D$)-2)
-        OSCLI "MD """+cursave$+TMP$+""""
-        OSCLI "CD """+cursave$+TMP$+""""
-        session%=1
-        cursave$=cursave$+TMP$+"/"
-      ENDIF
-
-      REM update last session file
-      f%=OPENOUT(@dir$+"telepaint_pref.ini")
-      IF f% THEN
-        PRINT#f%,cursave$+"M7_" + D$
-        CLOSE#f%
-      ENDIF
-
-      REM turn off grid and save state
-      OG%=gridshow%
-      gridshow%=0
-      CLS
-
-      REM save frames
-      frame%=frame_max%
-      FOR I%=1 TO frame_max%
-        PROCloadnextframe(1,0)
-        PROCsavebinaryfile(cursave$+"M7_" + D$ + "_" + STR$(frame%)+".BIN")
-        OSCLI "SCREENSAVE """+cursave$+"M7_" + D$ + "_" + STR$(frame%)+".BMP"" 0,0,1280,1000"
-        WAIT 10
-      NEXT
-
-      gridshow%=OG%
-
-      PROCloadnextframe(1,0)
-
-      menuext%=99
-      PRINTTAB(9,10)gw$;CHR$(232);STRING$(18,CHR$(172));CHR$(180);CHR$(144+curcol%);
-      FOR L%=11 TO 13
-        PRINTTAB(9,L%)gw$;CHR$(234);STRING$(17," ");gw$;CHR$(181);CHR$(144+curcol%);
-      NEXT
-      PRINTTAB(9,14)gw$;CHR$(170);STRING$(18,CHR$(172));CHR$(165);CHR$(144+curcol%);
-
-      REM READ FILES
-      PRINTTAB(13,12)tg$;"FILES SAVED!";
-
-      PROCWAITMOUSE(4)
-
-      PROCWAITMOUSE(0)
-
-      PROCmenurestore
-      REM *** DRAWFRAME??
-
-      ENDPROC
+      =D$
 
       REM ##########################################################
       REM import picture to one or more frames
@@ -4777,7 +4943,7 @@
 
       ENDCASE
       PROCWAITMOUSE(0)
-      PROCchangemode(7)
+      PROCchangemode(7,1)
       frame%=0
       PROCloadnextframe(1,0)
       menuext%=0
@@ -5062,7 +5228,7 @@
 
       ENDIF
       PROCWAITMOUSE(0)
-      PROCchangemode(7)
+      PROCchangemode(7,1)
       menuext%=2
 
 
@@ -5110,7 +5276,7 @@
       PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
 
       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
-      PROCchangemode(6)
+      PROCchangemode(6,1)
       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
 
       REM control code help
@@ -5241,14 +5407,9 @@
       PRINTTAB(23,2)"Undo";
       PRINTTAB(23,3)"Redo";
 
-      REPEAT
-        PROCREADMOUSE
-        WAIT 2
-        REM        PRINTTAB(4,18)LEFT$(STR$(TX%)+"   ",4)
-        REM PRINTTAB(4,19)LEFT$(STR$(TY%)+"   ",4)
-      UNTIL MB%=4
+      PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
-      PROCchangemode(7)
+      PROCchangemode(7,1)
       frame%-=1
       PROCloadnextframe(1,0)
       VDU 23,1,1;0;0;0; : REM Enable cursor
@@ -5292,10 +5453,10 @@
 
       showcodes%=0
       PROCframesave(frame%)
-      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
-      PROCchangemode(6)
-      OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
-      GCOL 3,8
+      REM      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
+      PROCchangemode(6,0)
+      REM OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
+      PROCdrawgrid
 
       REM control code special chars
 
@@ -5340,14 +5501,6 @@
       VDU 5
 
       FOR x%=0 TO 39
-
-        REM show grid
-        IF x%>0 THEN
-          GCOL 3,8
-          LINE x%*32,0,x%*32,999
-          IF x%<25 THEN LINE 0,x%*40,1279,x%*40
-
-        ENDIF
 
         REM show codes
         FOR y%=0 TO 23
@@ -5409,7 +5562,7 @@
 
       PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
-      PROCchangemode(7)
+      PROCchangemode(7,1)
       frame%-=1
       PROCloadnextframe(1,0)
 
@@ -5626,10 +5779,10 @@
       REM initialise shape and special sub menu
       DEF PROCinits1menu
 
-      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
-      PROCchangemode(6)
+      REM       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
+      PROCchangemode(6,0)
 
-      OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
+      REM       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
 
 
       GCOL 0,0
@@ -5648,10 +5801,10 @@
       REM initialise fill sub menu
       DEF PROCinits2menu
 
-      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
-      PROCchangemode(6)
+      REM       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
+      PROCchangemode(6,0)
 
-      OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
+      REM OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
 
       GCOL 0,0
       RECTANGLE FILL S2X%,S2Y%,S2W%,S2H%
@@ -5684,13 +5837,10 @@
           PROCprint40(Y%,"")
         NEXT
 
-        PROCprint40(2,tg$+"( )"+tw$+"LINE     "+tg$+"( )"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
-        PROCprint40(3,tg$+"( )"+tw$+"RECT         "+tc$+"GAP:"+tw$+"-"+ty$+" "+tw$+"+"+tc$+"LEN:"+tw$+"-"+ty$+" "+tw$+"+")
-        PROCprint40(4,tg$+"( )"+tw$+"CIRC     "+tg$+"( )"+tw$+"SHOW GRID")
-        PROCprint40(6,tg$+"( )"+tw$+"FLSH (136)  "+tg$+"( )"+tw$+"DBLH (141)")
-        PROCprint40(7,tg$+"( )"+tw$+"SEPR (154)  "+tg$+"( )"+tw$+"HOLD (158)")
-        PROCprint40(9,tg$+"( )"+tw$+"FORE "+tg$+"( )"+tw$+"BACK"+tb$+"(ENTIRE COLUMN)")
-        PROCprint40(10,tg$+"( )"+tw$+"HORZ "+tg$+"( )"+tw$+"VERT"+tb$+"(LOCK PASTE POS)")
+        PROCprint40(2,tg$+"( )"+tw$+"SHAPE OUTL"+tg$+"( )"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
+        PROCprint40(3,tg$+"( )"+tw$+"SHAPE FILL   "+tc$+"GAP:"+tw$+"-"+ty$+" "+tw$+"+"+tc$+"LEN:"+tw$+"-"+ty$+" "+tw$+"+")
+        PROCprint40(4,tg$+"( )"+tw$+"SHAPE EMPT")
+        PROCprint40(5,tg$+"( )"+tw$+"FONT:" + ty$ + "NORMAL"+tw$+"-"+ty$+" "+tw$+"+")
         D$=CHR$(129+showcodes%)
 
         REM PRINTTAB(35,1)tm$;"HELP"
@@ -5716,16 +5866,10 @@
       D$=CHR$(32+animateshape%*10)
       A$=STR$(animategap%)
       F$=STR$(animatelen%)
-      G$=CHR$(32+gridshow%*10)
-      R$=CHR$(32+copylockxt%*10)
-      U$=CHR$(32+copylockyt%*10)
 
-      PRINTTAB(16,2)D$;
+      PRINTTAB(17,2)D$;
       PRINTTAB(26,3)A$;
       PRINTTAB(37,3)F$;
-      PRINTTAB(16,4)G$;
-      PRINTTAB(2,10)R$;
-      PRINTTAB(12,10)U$;
 
       IF caps% THEN
         PROCprint40(12,"  A B C D E F G H I J K L M N O P Q R")
@@ -5779,10 +5923,6 @@
       MOVE x%,y%+2
       PRINT t$
       VDU 4
-
-      l%=LEN(t$)
-      sx%=l%*32+16
-      sy%=36
 
       ENDPROC
 
