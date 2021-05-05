@@ -1805,7 +1805,7 @@
               text$=text$+CHR$(32)
             ELSE
               C%=GET(TX%,TY%)
-              IF C%<>32 THEN text$=text$+CHR$(C%)
+              IF C%<>32 AND C%<127 THEN text$=text$+CHR$(C%)
             ENDIF
           ENDIF
           text$=LEFT$(text$,30)
@@ -5789,29 +5789,31 @@
 
       REM read font file
       f%=OPENIN(@dir$+"M7_FONTS\"+name$+".M7F")
-      INPUT#f%,i$
-      IF i$="TELEPAINT_FONT" THEN
+      IF f% THEN
         INPUT#f%,i$
-        fonthgt%=VAL(i$)
-        REPEAT
+        IF i$="TELEPAINT_FONT" THEN
           INPUT#f%,i$
-          a%=VAL(i$)-32
-          fonts{(a%)}.a%=1
-          INPUT#f%,i$
-          fonts{(a%)}.w%=VAL(i$)
+          fonthgt%=VAL(i$)
+          REPEAT
+            INPUT#f%,i$
+            a%=VAL(i$)-32
+            fonts{(a%)}.a%=1
+            INPUT#f%,i$
+            fonts{(a%)}.w%=VAL(i$)
 
-          INPUT#f%,i$
-          FOR I%=1 TO fonts{(a%)}.w%*fonthgt%
-            fonts{(a%)}.d%(I%-1)=VAL(MID$(i$,I%,1))
-          NEXT
-        UNTIL EOF#f%
-      ENDIF
-      CLOSE#f%
+            INPUT#f%,i$
+            FOR I%=1 TO fonts{(a%)}.w%*fonthgt%
+              fonts{(a%)}.d%(I%-1)=VAL(MID$(i$,I%,1))
+            NEXT
+          UNTIL EOF#f%
+        ENDIF
+        CLOSE#f%
 
-      REM add default space char if not exists in font file
-      IF fonts{(0)}.a%=0 THEN
-        fonts{(0)}.a%=1
-        fonts{(0)}.w%=4
+        REM add default space char if not exists in font file
+        IF fonts{(0)}.a%=0 THEN
+          fonts{(0)}.a%=1
+          fonts{(0)}.w%=4
+        ENDIF
       ENDIF
       ENDPROC
 
@@ -6464,14 +6466,19 @@
         PROCprint40(14,"  s t u v w x y z 1 2 3 4 5 6 7 8 9 0")
       ENDIF
 
-      IF fontcur%>0 THEN
-        FOR Y%=12 TO 18 STEP 2
-          FOR I%=1 TO 37 STEP 2
-            IF Y%=18 AND I%>27 THEN EXIT FOR
-            VDU31,I%,Y%,132+fonts{(GET(I%+1,Y%)-32)}.a%*3
-          NEXT
+
+      FOR Y%=12 TO 18 STEP 2
+        FOR I%=1 TO 37 STEP 2
+          IF fontcur%>0 THEN
+            C%=132+fonts{(GET(I%+1,Y%)-32)}.a%*3
+          ELSE
+            C%=135
+          ENDIF
+          IF Y%=18 AND I%>27 THEN EXIT FOR
+          VDU31,I%,Y%,C%
         NEXT
-      ENDIF
+      NEXT
+
 
       PROCprint40(20,"TEXT:"+tg$+text$)
       PRINTTAB(36,20)tr$;"< X";
