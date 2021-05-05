@@ -20,6 +20,10 @@
 
       REM *** SPRITES - ADD MASKING AND TRANSPARENCY FOR EACH SPRITE SET
 
+      REM *** SPRITES - ADD UNDO / REDO FOR EACH SPRITE
+
+      REM *** FONTS - KEYBOARD SCREEN.. USE COLOUR CODE FOR WHICH FONTS ARE CURRENTLY AVAILABLE
+
       REM *** GRADIENTS - ADD min, max, weight (in progress)
 
       REM *** END TODO LIST ***
@@ -163,7 +167,7 @@
       showcodes%=0
       gridx%=10
       gridy%=2
-      gridshow%=1
+      gridshow%=0
       pc%=0
 
       REM colour string constants
@@ -232,30 +236,27 @@
         NEXT
       NEXT
 
-
-      REM loading screen and sprite vars
+      REM loading screen
       menuext%=97
       frame_limit%=100
       frame_max%=8
       frame_old%=0
+
+      REM sprite variables
       sprite_limit%=48
       sprite_max%=8
       sprite_old%=0
       sprite_cur%=0
-      spr_frmstart%=1
-      spr_frmstep%=0
-      spr_frmx%=1
-      spr_frmy%=1
-      spr_frmh%=0
-      spr_frmv%=0
-      spr_lstcount%=-1
       spr_lstcount2%=0
       spr_trns%=1
-      spr_impwid%=0
-      spr_imphgt%=0
-      spr_impbpp%=0
-      spr_impofs%=0
       spr_scroll%=1
+
+      REM bmp image variables for importing to memory
+      bmp_imgwid%=0
+      bmp_imghgt%=0
+      bmp_imgbpp%=0
+      bmp_imgofs%=0
+
 
       PROCloadscreen
 
@@ -268,14 +269,47 @@
 
       REM 20x16 chars @320 bytes : 40x48 pixels @1920 bytes
       DIM sprite_buffer&(sprite_max%-1,319)
-      DIM sprsize{(sprite_max%-1) h%,v%}
+      DIM sprsize{(sprite_max%-1) w%,h%}
       DIM spr_tmp&(2000)
-      DIM sprlist{(2000) s%,f%,x%,y%}
       DIM sprlist2{(99) s%(11),f%,r%,x%,y%,h%,v%,m%}
 
       REM animation and menu controls - can be redfinable depending on current screen
       controls%=40
       DIM controlrange{(controls%) x1%,y1%,x2%,y2%}
+
+      REM general idea for supporting font files
+      REM each font is stored in an external file, height is static but width is variable per font char
+      REM as height is static, make height part of font header data and remove from each font
+      REM each font contains standard ascii lookup code so only fonts found in file are set to active in the font array
+      REM ascii code is decremented when loading to suit 0 index array i.e  ASC(32) = 0 ASC(65) = 33 ASC(126) = 94
+      REM only one font file loaded at a time
+      REM standard font array, fixed font count TBD (100?), max data size for each font i.e. w * h -1 20x20 = 400 bytes
+      REM Data:  ascii code, width
+      REM        data rows - 0= black pixel, 1=solid pixel, 2=transparent i.e. no plot
+
+      REM import detail for fonts supplied by pixelblip
+      REM pixel sizes appears to be 6x5 TBD
+      REM develop import utility to create data files (in progress)
+
+      REM arrays:
+      REM  fontcur% - 0=normal text
+      REM  fontname$ - scan font folder for file names -need to be standard max 10 chars
+      REM  fonts.d% - font pixel data
+      REM  fonts.a% - font active i.e. loaded from font file
+      REM  fonts.w% - font width
+      fontcur%=2
+      fontmax%=99
+      fonthgt%=0
+
+      DIM fontname$(31)
+      DIM fonts{(fontmax%) d%(399),a%,w%}
+
+      FOR I%=0 TO 31
+        READ fontname$(I%)
+        IF fontname$(I%)="" THEN EXIT FOR
+      NEXT
+
+      PROCloadfont(fontname$(fontcur%))
 
       REM undo buffer
       undo_max%=99
@@ -296,18 +330,12 @@
 
       DIM import_buffer% 1000000
 
-
-      PROCGR(curcol%,bakcol%,1)
-      PROCdrawmenu
-
-      FOR frame%=1 TO frame_max%
-        PROCframesave(frame%)
-        REM WAIT 10
-      NEXT frame%
-      frame%=1
-
+      REM init sprites
+      CLS
       FOR s%=0 TO sprite_max%-1
         PROCsavesprite(s%)
+        sprsize{(s%)}.w%=20
+        sprsize{(s%)}.h%=16
       NEXT
 
       FOR s%=0 TO 99
@@ -317,6 +345,15 @@
           REM sprlist2{(s%)}.s%(ss%)=(ss%+s%) MOD 9 -1
         NEXT
       NEXT
+
+      REM init frames
+      PROCGR(curcol%,bakcol%,1)
+      FOR frame%=1 TO frame_max%
+        PROCframesave(frame%)
+      NEXT frame%
+      frame%=1
+      PROCdrawmenu
+
       IF frame_old%=-2 THEN PROCshowhelp
 
       IF frame_old%=-3 THEN PROCimportimage
@@ -431,10 +468,14 @@
           IF gridshow%=1 THEN PROCdrawgrid
         ENDIF
       ELSE
-        IF menuext%=1 THEN
-          VDU 31,LEN(text$)+6,20
+        CASE menuext% OF
+          WHEN 1
+            VDU 31,LEN(text$)+6,20
 
-        ENDIF
+          WHEN 5
+            VDU 31,LEN(text$)+4,9
+
+        ENDCASE
       ENDIF
 
       ENDPROC
@@ -452,6 +493,14 @@
       REM wait for no key input
       DEF PROCWAITNOKEY(K%,R%)
       REPEAT UNTIL INKEY(K%)=R%
+      ENDPROC
+
+      REM ##########################################################
+      REM wait for no key input
+      DEF PROCMOVEMOUSE(X%,Y%)
+      MX%+=X%
+      MY%+=Y%
+      MOUSE TO MX%,MY%
       ENDPROC
 
       REM ##########################################################
@@ -579,7 +628,7 @@
       REM cmd% 2: Toggle the point XOR
       DEF PROCpoint_spr(x%, y%, cmd%)
 
-      IF x%>19 AND x%<60 AND y%>8 AND y%<57 THEN
+      IF x%>19 AND x%<sprsize{(sprite_cur%)}.w%*2+20 AND y%>8 AND y%<sprsize{(sprite_cur%)}.h%*3+9 THEN
 
         LOCAL cx%,cy%,chr%,C%
         REM Get character cell
@@ -660,10 +709,14 @@
       DEF PROCdrawspritegrid
       LOCAL X%
       SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
-      FOR X%=0 TO 20
-        SYS "SDL_RenderDrawLine", @memhdc%, X%*16+160, 60, X%*16+160, 380
-        IF X%<17 THEN SYS "SDL_RenderDrawLine", @memhdc%, 160, X%*20+60, 480, X%*20+60
+
+      FOR X%=0 TO sprsize{(sprite_cur%)}.w%
+        SYS "SDL_RenderDrawLine", @memhdc%, X%*16+160, 60, X%*16+160, sprsize{(sprite_cur%)}.h%*20+59
+        IF X%<sprsize{(sprite_cur%)}.h%+1 THEN
+          SYS "SDL_RenderDrawLine", @memhdc%, 160, X%*20+59, sprsize{(sprite_cur%)}.w%*16+160, X%*20+59
+        ENDIF
       NEXT
+
       *REFRESH
 
       ENDPROC
@@ -1123,7 +1176,6 @@
       REM MAIN CANVAS
       DEF PROCmaincanvas
       IF menuext%>0 THEN PROCmenurestore
-      REM *** DRAWFRAME??
 
       CASE toolsel% OF
         WHEN 1: REM PAINT TOOL
@@ -1341,8 +1393,12 @@
             WHEN 7: REM text print tool
               PROCundosave
               PROCWAITMOUSE(0)
-              A$=LEFT$(text$,40-TX%)
-              PRINTTAB(TX%,TY%)A$;
+              IF fontcur%=0 THEN
+                A$=LEFT$(text$,40-TX%)
+                PRINTTAB(TX%,TY%)A$;
+              ELSE
+                PROCdrawfont(PX%,PY%,text$)
+              ENDIF
               PROCframesave(frame%)
               IF animation% THEN PROCloadnextframe(1,0)
 
@@ -1601,8 +1657,15 @@
                 REM ADD VALID CHARS AND INCREASE TEXT POS
                 IF K%>31 AND K%<127  AND TY%>0 THEN
                   PROCundosave
-                  VDU 31,TEXTX%,TY%,K%
-                  IF TEXTX%<39 THEN TEXTX%+=1
+                  IF fontcur%=0 THEN
+                    VDU 31,TEXTX%,TY%,K%
+                    IF TEXTX%<39 THEN TEXTX%+=1
+                  ELSE
+                    IF fonts{(K%-32)}.a%<>0 THEN
+                      REM A$=CHR$(K%)
+                      PROCdrawfont(PX%,PY%,CHR$(K%))
+                    ENDIF
+                  ENDIF
                   PROCframesave(frame%)
                 ENDIF
             ENDCASE
@@ -1645,7 +1708,7 @@
       REM ##########################################################
       REM SPECIAL DIALOG
       DEF PROCoptionshandler
-
+      LOCAL of%
       PROCWAITMOUSE(0)
       CASE TY% OF
 
@@ -1683,6 +1746,17 @@
 
             WHEN 15,16,17: gridshow%=(gridshow%+1) AND 1 : REM gridshow toggle
           ENDCASE
+
+        WHEN 5
+          of%=fontcur%
+          IF TX%=11 AND fontcur%>0 THEN fontcur%-=1
+
+          IF TX%=14 AND fontcur%<31 THEN
+            fontcur%+=1
+            IF fontname$(fontcur%)="" THEN fontcur%-=1
+
+          ENDIF
+          IF fontcur%<>of% AND fontcur%>0 THEN PROCloadfont(fontname$(fontcur%))
 
         WHEN 6
           CASE TX% OF
@@ -1749,9 +1823,12 @@
 
         WHEN 22 : REM SPRITE, HELP, CLOSE BUTTTONS
           CASE TX% OF
-            WHEN 2,3,4,5,6,7,8,9,10,11,12
+            WHEN 2,3,4,5,6,7,8,9,10,11
               menuext%=2
-              PROCspritemenu(1)
+              PROCfontcreate
+              menuext%=1
+              PROCoptionsmenu(1)
+              PROCdrawmenu
 
             WHEN 17,18,19,20,21,22,23,24
 
@@ -1777,16 +1854,22 @@
       REM ##########################################################
       REM SPRITE EDITOR DIALOG
       DEF PROCspritehandler
-      LOCAL textx%,D$
+      LOCAL textx%,D$,prx%,pry%,trx%,try%
 
-      IF PX%>19 AND PX%<60 AND PY%>8 AND PY%<57 THEN
+      prx%=sprsize{(sprite_cur%)}.w%*2+20
+      pry%=sprsize{(sprite_cur%)}.h%*3+9
+      trx%=sprsize{(sprite_cur%)}.w%+10
+      try%=sprsize{(sprite_cur%)}.h%+3
+
+      REM sprite drawing region
+      IF PX%>19 AND PX%<prx% AND PY%>8 AND PY%<pry% THEN
         CASE toolsel% OF
           WHEN 1: REM PAINT TOOL
-            IF PX%>19 AND PX%<60 AND PY%>8 AND PY%<57 THEN
+            IF PX%>19 AND PX%<prx% AND PY%>8 AND PY%<pry% THEN
               PROCpoint(PX%,PY%,1-erase%)
               REPEAT
                 PROCREADMOUSE
-                IF PX%>19 AND PX%<60 AND PY%>8 AND PY%<57 THEN
+                IF PX%>19 AND PX%<prx% AND PY%>8 AND PY%<pry% THEN
                   IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
                     PROCpoint(PX%,PY%,1-erase%)
                     OLD_PX%=PX%
@@ -1808,10 +1891,10 @@
                 X%=(PX% DIV DA%)*DA%
                 Y%=(PY% DIV DA%)*DA%
 
-                IF PX%>19 AND PX%<60 AND PY%>8 AND PY%<57 THEN PROCpoint(X%,Y%,1-erase%)
-                IF PX%+D%>19 AND PX%+D%<60 AND PY%+D%>8 AND PY%+D%<57 THEN PROCpoint(X%+D%,Y%+D%,1-erase%)
+                IF PX%>19 AND PX%<prx% AND PY%>8 AND PY%<pry% THEN PROCpoint(X%,Y%,1-erase%)
+                IF PX%+D%>19 AND PX%+D%<prx% AND PY%+D%>8 AND PY%+D%<pry% THEN PROCpoint(X%+D%,Y%+D%,1-erase%)
               WHEN 4
-                IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
+                IF TX%>9 AND TX%<trx% AND TY%>2 AND TY%<try% THEN
                   char%=255-erase%*95 : REM SOLID BLOCK #255 / #160
                   VDU 31,TX%,TY%,char%
                 ENDIF
@@ -1824,10 +1907,10 @@
                     X%=(PX% DIV DA%)*DA%
                     Y%=(PY% DIV DA%)*DA%
 
-                    IF X%>19 AND X%<60 AND Y%>8 AND Y%<57 THEN PROCpoint(X%,Y%,1-erase%)
-                    IF X%+D%>19 AND X%+D%<60 AND Y%+D%>8 AND Y%+D%<57 THEN PROCpoint(X%+D%,Y%+D%,1-erase%)
+                    IF X%>19 AND X%<prx% AND Y%>8 AND Y%<pry% THEN PROCpoint(X%,Y%,1-erase%)
+                    IF X%+D%>19 AND X%+D%<prx% AND Y%+D%>8 AND Y%+D%<pry% THEN PROCpoint(X%+D%,Y%+D%,1-erase%)
                   WHEN 4
-                    IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
+                    IF TX%>9 AND TX%<trx% AND TY%>2 AND TY%<try% THEN
                       char%=255-erase%*95 : REM SOLID BLOCK #255
                       VDU 31,TX%,TY%,char%
                     ENDIF
@@ -1850,9 +1933,9 @@
                   PROCREADMOUSE
                   IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
                     IF PX%<20 THEN PX%=20
-                    IF PX%>59 THEN PX%=59
+                    IF PX%>prx%-1 THEN PX%=prx%-1
                     IF PY%<9 THEN PY%=9
-                    IF PY%>56 THEN PY%=56
+                    IF PY%>pry%-1 THEN PY%=pry%-1
                     PROCbresenham(startx%,starty%,OLD_PX%,OLD_PY%,2)
                     PROCbresenham(startx%,starty%,PX%,PY%,2)
                     OLD_PX%=PX%
@@ -1873,9 +1956,9 @@
                   PROCREADMOUSE
                   IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
                     IF PX%<20 THEN PX%=20
-                    IF PX%>59 THEN PX%=59
+                    IF PX%>prx%-1 THEN PX%=prx%-1
                     IF PY%<9 THEN PY%=9
-                    IF PY%>56 THEN PY%=56
+                    IF PY%>pry%-1 THEN PY%=pry%-1
                     PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
                     PROCrectangle(startx%,starty%,PX%,PY%,2)
                     OLD_PX%=PX%
@@ -1906,11 +1989,11 @@
                 PROCsavesprite(sprite_cur%)
 
               WHEN 3,4,5,6 : REM special control codes
-                IF TX%<30 AND TX%>9 AND TY%>2 AND TY%<19 THEN VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
+                IF TX%<trx% AND TX%>9 AND TY%>2 AND TY%<try% THEN VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
                 REPEAT
                   PROCREADMOUSE
                   IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                    IF TX%<30 AND TX%>9 AND TY%>2 AND TY%<19 THEN VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
+                    IF TX%<trx% AND TX%>9 AND TY%>2 AND TY%<try% THEN VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
                   ENDIF
                   OLD_TX%=TX%
                   OLD_TY%=TY%
@@ -1920,7 +2003,7 @@
               WHEN 7: REM text print tool
                 PROCWAITMOUSE(0)
                 FOR textx%=0 TO LENtext$-1
-                  IF TX%+textx%<30 AND TX%+textx%>9 AND TY%>2 AND TY%<19 THEN
+                  IF TX%+textx%<trx% AND TX%+textx%>9 AND TY%>2 AND TY%<try% THEN
                     PRINTTAB(TX%+textx%,TY%)MID$(text$,textx%+1,1);
                   ENDIF
                 NEXT
@@ -1929,7 +2012,7 @@
             ENDCASE
 
           WHEN 5 : REM background colour
-            IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
+            IF TX%>9 AND TX%<trx% AND TY%>2 AND TY%<try% THEN
               IF colmode%=1 THEN
                 PROCWAITMOUSE(4)
                 PROCWAITMOUSE(0)
@@ -1951,11 +2034,11 @@
                 REPEAT
                   PROCREADMOUSE
                   IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                    IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
+                    IF TX%>9 AND TX%<trx% AND TY%>2 AND TY%<try% THEN
                       IF erase% THEN
                         VDU 31,TX%,TY%,156
                       ELSE
-                        IF TX%<29 THEN VDU 31,TX%,TY%,(curcol%+144),157
+                        IF TX%<trx%-1 THEN VDU 31,TX%,TY%,(curcol%+144),157
                       ENDIF
                     ENDIF
                   ENDIF
@@ -1966,7 +2049,7 @@
               PROCsavesprite(sprite_cur%)
             ENDIF
           WHEN 6: REM foreground colour
-            IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
+            IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<try% THEN
               IF colmode%=1 THEN
                 PROCWAITMOUSE(4)
                 PROCWAITMOUSE(0)
@@ -1979,7 +2062,7 @@
                 REPEAT
                   PROCREADMOUSE
                   IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                    IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                    IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<try% THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
                     OLD_TX%=TX%
                     OLD_TY%=TY%
                   ENDIF
@@ -1996,7 +2079,7 @@
         CASE TY% OF
           WHEN 2
             CASE TX% OF
-              WHEN 1,2,3,4,5 : REM LOAD
+              WHEN 1,2,3,4,5 : REM load sprite
                 PROCloadfile(3)
                 menuext%=2
                 PROCdrawmenu
@@ -2004,20 +2087,20 @@
                 PROCdrawsprite
 
 
-              WHEN 33,34,35 : REM CLS
+              WHEN 33,34,35 : REM cls
                 FOR S%=0 TO 319
                   sprite_buffer&(sprite_cur%,S%)=32
                 NEXT
                 PROCdrawsprite
 
-              WHEN 37,38,39 : REM SCROLL MODE
+              WHEN 37,38,39 : REM scroll mode
                 spr_scroll%=(spr_scroll%+1) AND 1
                 PROCspritemenu(0)
 
             ENDCASE
           WHEN 4
             CASE TX% OF
-              WHEN 1,2,3,4,5 : REM SAVE
+              WHEN 1,2,3,4,5 : REM save sprite
                 IF session%=0 THEN
                   D$=FNgetdate
                   cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
@@ -2030,10 +2113,10 @@
 
                 PROCsavespritefile(cursave$+"SPRITEDATA",1,0)
 
-              WHEN 33,34,35,36,37 : REM SCROLL LEFT
+              WHEN 33,34,35,36,37 : REM scroll left
 
                 IF spr_scroll%=1 THEN
-                  REM CHAR MODE
+                  REM char mode
                   FOR S%=0 TO 15
                     spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20)
                   NEXT
@@ -2045,7 +2128,7 @@
                   NEXT
                   PROCdrawsprite
                 ELSE
-                  REM PIX MODE
+                  REM pixel mode
 
                   FOR Y%=0 TO 47
                     FOR X%=0 TO 39
@@ -2067,29 +2150,17 @@
 
           WHEN 6
             CASE TX% OF
-              WHEN 1,2,3,4,5 : REM ADD SPRITE TO LIST
+              WHEN 1,2,3,4,5 : REM import
+                REM menuext%=88
+                REM done%=0
 
-                spr_lstcount%+=1
-                sprlist{(spr_lstcount%)}.s%=sprite_cur%
-                sprlist{(spr_lstcount%)}.f%=spr_frmstart%
-                sprlist{(spr_lstcount%)}.x%=spr_frmx%
-                sprlist{(spr_lstcount%)}.y%=spr_frmy%
+                REM              PROCloadfile(2)
+                PROCimportsprite
 
-                IF spr_frmstep%>0 THEN
-                  X%=spr_frmx%+spr_frmh%
-                  Y%=spr_frmy%+spr_frmv%
-                  FOR ST%=spr_frmstart%+spr_frmstep% TO frame_max% STEP spr_frmstep%
-                    spr_lstcount%+=1
-                    sprlist{(spr_lstcount%)}.s%=sprite_cur%
-                    sprlist{(spr_lstcount%)}.f%=ST%
-                    sprlist{(spr_lstcount%)}.x%=X%
-                    sprlist{(spr_lstcount%)}.y%=Y%
-                    X%+=spr_frmh%
-                    Y%+=spr_frmv%
+                PROCdrawmenu
+                PROCspritemenu(1)
+                PROCdrawsprite
 
-                  NEXT
-                ENDIF
-                PROCspritemenu(0)
 
               WHEN 33,34,35,36,37 : REM SCROLL RIGHT
                 IF spr_scroll%=1 THEN
@@ -2129,71 +2200,13 @@
 
           WHEN 8
             CASE TX% OF
-              WHEN 1,2,3,4,5 : REM VIEW SPRITE LIST
-                IF spr_lstcount%>-1 THEN
-                  P%=0 : OP%=1 : X%=0
-                  REPEAT
-                    IF OP%<>P% THEN
-                      OP%=P%
-                      CLS
-                      FOR S%=0 TO 23
-                        IF S%+P%*24<=spr_lstcount% THEN
-                          PRINT tb$;RIGHT$("00"+STR$(S%+P%*24),3);tw$;
-                          PRINT"SPR:";tg$;RIGHT$("0"+STR$(sprlist{(S%+P%*24)}.s%+1),2);tw$;" ";
-                          PRINT"FRM:";tg$;RIGHT$("00"+STR$(sprlist{(S%+P%*24)}.f%),3);tw$;" ";
-                          PRINT"X:";tg$;RIGHT$("0"+STR$(sprlist{(S%+P%*24)}.x%),2);tw$;" ";
-                          PRINT"Y:";tg$;RIGHT$("0"+STR$(sprlist{(S%+P%*24)}.y%),2)
-                        ENDIF
-                      NEXT
-                      PRINTTAB(0,24)tb$;CHR$(157);tc$;"<  ";CHR$(156);tb$;CHR$(157);tc$;">  ";CHR$(156);RIGHT$("00"+STR$(P%),3);tm$;CHR$(157);ty$;"CLEAR  ";CHR$(156);tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
-                    ENDIF
-                    PROCWAITMOUSE(4)
-                    PROCWAITMOUSE(0)
-                    IF TY%=24 THEN
-                      CASE TX% OF
-                        WHEN 1,2,3,4,5,6 : REM previous page
-                          IF P%>0 THEN P%-=1
-                        WHEN 8,9,10,11,12,13 : REM next page
-                          IF (P%+1)*24<spr_lstcount% THEN P%+=1
-                        WHEN 18,19,20,21,22,23,24,25,26 : REM clear list
-                          PROCprint40(9,"")
-                          PROCprint40(14,"")
-                          PRINTTAB(5,9)gy$;CHR$(232);STRING$(26,CHR$(172));CHR$(180);
-                          FOR L%=10 TO 13
-                            PROCprint40(L%,"")
-                            PRINTTAB(5,L%)gy$;CHR$(234);STRING$(25," ");gy$;CHR$(181);
-                          NEXT
-                          PRINTTAB(5,14)gy$;CHR$(170);STRING$(26,CHR$(172));CHR$(165);
+              WHEN 1,2,3,4,5 : REM sprite animation screen
+                PROCanimscreen
+                PROCdrawmenu
+                PROCspritemenu(1)
+                PROCdrawsprite
+                IF menuext%=77 THEN PROCmenurestore
 
-                          REM confirm clear list
-                          PRINTTAB(8,11)ty$;"CLEAR ENTIRE LIST?";
-                          PRINTTAB(8,12)tr$;CHR$(157);ty$;"CLEAR  ";CHR$(156);tb$;CHR$(157);tg$;"CANCEL  ";CHR$(156);
-
-                          PROCWAITMOUSE(4)
-                          PROCWAITMOUSE(0)
-                          IF TY%=12 THEN
-                            CASE TX% OF
-                              WHEN 9,10,11,12,13,14,15,16 : REM clear list
-                                spr_lstcount%=-1
-                                X%=1
-                              OTHERWISE
-                                OP%=-1
-                            ENDCASE
-                          ELSE
-                            OP%=-1
-                          ENDIF
-
-                        WHEN 29,30,31,32,33,34,35,36,37 : REM close window
-                          X%=1
-
-                      ENDCASE
-
-                    ENDIF
-
-                  UNTIL X%=1
-                  PROCdrawmenu
-                  PROCspritemenu(1)
-                ENDIF
               WHEN 33,34,35,36,37 : REM SCROLL UP
                 IF spr_scroll%=1 THEN
                   REM CHAR MODE
@@ -2233,16 +2246,14 @@
 
           WHEN 10
             CASE TX% OF
-              WHEN 1,2,3,4,5 : REM sprite animation screen (old clear sprite list)
-                PROCanimscreen
-                PROCdrawmenu
-                PROCspritemenu(1)
-                PROCdrawsprite
-                IF menuext%=77 THEN PROCmenurestore
-                REM spr_lstcount%=-1
-                REM PROCspritemenu(0)
+              WHEN 1,2,3,4,5 : REM copy sprite to next
+                dst%=sprite_cur%+1
+                IF dst%>sprite_max%-1 THEN dst%=0
+                FOR S%=0 TO 319
+                  sprite_buffer&(dst%,S%)=sprite_buffer&(sprite_cur%,S%)
+                NEXT
 
-              WHEN 33,34,35,36,37 : REM SCROLL DOWN
+              WHEN 33,34,35,36,37 : REM scroll down
                 IF spr_scroll%=1 THEN
                   FOR S%=0 TO 19
                     spr_tmp&(S%)=sprite_buffer&(sprite_cur%,300+S%)
@@ -2280,21 +2291,14 @@
 
           WHEN 12
             CASE TX% OF
-              WHEN 1,2,3,4,5 : REM import sprite
-                REM menuext%=88
-                REM done%=0
+              WHEN 1,2,3,4,5 : REM copy sprite prev
+                dst%=sprite_cur%-1
+                IF dst%<0 THEN dst%=sprite_max%-1
+                FOR S%=0 TO 319
+                  sprite_buffer&(dst%,S%)=sprite_buffer&(sprite_cur%,S%)
+                NEXT
 
-                REM              PROCloadfile(2)
-                PROCimportsprite
-
-                REM after loadfile menuext% returns: No file: 94, single image: 95, grid: 96
-
-                PROCdrawmenu
-                PROCspritemenu(1)
-                PROCdrawsprite
-
-
-              WHEN 33,34,35,36,37 : REM FLIP HORIZONTAL
+              WHEN 33,34,35,36,37 : REM flip horizontal
                 FOR X%=0 TO 39
                   FOR Y%=0 TO 47
                     spr_tmp&(Y%*40+X%)=FNpoint((39-X%)+20,Y%+9)
@@ -2304,6 +2308,7 @@
                   PROCpoint(S% MOD 40+20,S% DIV 40+9,spr_tmp&(S%))
                 NEXT
                 PROCsavesprite(sprite_cur%)
+
 
             ENDCASE
 
@@ -2319,7 +2324,7 @@
                 toolsel%=7:toolcursor%=17:copypaste%=1
                 PROCmenurestore
 
-              WHEN 33,34,35,36,37 : REM FLIP VERTICAL
+              WHEN 33,34,35,36,37 : REM flip vertical
                 FOR X%=0 TO 39
                   FOR Y%=0 TO 47
                     spr_tmp&(Y%*40+X%)=FNpoint(X%+20,(47-Y%)+9)
@@ -2340,16 +2345,12 @@
                 NEXT
                 PROCdrawsprite
 
-              WHEN 33,34,35,36,37 : REM COPY TO NEXT SPRITE
-                dst%=sprite_cur%+1
-                IF dst%>sprite_max%-1 THEN dst%=0
-                FOR S%=0 TO 319
-                  sprite_buffer&(dst%,S%)=sprite_buffer&(sprite_cur%,S%)
-                NEXT
+              WHEN 33,34,35,36,37 : REM rotate sprite right
+                REM *** FIX ***
 
             ENDCASE
 
-          WHEN 19 : REM PREV / NEXT SPRITE
+          WHEN 19 : REM prev / next sprite
             CASE TX% OF
               WHEN 11,12,13,14
                 sprite_cur%-=1
@@ -2366,82 +2367,31 @@
                 spr_trns%=(spr_trns%+1) MOD 2
                 PROCspritemenu(0)
 
-              WHEN 33,34,35,36,37 : REM COPY TO PREV SPRITE
-                dst%=sprite_cur%-1
-                IF dst%<0 THEN dst%=sprite_max%-1
-                FOR S%=0 TO 319
-                  sprite_buffer&(dst%,S%)=sprite_buffer&(sprite_cur%,S%)
-                NEXT
+              WHEN 33,34,35,36,37 : REM rotate sprite left
+                REM *** FIX ***
+            ENDCASE
+
+          WHEN 21 : REM sprite size
+            CASE TX% OF
+              WHEN 1,2,3,4,5,6,7,8,9,10,11,12 : REM ???
+
+              WHEN 15,16,17,18,19,20,21,22,23,24,25 : REM ???
+
 
             ENDCASE
 
-          WHEN 21 : REM DRAW / UNDO SPRITES
+
+          WHEN 24 : REM close button
             CASE TX% OF
-              WHEN 1,2,3,4,5,6,7,8,9,10,11,12 : REM DRAW ALL SPRITES
-                IF spr_lstcount%>-1 THEN
-                  FOR S%=0 TO spr_lstcount%
-                    IF sprlist{(S%)}.f%<frame_max%+1 THEN
-                      PROCspritetoframe(sprlist{(S%)}.f%,sprlist{(S%)}.s%,sprlist{(S%)}.x%,sprlist{(S%)}.y%)
-                    ENDIF
-                  NEXT
-
-                ENDIF
-
-              WHEN 15,16,17,18,19,20,21,22,23,24,25 : REM UNDO ALL SPRITES
-
               WHEN 29,30,31,32,33,34,35,36,37 : REM close sprites screen
                 PROCmenurestore
 
             ENDCASE
 
-          WHEN 23 : REM FRAME POINTERS
-            CASE TX% OF
-              WHEN 13 : REM FRAME DECREMENT
-                IF spr_frmstart%>1 THEN spr_frmstart%-=1
-
-              WHEN 19 : REM FRAME INCREMENT
-                IF spr_frmstart%<frame_max% THEN spr_frmstart%+=1
-
-              WHEN 27 : REM STEP DECREMENT
-                IF spr_frmstep%>0 THEN spr_frmstep%-=1
-
-              WHEN 33 : REM STEP INCREMENT
-                IF spr_frmstep%<frame_max%-1 THEN spr_frmstep%+=1
-
-            ENDCASE
-            PROCspritemenu(0)
-
-          WHEN 24 : REM SPRITE OFFSETS
-            CASE TX% OF
-              WHEN 3 : REM X DECREMENT
-                IF spr_frmx%>1 THEN spr_frmx%-=1
-
-              WHEN 8 : REM X INCREMENT
-                IF spr_frmx%<39 THEN spr_frmx%+=1
-
-              WHEN 12 : REM Y DECREMENT
-                IF spr_frmy%>1 THEN spr_frmy%-=1
-
-              WHEN 17 : REM Y INCREMENT
-                IF spr_frmy%<24 THEN spr_frmy%+=1
-
-              WHEN 21 : REM H DECREMENT
-                IF spr_frmh%>-5 THEN spr_frmh%-=1
-
-              WHEN 26 : REM H INCREMENT
-                IF spr_frmh%<5 THEN spr_frmh%+=1
-
-              WHEN 30 : REM V DECREMENT
-                IF spr_frmv%>-5 THEN spr_frmv%-=1
-
-              WHEN 35 : REM V INCREMENT
-                IF spr_frmv%<5 THEN spr_frmv%+=1
-
-            ENDCASE
-            PROCspritemenu(0)
         ENDCASE
       ENDIF
 
+      REM keyboard change
       IF sprite_cur%<>sprite_old% THEN
         REM PROCsavesprite(sprite_old%)
         PROCspritemenu(0)
@@ -2453,7 +2403,7 @@
       REM ##########################################################
       REM shape and special sub menu
       DEF PROCsub1handler
-      LOCAL DONE%,L%,C%
+      LOCAL done%,L%,C%
 
       PROCWAITMOUSE(0)
       C%=-1
@@ -2518,25 +2468,25 @@
           REM tool selected
           IF C%>=0 AND C%<8 AND shapesel%>-1 THEN
             toolsel%=4:toolcursor%=19
-            DONE%=1
+            done%=1
           ENDIF
 
           REM other menus
           IF C%>12 THEN
-            DONE%=1
+            done%=1
           ENDIF
 
 
         ENDIF
       ELSE
-        DONE%=1
+        done%=1
       ENDIF
       REM IF SP%>sprite_max%-1 THEN SP%=-1
-      REM PRINTTAB(0,1)STR$(C%);" "; STR$(DONE%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
+      REM PRINTTAB(0,1)STR$(C%);" "; STR$(done%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
       REM PROCWAITMOUSE(4)
       REM PROCWAITMOUSE(0)
 
-      IF DONE%=1 THEN
+      IF done%=1 THEN
         PROCWAITMOUSE(0)
 
         PROCchangemode(7,1)
@@ -2590,7 +2540,7 @@
       REM ##########################################################
       REM fill sub menu
       DEF PROCsub2handler
-      LOCAL DONE%,L%,C%
+      LOCAL done%,L%,C%
 
       PROCWAITMOUSE(0)
       C%=-1
@@ -2612,28 +2562,28 @@
           WHEN 0 : REM flood fill
             toolsel%=3
             toolcursor%=18
-            DONE%=1
+            done%=1
 
           WHEN 9,10 : REM gradient type
             PROCs2update(C%)
           WHEN 11,12 : REM opts / help
-            DONE%=1
+            done%=1
 
           OTHERWISE
             toolsel%=1
             toolcursor%=15
-            DONE%=1
+            done%=1
 
         ENDCASE
       ELSE
-        DONE%=1
+        done%=1
       ENDIF
       REM IF SP%>sprite_max%-1 THEN SP%=-1
-      REM PRINTTAB(0,1)STR$(C%);" "; STR$(DONE%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
+      REM PRINTTAB(0,1)STR$(C%);" "; STR$(done%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
       REM PROCWAITMOUSE(4)
       REM PROCWAITMOUSE(0)
 
-      IF DONE%=1 THEN
+      IF done%=1 THEN
         PROCWAITMOUSE(0)
 
         PROCchangemode(7,1)
@@ -2663,6 +2613,8 @@
                 PROCdiagonal_g(0,1,0,18)
 
             ENDCASE
+            PROCframesave(frame%)
+
           WHEN 9 : REM keyboard and options screen
             menuext%=1
             PROCoptionsmenu(1)
@@ -2699,12 +2651,9 @@
       REM ##########################################################
       REM animation UI
       DEF PROCanimscreen
-      LOCAL X%,Y%,DX,DY%,S%,SP%,DP%,DONE%
+      LOCAL X%,Y%,DX,DY%,S%,SP%,DP%,done%
       REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
       PROCchangemode(6,1) : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
-
-      REM VDU 19,7,16,167,167,167 : REM set colour 7 to slightly darker
-
 
 
       PROCanimredraw
@@ -2868,7 +2817,7 @@
                     ENDIF
 
                   WHEN 21 : REM y dec 1
-                    IF sprlist2{(spr_lstcount2%)}.yx%>-16 THEN
+                    IF sprlist2{(spr_lstcount2%)}.y%>-16 THEN
                       sprlist2{(spr_lstcount2%)}.y%-=1
                       PROCanimupdate(X%)
                     ENDIF
@@ -2965,12 +2914,12 @@
 
                       ENDIF
                     NEXT
-                    DONE%=1
+                    done%=1
                     menuext%=77
 
                   WHEN 31 : REM undo
                     PROCundorestoreall
-                    DONE%=1
+                    done%=1
                     menuext%=77
 
                   WHEN 32 : REM spare
@@ -2998,7 +2947,7 @@
                   WHEN 34 : REM spare
 
                   WHEN 35 : REM exit
-                    DONE%=1
+                    done%=1
 
                   WHEN 36 : REM put sprite in frame
                     IF sprlist2{(spr_lstcount2%)}.s%(0)>-1 THEN
@@ -3040,16 +2989,15 @@
         ENDIF
         REM IF SP%>sprite_max%-1 THEN SP%=-1
         REM PRINTTAB(0,12)STR$(SP%);" ";STR$(DP%);" ";STR$(MX%);",";STR$(MY%);"    "
-      UNTIL DONE%=1
+      UNTIL done%=1
       PROCWAITMOUSE(0)
       PROCchangemode(7,1)
-      VDU 23,1,1;0;0;0; : REM Enable cursor
       ENDPROC
 
       REM ##########################################################
       REM display a warning for clearing sets
       DEF FNclearset(t$)
-      LOCAL DONE%
+      LOCAL done%
 
       GCOL 0,0
       RECTANGLE FILL 240,300,800,400
@@ -3065,9 +3013,9 @@
 
       PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
-      IF MX%>298 AND MX%<524 AND MY%>410 AND MY%<500 THEN DONE%=1
+      IF MX%>298 AND MX%<524 AND MY%>410 AND MY%<500 THEN done%=1
 
-      =DONE%
+      =done%
 
       REM ##########################################################
       REM display a control button, Title, X, Y, border col, text col, fill col
@@ -3313,7 +3261,7 @@
       REM ##########################################################
       REM place 1st sprite of a set in frame
       DEF PROCanimput(G%)
-      LOCAL X%,Y%,OX%,OY%,C%,S%,F%,DONE%
+      LOCAL X%,Y%,OX%,OY%,C%,S%,F%,done%
       COLOUR 128
       CLS
 
@@ -3397,14 +3345,572 @@
 
         REM save the position on click
         IF MB%=4 THEN
-          DONE%=1
+          done%=1
           sprlist2{(spr_lstcount2%)}.x%=(X% DIV 16)-20
           sprlist2{(spr_lstcount2%)}.y%=25-(Y% DIV 24)
         ENDIF
 
         WAIT 2
-      UNTIL DONE%=1
+      UNTIL done%=1
       PROCWAITMOUSE(0)
+      ENDPROC
+
+      REM ##########################################################
+      REM draw font
+      DEF PROCdrawfont(x%,y%,text$)
+      IF text$<>"" THEN
+        LOCAL F%,I%,X%,Y%
+        FOR F%=0 TO LEN(text$)-1
+          I%=ASC(MID$(text$,F%+1,1))-32
+          IF fonts{(I%)}.a%<>0 THEN
+            FOR Y%=0 TO fonthgt%-1
+              FOR X%=0 TO fonts{(I%)}.w%-1
+                PROCpoint(X%+x%,y%+fonthgt%-Y%,fonts{(I%)}.d%(X%+Y%*fonts{(I%)}.w%))
+              NEXT
+            NEXT
+            x%+=fonts{(I%)}.w%
+          ENDIF
+        NEXT
+      ENDIF
+      ENDPROC
+
+      REM ##########################################################
+      REM update font variables
+      DEF PROCupdatefont(i%,v%,a$)
+      COLOUR 11
+      CASE i% OF
+        WHEN 0 : REM name
+          PRINTTAB(6,0)a$
+        WHEN 1 : REM font width
+          PRINTTAB(11,1)RIGHT$("0"+STR$(v%),2)
+        WHEN 2 : REM font height
+          PRINTTAB(22,1)RIGHT$("0"+STR$(v%),2)
+        WHEN 3 : REM cell x
+          PRINTTAB(11,2)RIGHT$("0"+STR$(v%),2)
+        WHEN 4 : REM cell y
+          PRINTTAB(22,2)RIGHT$("0"+STR$(v%),2)
+        WHEN 5 : REM asc val
+          PRINTTAB(7,3)RIGHT$("00"+STR$(v%),3)
+          COLOUR 10
+          PRINTTAB(13,3)CHR$(v%)
+      ENDCASE
+      ENDPROC
+
+      REM ##########################################################
+      REM create font data file from bitmap
+      DEF PROCfontcreate
+      LOCAL X%,Y%,GX%,GY%,K%,find%,f%,h%,done%
+      LOCAL startx%,starty%,gridsx%,gridsy%,line_wid%,box%,px%,py%
+      LOCAL fw%,fh%,cx%,cy%,nw%,asc%,bmpx%,bmpy%
+      LOCAL ofw%,ofh%,ocx%,ocy%,oasc%,ofs%,col%
+      LOCAL name$,a$
+      REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
+
+      menuext%=5
+      done%=-1
+      text$=""
+
+      REPEAT
+        IF done%=-1 THEN
+          FOR Y%=6 TO 11
+            PROCprint40(Y%,"")
+          NEXT
+
+          REM get font name and confirm if already exists
+          PRINTTAB(2,8)"ENTER FONT NAME:"
+          PRINTTAB(1,9)tb$;CHR$(157);tc$;SPC(14);CHR$(156);
+          PRINTTAB(20,9)tb$;CHR$(157);tg$;"CREATE  ";CHR$(156)
+          VDU31,3,9
+          done%=0
+          name$=""
+        ENDIF
+
+        PROCREADMOUSE
+        IF MB%=4 THEN
+          PROCWAITMOUSE(0)
+          CASE TY% OF
+
+            WHEN 9 : REM create button
+              IF TX%>20 AND TX%<31 AND name$<>"" THEN done%=1
+
+            WHEN 12,13,14,15,16,17,18,19 : REM alphabet selector
+              C%=GET(TX%,TY%)
+              IF (C%>47 AND C%<58) OR (C%>64 AND C%<91) AND LEN(text$)<10 THEN
+                text$=text$+CHR$(C%)
+              ENDIF
+
+            WHEN 20 : REM text controls
+              CASE TX% OF
+                WHEN 37 : REM backspace
+                  IF text$<>"" THEN text$=LEFT$(text$,LEN(text$)-1)
+                WHEN 39 : REM clear text
+                  text$=""
+              ENDCASE
+
+            WHEN 22 : REM cancel button
+              IF TX%>28 AND TX%<38 THEN done%=2
+
+          ENDCASE
+        ELSE
+
+          REM check keyboard for text input
+          K%=INKEY(0)
+          IF K%>1 THEN
+
+            REM handle specific keypresses
+            CASE K% OF
+              WHEN 8 : REM backspace
+                IF text$<>"" THEN text$=LEFT$(text$,LEN(text$)-1)
+
+              WHEN 13 : REM enter
+                IF text$<>"" THEN done%=1
+
+              OTHERWISE
+                REM ADD VALID CHARS AND INCREASE TEXT POS
+                IF (K%>47 AND K%<58) OR (K%>64 AND K%<91) AND LEN(text$)<10 THEN
+                  text$=text$+CHR$(K%)
+                ENDIF
+            ENDCASE
+          ENDIF
+
+          WAIT 2
+        ENDIF
+        IF text$<>name$ THEN
+          name$=text$
+          PRINTTAB(4,9)SPC(10);
+          PRINTTAB(4,9)name$;
+        ENDIF
+
+        REM check if name already exists
+        IF done%=1 THEN
+          FOR X%=0 TO 31
+            IF fontname$(X%)<>"" THEN
+              IF name$=fontname$(X%) THEN
+                done%=0
+                FOR Y%=6 TO 11
+                  PROCprint40(Y%,"")
+                NEXT
+                PRINTTAB(2,8)"FONT NAME ALREADY EXISTS!"
+                PRINTTAB(2,9)"OVERWRITE FONT DATA? ";tg$;"Y  ";tr$;"N"
+                REPEAT
+                  PROCREADMOUSE
+                  IF MB%=4 THEN
+                    PROCWAITMOUSE(0)
+                    IF TY%=9 AND TX%=24 THEN done%=1
+                    IF TY%=9 AND TX%=28 THEN done%=-1
+                  ELSE
+                    WAIT 2
+                  ENDIF
+                UNTIL done%<>0
+                EXIT FOR
+              ENDIF
+            ELSE
+              EXIT FOR
+            ENDIF
+          NEXT
+        ENDIF
+
+      UNTIL done%>0
+
+      text$=""
+
+      REM begin capture if valid name entered
+      IF done%=1 THEN
+        done%=0
+
+        PROCloadfile(4)
+
+        IF menuext%=95 THEN
+
+          REM adjust for correct byte width multiple of 4
+          line_wid%=bmp_imgwid%*3
+          WHILE line_wid% MOD 4<>0
+            line_wid%+=1
+          ENDWHILE
+
+          fw%=10
+          fh%=11
+          cx%=6
+          cy%=5
+
+          asc%=65
+
+          COLOUR 15
+          PRINTTAB(0,0)"NAME:"
+          PRINTTAB(0,1)"FONT  W: -    +  H: -    +"
+          PRINTTAB(0,2)"CELL  X: -    +  Y: -    +"
+          PRINTTAB(0,3)"ASC: -     +"
+
+          COLOUR 5
+          PRINTTAB(0,4)"SPC: SAVE FONT   S: SKIP ASC"
+          PRINTTAB(0,5)"TAB: AUTO WIDTH  F: FIND CELL"
+
+          PROCgtext(" CLOSE ",768,998,11,9)
+
+          PROCupdatefont(0,0,name$)
+          PROCupdatefont(1,fw%,"")
+          PROCupdatefont(2,fh%,"")
+          PROCupdatefont(3,cx%,"")
+          PROCupdatefont(4,cy%,"")
+          PROCupdatefont(5,asc%,"")
+
+          f%=OPENOUT(@dir$+"M7_FONTS/"+name$+".M7F")
+          PRINT#f%,"TELEPAINT_FONT"
+          CLOSE#f%
+
+
+          gridsx%=fw%*cx%*2-2
+          gridsy%=fh%*cy%*2-2
+
+          REM PROCprint40(0,"Select Sprite: "+RIGHT$("0"+STR$(sprite_cur%+1),2))
+          GCOL 0,2
+          RECTANGLE FILL 1270-fw%*12,990-fh%*12,fw%*12+8,fh%*12+8
+
+          MX%=(MX% DIV 2)*2
+          MY%=(MY% DIV 2)*2
+          OLDMX%=MX%
+          OLDMY%=MY%
+
+          IF MY%<880 THEN
+            GCOL 3,15
+            RECTANGLE MX%,MY%,gridsx%,gridsy%
+            box%=1
+          ENDIF
+
+          REPEAT
+            PROCREADMOUSE
+
+            MX%=(MX% DIV 2)*2
+            MY%=(MY% DIV 2)*2
+            REM start a new selection
+
+            ofw%=fw%
+            ofh%=fh%
+            ocx%=cx%
+            ocy%=cy%
+            oasc%=asc%
+
+            IF MY%<880-gridsy% THEN
+              REM CTRL & cursor keys update mouse and font capture box
+              IF INKEY(-5) THEN
+                GX%=2
+                GY%=2
+              ELSE
+                GX%=cx%*2
+                GY%=cy%*2
+              ENDIF
+              REM left arrow
+              IF INKEY(-26) AND MX%>0 THEN
+                PROCWAITNOKEY(-26,0)
+                IF INKEY(-4) THEN
+                  IF fw%>1 THEN fw%-=1
+                ELSE
+                  PROCMOVEMOUSE(-GX%,0)
+                ENDIF
+              ENDIF
+              REM right arrow
+              IF INKEY(-122) AND MX%<1278 THEN
+                PROCWAITNOKEY(-122,0)
+                IF INKEY(-4) THEN
+                  IF fw%<20 THEN fw%+=1
+                ELSE
+                  PROCMOVEMOUSE(GX%,0)
+                ENDIF
+              ENDIF
+              REM up arrow
+              IF INKEY(-58) AND MY%<998 THEN
+                PROCWAITNOKEY(-58,0)
+                IF INKEY(-4) THEN
+                  IF fh%<20 THEN fh%+=1
+                ELSE
+                  PROCMOVEMOUSE(0,GX%)
+                ENDIF
+              ENDIF
+              REM down arrow
+              IF INKEY(-42) AND MY%>0 THEN
+                PROCWAITNOKEY(-42,0)
+                IF INKEY(-4) THEN
+                  IF fh%>1 THEN fh%-=1
+                ELSE
+                  PROCMOVEMOUSE(0,-GX%)
+                ENDIF
+              ENDIF
+
+              REM F - find next cell
+              IF INKEY(-68) THEN
+                PROCWAITNOKEY(-68,0)
+
+                REM start new find or next line
+                IF find%=0 THEN
+                  starty%=bmp_imghgt%-1
+                  find%=1
+                ELSE
+                  starty%=MY% DIV 2
+                ENDIF
+
+                bmpy%=starty%
+                bmpx%=0
+                GX%=0
+
+                REM scan bitmap left to right until pixels found
+                REPEAT
+                  ofs%=bmp_imgofs%+bmpx%*3+bmpy%*line_wid%
+                  col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                  IF col%>0 THEN
+
+                    REM scan a block cx% * cy% to determine if full cell found
+                    GY%=0
+                    FOR X%=0 TO cx%*cy%-1
+                      ofs%=bmp_imgofs%+(bmpx%+X% MOD cx%)*3+(bmpy%-X% DIV cx%)*line_wid%
+                      col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                      IF col%=0 THEN
+                        bmpx%+=X% MOD cx%
+                        bmpy%-=X% DIV cx%
+                        EXIT FOR
+                      ELSE
+                        GY%+=1
+                      ENDIF
+                    NEXT
+
+                    REM if full cell found, scan down until bottom left of char is found
+                    IF GY%=cx%*cy% THEN
+                      REPEAT
+                        ofs%=bmp_imgofs%+(bmpx%+X% MOD cx%)*3+(bmpy%-X% DIV cx%)*line_wid%
+                        col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                        bmpy%-=cy%
+                      UNTIL col%=0 OR bmpy%<cy%
+                      IF bmpy%>cy% THEN GX%=1 ELSE GX%=2
+
+                    ENDIF
+                  ELSE
+                    bmpy%-=1
+                    IF bmpy%<cy% THEN
+                      bmpx%+=1
+                      bmpy%=starty%
+                      IF bmpx%>bmp_imgwid%-cx% THEN GX%=2
+                    ENDIF
+                  ENDIF
+                UNTIL GX%>0
+
+                REM move mouse to found char
+                IF GX%=1 THEN PROCMOVEMOUSE(bmpx%*2-MX%,bmpy%*2-MY%-cy%)
+
+              ENDIF
+
+              REM check for SPACE and save font to data file OR tab for auto width
+              K%=0
+              IF INKEY(-99) THEN K%=1
+              IF INKEY(-97) THEN K%=2
+              IF K%<>0 THEN
+                PROCWAITNOKEY(-99,0)
+                PROCWAITNOKEY(-97,0)
+
+                bmpx%=MX% DIV 2
+                bmpy%=MY% DIV 2
+                nw%=0
+
+                IF K%=1 THEN
+                  REM save curren font and step to next one
+                  f%=OPENUP(@dir$+"M7_FONTS/"+name$+".M7F")
+                  PTR#f%=EXT#f%
+                  IF h%=0 THEN
+                    PRINT#f%,STR$(fh%)
+                    h%=1
+                  ENDIF
+                  PRINT#f%,STR$(asc%)
+                  PRINT#f%,STR$(fw%)
+                  a$=""
+                  FOR Y%=bmpy% TO bmpy%+fh%*cy%-cy% STEP cy%
+                    FOR X%=bmpx% TO bmpx%+fw%*cx%-cx% STEP cx%
+                      col%=0
+                      IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
+                        ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
+                        col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                      ENDIF
+                      IF col%>0 THEN
+                        a$+="1"
+                      ELSE
+                        a$+="0"
+                      ENDIF
+                    NEXT
+                  NEXT
+                  PRINT#f%,a$
+
+                  CLOSE#f%
+
+                  PROCMOVEMOUSE(fw%*cx%*2,0)
+                  X%=bmpx%+fw%*cx%
+                ELSE
+                  X%=bmpx%
+                ENDIF
+
+                REM scan next font and determine font width
+                REPEAT
+                  GX%=0
+                  FOR Y%=bmpy% TO bmpy%+fh%*cy%-cy% STEP cy%
+                    col%=0
+                    IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
+                      ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
+                      col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                    ENDIF
+                    GX%+=col%
+                  NEXT
+                  X%+=cx%
+                  nw%+=1
+                UNTIL GX%=0
+
+                fw%=nw%
+
+                IF K%=1 AND asc%<126 THEN
+                  asc%+=1
+                  PROCupdatefont(5,asc%,"")
+                ENDIF
+              ENDIF
+
+              REM check for S and skip this char
+              IF INKEY(-82) AND asc%<126 THEN
+                asc%+=1
+                PROCWAITNOKEY(-82,0)
+                PROCupdatefont(5,asc%,"")
+              ENDIF
+
+            ELSE
+              REM menu area
+              REM PRINTTAB(0,4)STR$(TX%);"   ";STR$(TY%);"   ";
+              IF MB%=4 THEN
+
+                CASE TY% OF
+                  WHEN 0 : REM close window
+                    done%=1
+                  WHEN 1 : REM font width height
+                    PROCWAITMOUSE(0)
+                    CASE TX% OF
+                      WHEN 9
+                        IF fw%>1 THEN fw%-=1
+
+                      WHEN 14
+                        IF fw%<20 THEN fw%+=1
+
+                      WHEN 20
+                        IF fh%>1 THEN fh%-=1
+
+                      WHEN 25
+                        IF fh%<20 THEN fh%+=1
+
+                    ENDCASE
+
+                  WHEN 2 : REM cell x,y
+                    PROCWAITMOUSE(0)
+                    CASE TX% OF
+                      WHEN 9
+                        IF cx%>1 THEN cx%-=1
+
+                      WHEN 14
+                        IF cx%<10 THEN cx%+=1
+
+                      WHEN 20
+                        IF cy%>1 THEN cy%-=1
+
+                      WHEN 25
+                        IF cy%<10 THEN cy%+=1
+
+                    ENDCASE
+
+                  WHEN 3 : REM asc
+                    IF TX%=5 AND asc%>32 THEN
+                      asc%-=1
+                      WAIT 12
+                    ENDIF
+
+                    IF TX%=11 AND asc%<126 THEN
+                      asc%+=1
+                      WAIT 12
+                    ENDIF
+
+                ENDCASE
+
+              ENDIF
+
+            ENDIF
+
+            REM update any changes
+            IF ofw%<>fw% THEN PROCupdatefont(1,fw%,"")
+            IF ofh%<>fh% THEN PROCupdatefont(2,fh%,"")
+            IF ocx%<>cx% THEN PROCupdatefont(3,cx%,"")
+            IF ocy%<>cy% THEN PROCupdatefont(4,cy%,"")
+            IF oasc%<>asc% THEN PROCupdatefont(5,asc%,"")
+
+            REM update output window
+            IF ofw%<>fw% OR ofh%<>fh% OR ocx%<>cx% OR ocy%<>cy% THEN
+              GCOL 0,0
+              RECTANGLE FILL 1270-ofw%*12,990-ofh%*12,ofw%*12+8,ofh%*12+8
+
+              GCOL 0,2
+              RECTANGLE FILL 1270-fw%*12,990-fh%*12,fw%*12+8,fh%*12+8
+
+            ENDIF
+
+            REM mouse moved or font width changed?
+            IF OLDMX%<>MX% OR OLDMY%<>MY% OR ofw%<>fw% OR ofh%<>fh% THEN
+              IF box%=1 THEN
+                GCOL 3,15
+                RECTANGLE OLDMX%,OLDMY%,gridsx%,gridsy%
+              ENDIF
+
+              bmpx%=MX% DIV 2
+              bmpy%=MY% DIV 2
+
+              REM PRINTTAB(0,1)STR$(x%);"  ";STR$(y%);"   ";
+
+              IF MY%<880-gridsy% THEN
+                px%=0
+                FOR X%=bmpx% TO bmpx%+fw%*cx%-cx% STEP cx%
+                  py%=994-fh%*12
+                  FOR Y%=bmpy% TO bmpy%+fh%*cy%-cy% STEP cy%
+                    col%=0
+                    IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
+                      ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
+                      col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                    ENDIF
+                    IF col%>0 THEN
+                      GCOL 0,15
+                    ELSE
+                      GCOL 0,0
+                    ENDIF
+                    RECTANGLE FILL 1274-fw%*12+px%,py%,12
+
+                    py%+=12
+                  NEXT
+                  px%+=12
+                NEXT
+
+                gridsx%=fw%*cx%*2-2
+                gridsy%=fh%*cy%*2-2
+
+                GCOL 3,15
+                RECTANGLE MX%,MY%,gridsx%,gridsy%
+                box%=1
+              ELSE
+                REM mouse in menu area
+                box%=0
+              ENDIF
+
+
+              OLDMX%=MX%
+              OLDMY%=MY%
+            ELSE
+              WAIT 2
+            ENDIF
+
+          UNTIL done%<>0
+
+        ENDIF
+        PROCWAITMOUSE(0)
+        PROCchangemode(7,1)
+
+      ENDIF
+      menuext%=1
+
       ENDPROC
 
       REM ##########################################################
@@ -3598,7 +4104,6 @@
           IF cls% THEN
             FOR frame%=1 TO frame_max%
               PROCframesave(frame%)
-              REM WAIT 10
             NEXT frame%
             frame%=1
           ELSE
@@ -4006,11 +4511,11 @@
         A$=""
         f%=OPENOUT(F$+".TXT")
         FOR c%=0 TO sprite_max%-1
-          PRINT#f%,"REM SPR: "+STR$(c%)+"  W: 13  H: 15"
+          PRINT#f%,"REM SPR: "+STR$(c%)+"  W: 40  H: 48"
           BPUT#f%,10
-          FOR Y%=0 TO 14
+          FOR Y%=0 TO 47
             A$=""
-            FOR X%=0 TO 12
+            FOR X%=0 TO 39
               A$+=STR$(FNpoint_sprbuf(X%+2,Y%,c%))
               IF X%<12 THEN A$+=","
             NEXT
@@ -4075,8 +4580,8 @@
       REM loadfile - modified dirscan to include type array so files list can be displayed for mode 7
       REM loadtype determines the type of load / import function
       DEF PROCloadfile(loadtype%)
-      LOCAL I%,N%,L%,M%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,filetype$,fh%,MACT%,maxy%,opt1%,opt2%,GT%,OGT%,reload%
-
+      LOCAL I%,N%,L%,M%,F%,SEL%,SELOLD%,SELY%,INDEX%,INDEXOLD%,fh%,MACT%,maxy%,opt1%,opt2%,GT%,OGT%,reload%
+      LOCAL title$,filetype$
       REM n$ holds file and dir list of current folder
       REM t& holds type list for current folder, 0=special, 1=dir, 2=file
 
@@ -4097,14 +4602,10 @@
 
       PROCWAITMOUSE(0)
       menuext%=99
+      maxy%=M%+15
       CASE loadtype% OF
         WHEN 0 : maxy%=M%+19
-        WHEN 1 : maxy%=M%+15
-        WHEN 2 : maxy%=M%+15
-        WHEN 3 : maxy%=M%+15
       ENDCASE
-      REM      maxy%=22-loadtype%*3
-      REM       PRINTTAB(0,1)STR$(maxy%)
 
       FOR L%=M% TO maxy%
         PROCprint40(L%,"")
@@ -4123,7 +4624,7 @@
       CASE loadtype% OF
         WHEN 0 : REM bin files
           filetype$=".bin"
-          PRINTTAB(2,M%)gw$;CHR$(232);STRING$(10,CHR$(172));tg$;"LOAD FILE";gw$;STRING$(10,CHR$(172));CHR$(180);
+          title$="LOAD FILE"
           PRINTTAB(15,M%+14)tr$;CHR$(157);ty$;"LOAD LAST SAVE ";gw$;CHR$(156);
           PRINTTAB(4,M%+16)tg$;"(*)";tw$;"ALL FRMS ";tg$;"( )";tw$;"SINGLE FRM";
           PRINTTAB(4,M%+17)tg$;"(*)";tw$;"CLS ";tg$;"( )";tw$;"BACK ";tg$;"( )";tw$;"FORE";
@@ -4131,8 +4632,8 @@
 
         WHEN 1 : REM import bmp
           filetype$=".bmp"
-          PRINTTAB(2,M%)gw$;CHR$(232);STRING$(9,CHR$(172));tg$;"IMPORT FILE";gw$;STRING$(9,CHR$(172));CHR$(180);
-          PRINTTAB(15,M%+14)CHR$(156);
+          title$="IMPORT FILE"
+          opt1%=1
           PRINTTAB(1,M%+17)tg$;"(*)";tw$;"SINGLE BOX CAPTURE"
           PRINTTAB(1,M%+18)tg$;"( )";tw$;"GRID";tc$;"HOR";tw$;"-";ty$;"10";tw$;"+ ";tc$;"VER";tw$;"-";ty$;"02";tw$"+"
           PRINTTAB(1,M%+19)tg$;"( )";tw$;"SERIES 78x72 FORMAT: F0001.BMP"
@@ -4141,19 +4642,25 @@
 
         WHEN 2 : REM import bmp to sprite
           filetype$=".bmp"
-          PRINTTAB(2,M%)gw$;CHR$(232);STRING$(8,CHR$(172));tg$;"SPRITE IMPORT";gw$;STRING$(8,CHR$(172));CHR$(180);
-          PRINTTAB(15,M%+14)CHR$(156);
+          title$="SPRITE IMPORT"
           opt1%=1
 
         WHEN 3 : REM load spr sprite
           filetype$=".spr"
-          PRINTTAB(2,M%)gw$;CHR$(232);STRING$(8,CHR$(172));tg$;"LOAD SPR FILE";gw$;STRING$(8,CHR$(172));CHR$(180);
-          PRINTTAB(15,M%+14)CHR$(156);
+          title$="LOAD SPR FILE"
           opt1%=1
 
+        WHEN 4 : REM import bmp to font
+          filetype$=".bmp"
+          title$="FONT IMPORT"
+          opt1%=1
 
       ENDCASE
+      L%=(29-LEN(title$)) DIV 2
+      I%=L% + (LEN(title$)-1) MOD 2
+      PRINTTAB(2,M%)gw$;CHR$(232);STRING$(L%,CHR$(172));tg$;title$;gw$;STRING$(I%,CHR$(172));CHR$(180);
 
+      REM scan initial folder and set menu defaults
       N% = FN_dirscan2(n$(), t&(), "dir *.*", filetype$,opt1%)
       F%=0
       S%=0
@@ -4163,7 +4670,6 @@
       INDEX%=1
       INDEXOLD%=1
       MACT%=-1
-
 
       FOR I%=INDEX% TO INDEX%+11
         IF I%<N%+1 THEN PRINTTAB(6,M%+I%)CHR$(c%(t&(I%)));LEFT$(n$(I%),24);
@@ -4176,12 +4682,17 @@
         IF MB%=4 THEN
           IF MACT%=-1 THEN MACT%=TY%
 
+          REM drag action scrolls file list
           IF MACT%>M% AND MACT%<M%+13 THEN
             IF TX%>4 AND TX%<34 THEN
-              IF TY%<>OLD_TY% THEN INDEX%-=SGN(TY%-OLD_TY%)
-              IF INDEX%>N%-11 THEN INDEX%=N%-11
-              IF INDEX%<1 THEN INDEX%=1
-              IF SELY%=-1 THEN SELY%=TY%
+              IF TY%<>OLD_TY% THEN
+                INDEX%-=SGN(TY%-OLD_TY%)
+                IF INDEX%>N%-11 THEN INDEX%=N%-11
+                IF INDEX%<1 THEN INDEX%=1
+                SELY%=-2
+              ELSE
+                IF SELY%=-1 THEN SELY%=TY%
+              ENDIF
             ENDIF
           ELSE
             IF TY%=M%+18 AND loadtype%=1 THEN
@@ -4204,18 +4715,19 @@
 
         REM detect touch release
         IF MB%=0 AND MACT%<>-1 THEN
-          IF MACT%=M%+3 AND TX%=35 AND INDEX%>1 THEN INDEX%-=1
-          IF MACT%=M%+12 AND TX%=35 AND INDEX%<N%-11 THEN INDEX%+=1
-          IF MACT%=M%+4 AND TX%=35 THEN
-            INDEX%-=10
+
+          REM scroll buttons
+          IF TX%=35 THEN
+            IF MACT%=M%+3 THEN INDEX%-=1
+            IF MACT%=M%+12 THEN INDEX%+=1
+            IF MACT%=M%+4 THEN INDEX%-=10
+            IF MACT%=M%+11 THEN INDEX%+=10
+            IF INDEX%>N%-11 THEN INDEX%=N%-11
             IF INDEX%<1 THEN INDEX%=1
           ENDIF
-          IF MACT%=M%+11 AND TX%=35 THEN
-            INDEX%+=10
-            IF INDEX%>N%-11 THEN INDEX%=N%-11
-          ENDIF
 
-          IF SELY%=TY% AND MACT%>M% AND MACT%<M%+13 AND TX%>3 AND TX%<36 THEN
+          REM select file / folder
+          IF SELY%=TY% AND MACT%>M% AND MACT%<M%+13 AND TX%>3 AND TX%<35 THEN
             S%=TY%-M%-1
             IF S%>-1 AND S%<12 THEN
               SEL%=S%+INDEX%
@@ -4238,7 +4750,9 @@
 
               ENDIF
             ENDIF
+
           ENDIF
+
 
           REM check for button and control clicks
           IF TY%=0 AND MACT%=0 THEN F%=-1
@@ -4329,8 +4843,8 @@
           SELY%=-1
           INDEX%=1
           INDEXOLD%=-1
-          FOR I%=INDEX% TO INDEX%+12
-            PRINTTAB(6,M%+I%)SPC(28);
+          FOR I%=INDEX% TO INDEX%+11
+            PRINTTAB(4,M%+I%)SPC(28);
           NEXT
           reload%=0
         ENDIF
@@ -4342,13 +4856,13 @@
             IF K%<N%+1 THEN
               PRINTTAB(4,I%+M%+1)SPC(28)
               VDU 31,4,I%+M%+1
-              IF SEL%=K% THEN
+              IF SEL%=K% AND K%>2 THEN
                 VDU 132,157
               ELSE
                 VDU 32,32
               ENDIF
               PRINTCHR$(c%(t&(K%)));LEFT$(n$(K%),24);
-              IF SEL%=K% THEN VDU 32,32,156
+              IF SEL%=K% AND K%>2 THEN VDU 32,32,156
             ENDIF
           NEXT
           SELOLD%=SEL%
@@ -4362,10 +4876,11 @@
         WAIT 2
       UNTIL F%<>0
 
+      VDU 23,1,1;0;0;0;  : REM Enable cursor
+
       CASE loadtype% OF
         WHEN 0 : REM load bin
           PROCmenurestore
-          REM *** DRAWFRAME??
 
           IF F%=-2 THEN
             REM read last session file
@@ -4472,22 +4987,22 @@
             REM bmp reserved (2 bytes) ?8 ?9
             REM bmp pixel data offset (4 bytes)
             REM PRINT"pOfs:";STR$(import_buffer%!10)
-            spr_impofs%=import_buffer%!10
+            bmp_imgofs%=import_buffer%!10
 
             REM bmp header size (4 bytes)
             REM PRINT"hSze:";STR$(import_buffer%!14)
 
             REM bmp image width (4 bytes)
             REM PRINT"iWid:";STR$(import_buffer%!18)
-            spr_impwid%=import_buffer%!18
+            bmp_imgwid%=import_buffer%!18
 
             REM bmp image height (4 bytes)
             REM PRINT"iHgt:";STR$(import_buffer%!22)
-            spr_imphgt%=import_buffer%!22
+            bmp_imghgt%=import_buffer%!22
             REM bmp planes (2 bytes) ?26 ?27
             REM bmp but per pixel (2 bytes)
             REM PRINT"bpp: ";STR$(import_buffer%?29);STR$(import_buffer%?28)
-            spr_impbpp%=import_buffer%?28+(import_buffer%?29*256)
+            bmp_imgbpp%=import_buffer%?28+(import_buffer%?29*256)
 
             REM bmp compression (4 bytes) ?30 ?31 ?32 ?33
             REM bmp image size (4 bytes) ?34 ?35 ?36 ?37
@@ -4495,7 +5010,7 @@
             REM bmp y pixels per meter (4 bytes) ?42 ?43 ?44 ?45
             REM bmp total colours (4 bytes) ?46 ?47 ?48 ?49
             REM bmp important colours (4 bytes) ?50 ?51 ?52 ?53
-            IF T$<>"BM" OR spr_impofs%<>54 OR spr_impbpp%<>24 THEN
+            IF T$<>"BM" OR bmp_imgofs%<>54 OR bmp_imgbpp%<>24 THEN
               PRINTTAB(0,0)"Image format not supported, must be BMP 24bpp"
               PROCWAITMOUSE(4)
               PROCWAITMOUSE(0)
@@ -4511,16 +5026,41 @@
         WHEN 3 : REM load spr
           PROCloadspritefile(curdir$+n$(SEL%))
 
-      ENDCASE
+        WHEN 4 : REM font import
+          PROCchangemode(6,1)
 
-      VDU 23,1,1;0;0;0;  : REM Enable cursor
+          IF F%=-1 THEN
+            COLOUR 9
+            PRINTTAB(0,0)"NO FILE LOADED"
+            PROCWAITMOUSE(4)
+            PROCWAITMOUSE(0)
+          ELSE
+
+            OSCLI "LOAD """+curdir$+n$(SEL%)+""" "+STR$~import_buffer%+" +"+STR$1000000
+
+            T$=CHR$(import_buffer%?0)+CHR$(import_buffer%?1)
+            bmp_imgofs%=import_buffer%!10
+            bmp_imgwid%=import_buffer%!18
+            bmp_imghgt%=import_buffer%!22
+            bmp_imgbpp%=import_buffer%?28+(import_buffer%?29*256)
+
+            IF T$<>"BM" OR bmp_imgofs%<>54 OR bmp_imgbpp%<>24 THEN
+              PRINTTAB(0,0)"Image format not supported, must be BMP 24bpp"
+              PROCWAITMOUSE(4)
+              PROCWAITMOUSE(0)
+            ELSE
+              OSCLI "MDISPLAY "+STR$~import_buffer%
+              menuext%=95
+            ENDIF
+          ENDIF
+      ENDCASE
 
       ENDPROC
 
       REM ##########################################################
       REM save all frames to file, create session folder if not already exists
       DEF PROCsavefile
-      LOCAL D$,DONE%,OG%
+      LOCAL D$,done%,OG%
 
       PROCWAITMOUSE(0)
 
@@ -4574,10 +5114,10 @@
               PROCsaveupdate(0,"DAT")
 
             WHEN 0 : REM save
-              DONE%=1
+              done%=1
 
             WHEN 1 : REM cancel
-              DONE%=2
+              done%=2
 
           ENDCASE
           IF save_bin%+save_bmp%+save_spr%+save_dat%=0 THEN
@@ -4589,11 +5129,11 @@
           WAIT 2
         ENDIF
 
-      UNTIL DONE%>0
+      UNTIL done%>0
 
       PROCchangemode(7,1)
 
-      IF DONE%=1 THEN
+      IF done%=1 THEN
         REM create and change to session folder, strip off seconds value
         IF session%=0 THEN
           OSCLI "MD """+cursave$+cursavedir$+""""
@@ -4665,22 +5205,26 @@
         RECTANGLE SX%+10,SY%+10,SW%-20,SH%-20
         REM t$,x%,y%,tc%,bc%
         PROCgtext(" SAVE FILE OPTIONS ",SX%+236,TY%-40,10,0)
-        PROCgtext("PROJECT NAME: ",SX%+40,TY%-100,3,0)
-        PROCgtext("SAVE BIN:",SX%+40,TY%-208,15,0)
-        PROCgtext("SAVE BMP:",SX%+40,TY%-256,15,0)
-        PROCgtext("SAVE SPR:",SX%+40,TY%-304,15,0)
-        PROCgtext("SAVE TXT:",SX%+40,TY%-352,15,0)
-        PROCgtext("(SPR PIXEL DATA)",SX%+500,TY%-352,4,0)
+        PROCgtext("PROJECT NAME: ",SX%+40,TY%-100,15,0)
+        PROCgtext("FILES TO SAVE:",SX%+40,TY%-208,15,0)
+        PROCgtext("BIN:",SX%+40,TY%-256,15,0)
+        PROCgtext("(BIN FORMAT 1 KB)",SX%+340,TY%-256,4,0)
+        PROCgtext("BMP:",SX%+40,TY%-304,15,0)
+        PROCgtext("(BMP FORMAT 1 MB)",SX%+340,TY%-304,4,0)
+        PROCgtext("SPR:",SX%+40,TY%-352,15,0)
+        PROCgtext("(ALL SPRITE DATA)",SX%+340,TY%-352,4,0)
+        PROCgtext("TXT:",SX%+40,TY%-400,15,0)
+        PROCgtext("(DATA STATEMENTS)",SX%+340,TY%-400,4,0)
         PROCanimcontrol(0,"  SAVE  ",SX%+100,SY%+100,12,10,4)
         PROCanimcontrol(1," CANCEL ",SX%+700,SY%+100,9,11,1)
       ENDIF
 
-      PROCgtext(D$,SX%+40,TY%-144,15,4)
+      PROCgtext(D$,SX%+40,TY%-144,11,4)
 
-      PROCanimcontrol(2," "+CHR$(78+save_bin%*11)+" ",SX%+340,TY%-208,8,11+4*save_bin%,1+save_bin%)
-      PROCanimcontrol(3," "+CHR$(78+save_bmp%*11)+" ",SX%+340,TY%-256,8,11+4*save_bmp%,1+save_bmp%)
-      PROCanimcontrol(4," "+CHR$(78+save_spr%*11)+" ",SX%+340,TY%-304,8,11+4*save_spr%,1+save_spr%)
-      PROCanimcontrol(5," "+CHR$(78+save_dat%*11)+" ",SX%+340,TY%-352,8,11+4*save_dat%,1+save_dat%)
+      PROCanimcontrol(2," "+CHR$(78+save_bin%*11)+" ",SX%+180,TY%-256,8,11+4*save_bin%,1+save_bin%)
+      PROCanimcontrol(3," "+CHR$(78+save_bmp%*11)+" ",SX%+180,TY%-304,8,11+4*save_bmp%,1+save_bmp%)
+      PROCanimcontrol(4," "+CHR$(78+save_spr%*11)+" ",SX%+180,TY%-352,8,11+4*save_spr%,1+save_spr%)
+      PROCanimcontrol(5," "+CHR$(78+save_dat%*11)+" ",SX%+180,TY%-400,8,11+4*save_dat%,1+save_dat%)
 
       ENDPROC
 
@@ -4967,31 +5511,31 @@
           OSCLI "LOAD """+curdir$+NAME$+""" "+STR$~import_buffer%+" +"+STR$1000000
 
           T$=CHR$(import_buffer%?0)+CHR$(import_buffer%?1)
-          spr_impofs%=import_buffer%!10
-          spr_impwid%=import_buffer%!18
-          spr_imphgt%=import_buffer%!22
-          spr_impbpp%=import_buffer%?28+(import_buffer%?29*256)
+          bmp_imgofs%=import_buffer%!10
+          bmp_imgwid%=import_buffer%!18
+          bmp_imghgt%=import_buffer%!22
+          bmp_imgbpp%=import_buffer%?28+(import_buffer%?29*256)
 
           REM adjust for correct line byte width multiple of 4
-          line_wid%=spr_impwid%*3
+          line_wid%=bmp_imgwid%*3
           WHILE line_wid% MOD 4<>0
             line_wid%+=1
           ENDWHILE
 
           REM        PRINTTAB(0,0)NAME$;"  F:";STR$(F%);"  ";
           REM        PRINTT$
-          REM        PRINT"pOfs:";STR$(spr_impofs%)
-          REM        PRINT"pWid:";STR$(spr_impwid%)
-          REM        PRINT"pHgt:";STR$(spr_imphgt%)
-          REM        PRINT"pBpp:";STR$(spr_impbpp%)
+          REM        PRINT"pOfs:";STR$(bmp_imgofs%)
+          REM        PRINT"pWid:";STR$(bmp_imgwid%)
+          REM        PRINT"pHgt:";STR$(bmp_imghgt%)
+          REM        PRINT"pBpp:";STR$(bmp_imgbpp%)
           REM        PROCWAITMOUSE(4)
 
-          IF T$="BM" AND spr_impofs%=54 AND spr_impbpp%=24 THEN
+          IF T$="BM" AND bmp_imgofs%=54 AND bmp_imgbpp%=24 THEN
             FOR X%=0 TO 77
               FOR Y%=0 TO 71
                 col%=0
-                IF X%>-1 AND X%<spr_impwid% AND Y%>-1 AND Y%<spr_imphgt% THEN
-                  ofs%=spr_impofs%+X%*3+Y%*line_wid%
+                IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
+                  ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
                   col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
                 ENDIF
                 IF col%>0 THEN
@@ -5064,7 +5608,7 @@
         gridsy%=94
 
         REM adjust for correct byte width multiple of 4
-        line_wid%=spr_impwid%*3
+        line_wid%=bmp_imgwid%*3
         WHILE line_wid% MOD 4<>0
           line_wid%+=1
         ENDWHILE
@@ -5120,8 +5664,8 @@
 
                   REM IF POINT(X%,Y%)<>0 THEN
                   col%=0
-                  IF X%>-1 AND X%<spr_impwid% AND Y%>-1 AND Y%<spr_imphgt% THEN
-                    ofs%=spr_impofs%+X%*3+Y%*line_wid%
+                  IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
+                    ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
                     col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
                   ENDIF
                   IF col%>0 THEN
@@ -5197,17 +5741,17 @@
           REM          A=GET
 
           IF menuext%=95 THEN
-            PROCprint40(0,"Complete! Process next sprit?  Y   N")
+            PROCprint40(0,"Complete! Process next sprite?  Y   N")
             GCOL 3,10
-            RECTANGLE FILL 948,960,108,40
+            RECTANGLE FILL 980,960,108,40
 
             GCOL 3,9
-            RECTANGLE FILL 1076,960,108,40
+            RECTANGLE FILL 1108,960,108,40
 
             PROCWAITMOUSE(4)
             PROCWAITMOUSE(0)
 
-            IF TY%=0 AND TX%>29 AND TX%<33 THEN
+            IF TY%=0 AND TX%>30 AND TX%<34 THEN
 
               REM reset selection
               startx%=-1
@@ -5234,6 +5778,42 @@
 
       ENDPROC
 
+      REM ##########################################################
+      REM load font file into font array
+      DEF PROCloadfont(name$)
+
+      REM clear existing font data
+      FOR I%=0 TO fontmax%
+        fonts{(I%)}.a%=0
+      NEXT
+
+      REM read font file
+      f%=OPENIN(@dir$+"M7_FONTS\"+name$+".M7F")
+      INPUT#f%,i$
+      IF i$="TELEPAINT_FONT" THEN
+        INPUT#f%,i$
+        fonthgt%=VAL(i$)
+        REPEAT
+          INPUT#f%,i$
+          a%=VAL(i$)-32
+          fonts{(a%)}.a%=1
+          INPUT#f%,i$
+          fonts{(a%)}.w%=VAL(i$)
+
+          INPUT#f%,i$
+          FOR I%=1 TO fonts{(a%)}.w%*fonthgt%
+            fonts{(a%)}.d%(I%-1)=VAL(MID$(i$,I%,1))
+          NEXT
+        UNTIL EOF#f%
+      ENDIF
+      CLOSE#f%
+
+      REM add default space char if not exists in font file
+      IF fonts{(0)}.a%=0 THEN
+        fonts{(0)}.a%=1
+        fonts{(0)}.w%=4
+      ENDIF
+      ENDPROC
 
       REM ##########################################################
       REM animate all frames in sequence from 1 to frame_max%
@@ -5600,17 +6180,16 @@
         REM        PRINTTAB(18,19)tb$;CHR$(157);tc$;">  ";CHR$(156);
         PRINTTAB(10,19)tb$;CHR$(157);tc$;"< ";CHR$(156);tb$;CHR$(157);tc$;"> ";CHR$(156);
 
-        PRINTTAB(0,21)tb$;CHR$(157);tc$;"DRAW ALL  ";CHR$(156);tm$;CHR$(157);ty$;"UNDO ALL  ";CHR$(156);tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
+        PRINTTAB(27,24)CHR$(156);tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
 
-        PRINTTAB(0,23)tb$;"FRAME";tc$;"START";tw$;"-";ty$;"   ";tw$;"+";tc$;" STEP";tw$;"-";ty$;"   ";tw$;"+";
-        PRINTTAB(0,24)tc$;"X";tw$;"-";ty$;"  ";tw$;"+"tc$;"Y";tw$;"-";ty$;"  ";tw$;"+"tc$;"H";tw$;"-";ty$;"  ";tw$;"+"tc$;"V";tw$;"-";ty$;"  ";tw$;"+";
+        PRINTTAB(10,21)tc$;"W:";tw$;"-";ty$;"  ";tw$;"+";tc$;" H";tw$;"-";ty$;"  ";tw$;"+";
 
         PRINTTAB(0,2)ty$;"LOAD";
         PRINTTAB(0,4)ty$;"SAVE";
-        PRINTTAB(0,6)tg$;"ADD L";
-        PRINTTAB(0,8)tg$;"VIEW L";
-        PRINTTAB(0,10)tw$;"ANIM8";
-        PRINTTAB(0,12)ty$;"IMPRT";
+        PRINTTAB(0,6)ty$;"IMPRT";
+        PRINTTAB(0,8)tw$;"ANIM8";
+        PRINTTAB(0,10)tc$;"CPY >";
+        PRINTTAB(0,12)tc$;"CPY <";
         PRINTTAB(0,14)tc$;"COPY";
         PRINTTAB(0,16)tc$;"PASTE";
 
@@ -5621,12 +6200,8 @@
         PRINTTAB(32,10)tc$;"SCR-D";
         PRINTTAB(32,12)tc$;"FLP-]";
         PRINTTAB(32,14)tc$;"FLP-^";
-        PRINTTAB(32,16)tc$;"CPY >";
-        PRINTTAB(32,18)tc$;"CPY <";
-
-        REM PROCdrawspritegrid
-
-        REM toolsel%=1:toolcursor%=15
+        PRINTTAB(32,16)tc$;"ROT >";
+        PRINTTAB(32,18)tc$;"ROT <";
 
       ENDIF
 
@@ -5636,14 +6211,9 @@
       IF spr_scroll%=0 THEN p$="PIX"
       PRINTTAB(36,2)tg$;p$;
       PRINTTAB(0,18)CHR$(129+spr_trns%);"TRANS";
-      PRINTTAB(1,7)tb$;RIGHT$("000"+STR$(spr_lstcount%+1),4);
 
-      PRINTTAB(15,23)RIGHT$("00"+STR$(spr_frmstart%),3);
-      PRINTTAB(29,23)RIGHT$("00"+STR$(spr_frmstep%),3);
-      PRINTTAB(5,24)RIGHT$("0"+STR$(spr_frmx%),2);
-      PRINTTAB(14,24)RIGHT$("0"+STR$(spr_frmy%),2);
-      PRINTTAB(23,24)RIGHT$("0"+STR$(spr_frmh%),2);
-      PRINTTAB(32,24)RIGHT$("0"+STR$(spr_frmv%),2);
+      PRINTTAB(16,21)RIGHT$("0"+STR$(sprsize{(sprite_cur%)}.w%),2);
+      PRINTTAB(26,21)RIGHT$("0"+STR$(sprsize{(sprite_cur%)}.h%),2);
 
       PROCdrawsprite
 
@@ -5725,7 +6295,7 @@
         menuadd%-=24
         PROCmenutext(13,"SPRITES    ",S1X%+20,menuadd%,10,(C%=14)*-4)
         PROCmenutext(14,"EDIT.TF    ",S1X%+20,menuadd%,10,(C%=15)*-4)
-        PROCmenutext(15,"KBRD & OPTS",S1X%+20,menuadd%,10,(C%=13)*-4)
+        PROCmenutext(15,"KYBRD FONTS",S1X%+20,menuadd%,10,(C%=13)*-4)
         PROCmenutext(16,"HELP       ",S1X%+20,menuadd%,10,(C%=16)*-4)
       ENDIF
 
@@ -5829,7 +6399,7 @@
       REM ##########################################################
       REM shape and special sub menu
       DEF PROCoptionsmenu(R%)
-
+      LOCAL F%,X%,Y%,P%
       REM REDRAW EVERYTHING
       IF R%=1 THEN
 
@@ -5840,7 +6410,17 @@
         PROCprint40(2,tg$+"( )"+tw$+"SHAPE OUTL"+tg$+"( )"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
         PROCprint40(3,tg$+"( )"+tw$+"SHAPE FILL   "+tc$+"GAP:"+tw$+"-"+ty$+" "+tw$+"+"+tc$+"LEN:"+tw$+"-"+ty$+" "+tw$+"+")
         PROCprint40(4,tg$+"( )"+tw$+"SHAPE EMPT")
-        PROCprint40(5,tg$+"( )"+tw$+"FONT:" + ty$ + "NORMAL"+tw$+"-"+ty$+" "+tw$+"+")
+        PROCprint40(5,tg$+"( )"+tw$+"FONT: -  +"+ty$)
+
+        IF fontcur%>0 THEN
+          VDU 31,0,6,151
+          VDU 31,0,7,151
+          VDU 31,0,8,151
+          VDU 31,0,9,151
+          VDU 31,0,10,151
+
+        ENDIF
+
         D$=CHR$(129+showcodes%)
 
         REM PRINTTAB(35,1)tm$;"HELP"
@@ -5848,19 +6428,23 @@
         PROCprint40(16,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
         PROCprint40(18,"  [ ] ; { } \ | : ' "" < > / ?"+tc$+"SPC CAP" )
 
-        PRINTTAB(1,22)tb$;CHR$(157);ty$;"SPRITES  ";CHR$(156);"  ";tm$;CHR$(157);ty$;"HELP  ";CHR$(156);"  ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
+        PRINTTAB(1,22)tb$;CHR$(157);ty$;"IMPORT  ";CHR$(156);"   ";tm$;CHR$(157);ty$;"HELP  ";CHR$(156);"  ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
 
         PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
       ENDIF
 
       REM REFRESH DYNAMIC AREAS
+      FOR Y%=6 TO 11
+        PROCprint40(Y%,CHR$(151))
+      NEXT
+
       FOR I%=0 TO 9
         IF shapesel%=I% THEN
           D$="*"
         ELSE
           D$=" "
         ENDIF
-        PRINTTAB(sopt{(I%)}.x%,sopt{(I%)}.y%)D$
+        REM PRINTTAB(sopt{(I%)}.x%,sopt{(I%)}.y%)D$
       NEXT
 
       D$=CHR$(32+animateshape%*10)
@@ -5870,6 +6454,7 @@
       PRINTTAB(17,2)D$;
       PRINTTAB(26,3)A$;
       PRINTTAB(37,3)F$;
+      PRINTTAB(16,5)LEFT$(fontname$(fontcur%)+"         ",10);
 
       IF caps% THEN
         PROCprint40(12,"  A B C D E F G H I J K L M N O P Q R")
@@ -5879,8 +6464,21 @@
         PROCprint40(14,"  s t u v w x y z 1 2 3 4 5 6 7 8 9 0")
       ENDIF
 
+      IF fontcur%>0 THEN
+        FOR Y%=12 TO 18 STEP 2
+          FOR I%=1 TO 37 STEP 2
+            IF Y%=18 AND I%>27 THEN EXIT FOR
+            VDU31,I%,Y%,132+fonts{(GET(I%+1,Y%)-32)}.a%*3
+          NEXT
+        NEXT
+      ENDIF
+
       PROCprint40(20,"TEXT:"+tg$+text$)
       PRINTTAB(36,20)tr$;"< X";
+
+      IF text$<>"" AND fontcur%>0 THEN
+        PROCdrawfont(2,18,text$)
+      ENDIF
 
       ENDPROC
 
@@ -6081,15 +6679,23 @@
         IF ASCa$ = &A a$ = MID$(a$,2)
         IF LEFT$(a$,2)="  " OR LEFT$(a$,2)="* " OR EOF#F% IF a$<>STRING$(20," ") THEN
           IF N% = 0 THEN
+            REM Zeroth index holds directory name
             d$ = name$(0)
             C% = FN_instrr(d$, "/", 0) : IF C% IF MID$(d$, C% - 1, 1) = "/" C% -= 1
             IF C% = 0 C% = FN_instrr(d$, "\", 0) : IF MID$(d$, C% - 1, 1) = "\" C% -= 1
             name$(0) = MID$(d$, 14, C% - 13)
             curdir$=name$(0)
-            N% += 1 : REM Zeroth index holds directory name
+            N% += 1
+
+            REM default folder entries
+            name$(N%) = "@lib$" : type&(N%) = 0 : N% += 1
+            name$(N%) = "@usr$" : type&(N%) = 0 : N% += 1
+            name$(N%) = ".."    : type&(N%) = 0 : N% += 1
+
           ELSE
             name$(N%) = FN_trim(name$(N%))
             d$ = FN_lower(name$(N%))
+
             ON ERROR LOCAL IF FALSE THEN
               OSCLI "cd """ + name$(0) + name$(N%) + """"
               OSCLI "cd """ + name$(0) + """"
@@ -6107,19 +6713,16 @@
               ENDIF
             ENDIF : RESTORE ERROR
           ENDIF
+
           name$(N%) = MID$(a$,3)
+
         ELSE
           name$(N%) += a$
         ENDIF
       UNTIL EOF#F% OR N% >= DIM(name$(),1)
       CLOSE #F%
 
-      IF N% < DIM(name$(),1) name$(N%) = "@lib$" : type&(N%) = 0 : SWAP type&(N%),type&(2):SWAP name$(N%),name$(2):N% += 1
-      IF N% < DIM(name$(),1) name$(N%) = "@usr$" : type&(N%) = 0 : SWAP type&(N%),type&(3):SWAP name$(N%),name$(3):N% += 1
-      name$(N%) = ".." : type&(N%) = 0 : SWAP type&(N%),type&(1):SWAP name$(N%),name$(1): N% += 1
-
-      REM name$(N%) = "TEST_FILE" : type&(N%) = 2
-
+      REM adjust list size
       N% -= 1
 
 
@@ -6288,6 +6891,8 @@
       DATA 1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1
       DATA 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
 
+      REM font names
+      DATA "TEXT","TOON","CENTRAL","CENTRAL2","CHALLENGE",""
 
       REM for future reference
 
