@@ -26,3 +26,4 @@ Current TelePaint features:
 * Configure up to 100 animation frames and 48 sprites
 * Gradient fills
 * Import sprites and BMP files (specific format required)
+* Added Fonts, ensure to download M7_FONTS folder
