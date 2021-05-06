@@ -103,6 +103,7 @@
 
       REM text input coords
       TEXTX%=0
+      FONTX%=0
       OTX%=0
       OTY%=0
 
@@ -297,19 +298,17 @@
       REM  fonts.d% - font pixel data
       REM  fonts.a% - font active i.e. loaded from font file
       REM  fonts.w% - font width
-      fontcur%=2
+      fontcur%=0
       fontmax%=99
       fonthgt%=0
 
-      DIM fontname$(31)
+      DIM fontname$(fontmax%)
       DIM fonts{(fontmax%) d%(399),a%,w%}
 
-      FOR I%=0 TO 31
-        READ fontname$(I%)
-        IF fontname$(I%)="" THEN EXIT FOR
-      NEXT
+      fontname$(0)="TEXT"
+      PROCloadfontnames
 
-      PROCloadfont(fontname$(fontcur%))
+      PROCloadfont(fontname$(1))
 
       REM undo buffer
       undo_max%=99
@@ -406,6 +405,7 @@
           ENDCASE : REM mb%
 
           TEXTX%=TX%
+          FONTX%=PX%
 
         ELSE : REM no mouse move or clicks detected
 
@@ -1663,7 +1663,8 @@
                   ELSE
                     IF fonts{(K%-32)}.a%<>0 THEN
                       REM A$=CHR$(K%)
-                      PROCdrawfont(PX%,PY%,CHR$(K%))
+                      PROCdrawfont(FONTX%,PY%,CHR$(K%))
+                      FONTX%+=fonts{(K%-32)}.w%
                     ENDIF
                   ENDIF
                   PROCframesave(frame%)
@@ -1749,9 +1750,9 @@
 
         WHEN 5
           of%=fontcur%
-          IF TX%=11 AND fontcur%>0 THEN fontcur%-=1
+          IF TX%=6 AND fontcur%>0 THEN fontcur%-=1
 
-          IF TX%=14 AND fontcur%<31 THEN
+          IF TX%=8 AND fontcur%<fontmax% THEN
             fontcur%+=1
             IF fontname$(fontcur%)="" THEN fontcur%-=1
 
@@ -3403,7 +3404,7 @@
       LOCAL startx%,starty%,gridsx%,gridsy%,line_wid%,box%,px%,py%
       LOCAL fw%,fh%,cx%,cy%,nw%,asc%,bmpx%,bmpy%
       LOCAL ofw%,ofh%,ocx%,ocy%,oasc%,ofs%,col%
-      LOCAL name$,a$
+      LOCAL name$,a$,asc$
       REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
 
       menuext%=5
@@ -3831,6 +3832,53 @@
 
               ENDIF
 
+            ENDIF
+
+            REM read numberpad to update ascii code
+            K%=INKEY(0)
+            REM handle specific keypresses
+            IF K%>47 AND K%<58 THEN
+              COLOUR 12
+              IF asc$="" THEN
+                IF K%<>50 AND K%<>48 THEN
+                  asc$=CHR$(K%)
+                  PRINTTAB(15,3)asc$;"  "
+                ENDIF
+              ELSE
+                IF LEN(asc$)=1 THEN
+                  CASE asc$ OF
+                    WHEN "1" : REM >100
+                      IF K%<51 THEN
+                        asc$+=CHR$(K%)
+                        PRINTTAB(15,3)asc$;"  "
+                      ENDIF
+
+                    WHEN "3" : REM 30 something
+                      IF K%>49 THEN
+                        asc$+=CHR$(K%)
+                        asc%=VAL(asc$)
+                        PRINTTAB(15,3)asc$;"  "
+                        asc$=""
+                      ENDIF
+
+                    OTHERWISE : REM 32-99
+                      asc$+=CHR$(K%)
+                      asc%=VAL(asc$)
+                      PRINTTAB(15,3)asc$;"  "
+                      asc$=""
+                  ENDCASE
+                ELSE
+                  IF LEFT$(asc$,1)="1" THEN
+                    IF K%<55 THEN
+                      asc$+=CHR$(K%)
+                      asc%=VAL(asc$)
+                      PRINTTAB(15,3)asc$;"  "
+
+                      asc$=""
+                    ENDIF
+                  ENDIF
+                ENDIF
+              ENDIF
             ENDIF
 
             REM update any changes
@@ -4577,6 +4625,38 @@
       ENDPROC
 
       REM ##########################################################
+      REM load font names
+      DEF PROCloadfontnames
+      LOCAL N%,I%,C%
+      LOCAL n$,t&
+
+      DIM n$(10000)
+      DIM t&(10000)
+
+      ON ERROR LOCAL IF FALSE THEN
+        OSCLI "CD ""M7_FONTS"""
+
+        N% = FN_dirscan2(n$(), t&(), "dir *.*", ".m7f",1)
+
+        IF N%>2 THEN
+          C%=1
+          FOR I%=3 TO N%
+            IF t&(I%)=2 THEN
+              fontname$(C%)=LEFT$(n$(I%),LEN(n$(I%))-4)
+              C%+=1
+            ENDIF
+          NEXT
+        ENDIF
+        OSCLI "CD """+@dir$+""""
+
+      ELSE
+        OSCLI "CD """+@dir$+""""
+
+      ENDIF : RESTORE ERROR
+
+      ENDPROC
+
+      REM ##########################################################
       REM loadfile - modified dirscan to include type array so files list can be displayed for mode 7
       REM loadtype determines the type of load / import function
       DEF PROCloadfile(loadtype%)
@@ -4598,14 +4678,16 @@
       REM top of load window
       M%=3
 
-      VDU 23,1,0;0;0;0;  : REM disable cursor
-
-      PROCWAITMOUSE(0)
       menuext%=99
       maxy%=M%+15
       CASE loadtype% OF
         WHEN 0 : maxy%=M%+19
+
       ENDCASE
+
+      VDU 23,1,0;0;0;0;  : REM disable cursor
+
+      PROCWAITMOUSE(0)
 
       FOR L%=M% TO maxy%
         PROCprint40(L%,"")
@@ -6412,7 +6494,7 @@
         PROCprint40(2,tg$+"( )"+tw$+"SHAPE OUTL"+tg$+"( )"+tw$+"ANIM"+tb$+"(LINE AND RECT)")
         PROCprint40(3,tg$+"( )"+tw$+"SHAPE FILL   "+tc$+"GAP:"+tw$+"-"+ty$+" "+tw$+"+"+tc$+"LEN:"+tw$+"-"+ty$+" "+tw$+"+")
         PROCprint40(4,tg$+"( )"+tw$+"SHAPE EMPT")
-        PROCprint40(5,tg$+"( )"+tw$+"FONT: -  +"+ty$)
+        PROCprint40(5,"FONT: < >"+ty$)
 
         IF fontcur%>0 THEN
           VDU 31,0,6,151
@@ -6456,7 +6538,7 @@
       PRINTTAB(17,2)D$;
       PRINTTAB(26,3)A$;
       PRINTTAB(37,3)F$;
-      PRINTTAB(16,5)LEFT$(fontname$(fontcur%)+"         ",10);
+      PRINTTAB(10,5)LEFT$(fontname$(fontcur%)+"         ",10);
 
       IF caps% THEN
         PROCprint40(12,"  A B C D E F G H I J K L M N O P Q R")
