@@ -321,6 +321,16 @@
       DIM redo_index%(frame_max%-1)
       DIM redo_count&(frame_max%-1)
 
+      REM sprite undo buffer
+      DIM spr_undo_buffer&(sprite_max%-1,undo_max%,319)
+      DIM spr_undo_index%(sprite_max%-1)
+      DIM spr_undo_count&(sprite_max%-1)
+
+      REM sprite redo buffer
+      DIM spr_redo_buffer&(sprite_max%-1,undo_max%,319)
+      DIM spr_redo_index%(sprite_max%-1)
+      DIM spr_redo_count&(sprite_max%-1)
+
       REM menu buffer
       DIM menu_buffer&(959)
 
@@ -419,7 +429,7 @@
         IF DEBUG% THEN
           PRINTTAB(0,1)SPC(40)
           REM        PRINTTAB(0,1)"MX:";STR$(MX%);" MY:";STR$(MY%);" TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%)
-          PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%);" ME:";STR$(menuext%);
+          PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%);" ME:";STR$(menuext%);" SC:";STR$(sprite_cur%);
 
         ENDIF
 
@@ -1576,8 +1586,19 @@
 
         WHEN 21 : erase%=(erase%+1) AND 1 : REM toggle erase tool
 
-        WHEN 23 : PROCmenucheck : PROCundorestore : REM undo PROCmenurestore:
-        WHEN 25 : PROCmenucheck : PROCredorestore : REM redo PROCmenurestore:
+        WHEN 23 : REM undo PROCmenurestore
+          IF menuext%=0 OR menuext%=2 THEN
+            PROCundorestore
+          ELSE
+            PROCmenucheck
+          ENDIF
+
+        WHEN 25 : REM redo PROCmenurestore
+          IF menuext%=0 OR menuext%=2 THEN
+            PROCredorestore
+          ELSE
+            PROCmenucheck
+          ENDIF
 
         WHEN 27 : PROCmenucheck : PROCclearscreen:toolsel%=1:toolcursor%=15 : REM clearscreen PROCmenurestore:
         WHEN 28 : toolsel%=5:toolcursor%=TX% : REM background colour
@@ -1685,6 +1706,7 @@
             IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
             PROCspritemenu(0)
             sprite_old%=sprite_cur%
+            PROCdrawmenu
             PROCWAITNOKEY(-26,0)
           ENDIF
 
@@ -1694,6 +1716,7 @@
             IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
             PROCspritemenu(0)
             sprite_old%=sprite_cur%
+            PROCdrawmenu
             PROCWAITNOKEY(-122,0)
           ENDIF
 
@@ -1870,6 +1893,7 @@
         CASE toolsel% OF
           WHEN 1: REM PAINT TOOL
             IF PX%>19 AND PX%<prx% AND PY%>8 AND PY%<pry% THEN
+              PROCundosave
               PROCpoint(PX%,PY%,1-erase%)
               REPEAT
                 PROCREADMOUSE
@@ -1885,6 +1909,7 @@
 
             ENDIF
           WHEN 2 : REM DITHER
+            PROCundosave
             CASE dither% OF
               WHEN 0,1,2,3
                 D%=2^(dither%)
@@ -1929,6 +1954,8 @@
           WHEN 4 : REM special tools
             CASE shapesel% OF
               WHEN 0: REM line tool
+                PROCundosave
+
                 startx%=PX%: starty%=PY%
                 OLD_PX%=PX% : OLD_PY%=PY%
                 PROCpoint(startx%,starty%,2)
@@ -1952,6 +1979,8 @@
                 PROCsavesprite(sprite_cur%)
 
               WHEN 1: REM rectangle tool
+                PROCundosave
+
                 startx%=PX%: starty%=PY%
                 OLD_PX%=PX% : OLD_PY%=PY%
                 PROCpoint(startx%,starty%,2)
@@ -1975,6 +2004,8 @@
                 PROCsavesprite(sprite_cur%)
 
               WHEN 2: REM circle
+                PROCundosave
+
                 startx%=PX%: starty%=PY%
                 OLD_PX%=PX% : OLD_PY%=PY%
 
@@ -1993,6 +2024,8 @@
                 PROCsavesprite(sprite_cur%)
 
               WHEN 3,4,5,6 : REM special control codes
+                PROCundosave
+
                 IF TX%<trx% AND TX%>9 AND TY%>2 AND TY%<try% THEN VDU 31,TX%,TY%,scode&((shapesel%-3)*2+erase%)
                 REPEAT
                   PROCREADMOUSE
@@ -2006,17 +2039,22 @@
 
               WHEN 7: REM text print tool
                 PROCWAITMOUSE(0)
-                FOR textx%=0 TO LENtext$-1
-                  IF TX%+textx%<trx% AND TX%+textx%>9 AND TY%>2 AND TY%<try% THEN
-                    PRINTTAB(TX%+textx%,TY%)MID$(text$,textx%+1,1);
-                  ENDIF
-                NEXT
-                PROCsavesprite(sprite_cur%)
+                IF LENtext$>0 THEN
+                  PROCundosave
 
+                  FOR textx%=0 TO LENtext$-1
+                    IF TX%+textx%<trx% AND TX%+textx%>9 AND TY%>2 AND TY%<try% THEN
+                      PRINTTAB(TX%+textx%,TY%)MID$(text$,textx%+1,1);
+                    ENDIF
+                  NEXT
+                  PROCsavesprite(sprite_cur%)
+                ENDIF
             ENDCASE
 
           WHEN 5 : REM background colour
             IF TX%>9 AND TX%<trx% AND TY%>2 AND TY%<try% THEN
+              PROCundosave
+
               IF colmode%=1 THEN
                 PROCWAITMOUSE(4)
                 PROCWAITMOUSE(0)
@@ -2054,6 +2092,8 @@
             ENDIF
           WHEN 6: REM foreground colour
             IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<try% THEN
+              PROCundosave
+
               IF colmode%=1 THEN
                 PROCWAITMOUSE(4)
                 PROCWAITMOUSE(0)
@@ -2092,6 +2132,8 @@
 
 
               WHEN 33,34,35 : REM cls
+                PROCundosave
+
                 FOR S%=0 TO 319
                   sprite_buffer&(sprite_cur%,S%)=32
                 NEXT
@@ -2118,6 +2160,7 @@
                 PROCsavespritefile(cursave$+"SPRITEDATA",1,0)
 
               WHEN 33,34,35,36,37 : REM scroll left
+                PROCundosave
 
                 IF spr_scroll%=1 THEN
                   REM char mode
@@ -2167,6 +2210,8 @@
 
 
               WHEN 33,34,35,36,37 : REM SCROLL RIGHT
+                PROCundosave
+
                 IF spr_scroll%=1 THEN
                   REM CHAR MODE
                   FOR S%=0 TO 15
@@ -2212,6 +2257,8 @@
                 IF menuext%=77 THEN PROCmenurestore
 
               WHEN 33,34,35,36,37 : REM SCROLL UP
+                PROCundosave
+
                 IF spr_scroll%=1 THEN
                   REM CHAR MODE
 
@@ -2258,6 +2305,8 @@
                 NEXT
 
               WHEN 33,34,35,36,37 : REM scroll down
+                PROCundosave
+
                 IF spr_scroll%=1 THEN
                   FOR S%=0 TO 19
                     spr_tmp&(S%)=sprite_buffer&(sprite_cur%,300+S%)
@@ -2303,6 +2352,8 @@
                 NEXT
 
               WHEN 33,34,35,36,37 : REM flip horizontal
+                PROCundosave
+
                 FOR X%=0 TO 39
                   FOR Y%=0 TO 47
                     spr_tmp&(Y%*40+X%)=FNpoint((39-X%)+20,Y%+9)
@@ -2312,7 +2363,6 @@
                   PROCpoint(S% MOD 40+20,S% DIV 40+9,spr_tmp&(S%))
                 NEXT
                 PROCsavesprite(sprite_cur%)
-
 
             ENDCASE
 
@@ -2329,6 +2379,8 @@
                 PROCmenurestore
 
               WHEN 33,34,35,36,37 : REM flip vertical
+                PROCundosave
+
                 FOR X%=0 TO 39
                   FOR Y%=0 TO 47
                     spr_tmp&(Y%*40+X%)=FNpoint(X%+20,(47-Y%)+9)
@@ -2344,6 +2396,8 @@
           WHEN 16
             CASE TX% OF
               WHEN 1,2,3,4,5 : REM paste clip board to sprite
+                PROCundosave
+
                 FOR S%=0 TO 319
                   sprite_buffer&(sprite_cur%,(S% MOD 16)*20+(S% DIV 16))=copy_buffer&(S%)
                 NEXT
@@ -2364,6 +2418,7 @@
                 IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
 
             ENDCASE
+            PROCdrawmenu
 
           WHEN 18
             CASE TX% OF
@@ -2400,6 +2455,7 @@
         REM PROCsavesprite(sprite_old%)
         PROCspritemenu(0)
         sprite_old%=sprite_cur%
+        PROCdrawmenu
       ENDIF
 
       ENDPROC
@@ -3362,6 +3418,7 @@
       REM ##########################################################
       REM draw font
       DEF PROCdrawfont(x%,y%,text$)
+      LOCAL c%
       IF text$<>"" THEN
         LOCAL F%,I%,X%,Y%
         FOR F%=0 TO LEN(text$)-1
@@ -3369,7 +3426,9 @@
           IF fonts{(I%)}.a%<>0 THEN
             FOR Y%=0 TO fonthgt%-1
               FOR X%=0 TO fonts{(I%)}.w%-1
-                PROCpoint(X%+x%,y%+fonthgt%-Y%,fonts{(I%)}.d%(X%+Y%*fonts{(I%)}.w%))
+                c%=fonts{(I%)}.d%(X%+Y%*fonts{(I%)}.w%)()
+                IF spr_trns%=0 THEN c%=(c%+1) AND 1
+                PROCpoint(X%+x%,y%+fonthgt%-Y%,c%)
               NEXT
             NEXT
             x%+=fonts{(I%)}.w%
@@ -4342,21 +4401,35 @@
       ENDPROC
 
       REM ##########################################################
-      REM save current screen to undo buffer
+      REM save current screen / sprite to undo buffer
       DEF PROCundosave
       LOCAL U%
+      CASE menuext% OF
+        WHEN 0 : REM main canvas
+          IF undo_count&(frame%-1)<undo_max% THEN undo_count&(frame%-1)+=1
 
-      IF undo_count&(frame%-1)<undo_max% THEN undo_count&(frame%-1)+=1
+          FOR U%=0 TO 959
+            undo_buffer&(frame%-1,undo_index%(frame%-1),U%)=GET(U% MOD 40,U% DIV 40+1)
+          NEXT
 
-      FOR U%=0 TO 959
-        undo_buffer&(frame%-1,undo_index%(frame%-1),U%)=GET(U% MOD 40,U% DIV 40+1)
-      NEXT
+          undo_index%(frame%-1)+=1
+          IF undo_index%(frame%-1)>undo_max% THEN undo_index%(frame%-1)=0
 
-      undo_index%(frame%-1)+=1
-      IF undo_index%(frame%-1)>undo_max% THEN undo_index%(frame%-1)=0
+          redo_count&(frame%-1)=0
 
-      redo_count&(frame%-1)=0
+        WHEN 2 : REM sprites screen
+          IF spr_undo_count&(sprite_cur%)<undo_max% THEN spr_undo_count&(sprite_cur%)+=1
 
+          FOR U%=0 TO 319
+            spr_undo_buffer&(sprite_cur%,spr_undo_index%(sprite_cur%),U%)=GET(U% MOD 20+10,U% DIV 20+3)
+          NEXT
+
+          spr_undo_index%(sprite_cur%)+=1
+          IF spr_undo_index%(sprite_cur%)>undo_max% THEN spr_undo_index%(sprite_cur%)=0
+
+          spr_redo_count&(sprite_cur%)=0
+
+      ENDCASE
       PROCdrawmenu
 
       ENDPROC
@@ -4405,38 +4478,68 @@
 
 
       REM ##########################################################
-      REM restore current undo buffer to screen
+      REM restore current undo buffer to screen / sprite
       DEF PROCundorestore
       LOCAL U%
+      CASE menuext% OF
+        WHEN 0 : REM main canvas
+          IF undo_count&(frame%-1)>0 THEN
+            undo_count&(frame%-1)-=1
 
-      IF undo_count&(frame%-1)>0 THEN
-        undo_count&(frame%-1)-=1
+            undo_index%(frame%-1)-=1
+            IF undo_index%(frame%-1)<0 THEN undo_index%(frame%-1)=undo_max%
 
-        undo_index%(frame%-1)-=1
-        IF undo_index%(frame%-1)<0 THEN undo_index%(frame%-1)=undo_max%
+            PROCredosave
+            FOR U%=0 TO 959
+              VDU 31,(U% MOD 40),(U% DIV 40+1),undo_buffer&(frame%-1,undo_index%(frame%-1),U%)
+            NEXT
+            PROCframesave(frame%)
+          ENDIF
+        WHEN 2 : REM sprite screen
+          IF spr_undo_count&(sprite_cur%)>0 THEN
+            spr_undo_count&(sprite_cur%)-=1
 
-        PROCredosave
-        FOR U%=0 TO 959
-          VDU 31,(U% MOD 40),(U% DIV 40+1),undo_buffer&(frame%-1,undo_index%(frame%-1),U%)
-        NEXT
-        PROCframesave(frame%)
-      ENDIF
+            spr_undo_index%(sprite_cur%)-=1
+            IF spr_undo_index%(sprite_cur%)<0 THEN spr_undo_index%(sprite_cur%)=undo_max%
+
+            PROCredosave
+            FOR U%=0 TO 319
+              VDU 31,U% MOD 20+10,U% DIV 20+3,spr_undo_buffer&(sprite_cur%,spr_undo_index%(sprite_cur%),U%)
+            NEXT
+            PROCsavesprite(sprite_cur%)
+          ENDIF
+
+      ENDCASE
 
       ENDPROC
 
       REM ##########################################################
-      REM save redo screen
+      REM save redo screen / sprite
       DEF PROCredosave
       LOCAL U%
 
-      IF redo_count&(frame%-1)<undo_max% THEN redo_count&(frame%-1)+=1
+      CASE menuext% OF
+        WHEN 0 : REM main canvas
+          IF redo_count&(frame%-1)<undo_max% THEN redo_count&(frame%-1)+=1
 
-      FOR U%=0 TO 959
-        redo_buffer&(frame%-1,redo_index%(frame%-1),U%)=GET(U% MOD 40,U% DIV 40+1)
-      NEXT
+          FOR U%=0 TO 959
+            redo_buffer&(frame%-1,redo_index%(frame%-1),U%)=GET(U% MOD 40,U% DIV 40+1)
+          NEXT
 
-      redo_index%(frame%-1)+=1
-      IF redo_index%(frame%-1)>undo_max% THEN redo_index%(frame%-1)=0
+          redo_index%(frame%-1)+=1
+          IF redo_index%(frame%-1)>undo_max% THEN redo_index%(frame%-1)=0
+
+        WHEN 2 : REM sprite screen
+          IF spr_redo_count&(sprite_cur%)<undo_max% THEN spr_redo_count&(sprite_cur%)+=1
+
+          FOR U%=0 TO 319
+            spr_redo_buffer&(sprite_cur%,spr_redo_index%(sprite_cur%),U%)=GET(U% MOD 20+10,U% DIV 20+3)
+          NEXT
+
+          spr_redo_index%(sprite_cur%)+=1
+          IF spr_redo_index%(sprite_cur%)>undo_max% THEN spr_redo_index%(sprite_cur%)=0
+
+      ENDCASE
 
       ENDPROC
 
@@ -4445,22 +4548,43 @@
       DEF PROCredorestore
       LOCAL U%
 
-      IF redo_count&(frame%-1)>0 THEN
-        redo_count&(frame%-1)-=1
+      CASE menuext% OF
+        WHEN 0 : REM main canvas
+          IF redo_count&(frame%-1)>0 THEN
+            redo_count&(frame%-1)-=1
 
-        redo_index%(frame%-1)-=1
-        IF redo_index%(frame%-1)<0 THEN redo_index%(frame%-1)=undo_max%
+            redo_index%(frame%-1)-=1
+            IF redo_index%(frame%-1)<0 THEN redo_index%(frame%-1)=undo_max%
 
-        FOR U%=0 TO 959
-          VDU 31,(U% MOD 40),(U% DIV 40+1),redo_buffer&(frame%-1,redo_index%(frame%-1),U%)
-        NEXT
-        PROCframesave(frame%)
+            FOR U%=0 TO 959
+              VDU 31,(U% MOD 40),(U% DIV 40+1),redo_buffer&(frame%-1,redo_index%(frame%-1),U%)
+            NEXT
+            PROCframesave(frame%)
 
-        undo_index%(frame%-1)+=1
-        IF undo_index%(frame%-1)>undo_max% THEN undo_index%(frame%-1)=0
-        IF undo_count&(frame%-1)<undo_max% THEN undo_count&(frame%-1)+=1
+            undo_index%(frame%-1)+=1
+            IF undo_index%(frame%-1)>undo_max% THEN undo_index%(frame%-1)=0
+            IF undo_count&(frame%-1)<undo_max% THEN undo_count&(frame%-1)+=1
 
-      ENDIF
+          ENDIF
+        WHEN 2 : REM sprite screen
+          IF spr_redo_count&(sprite_cur%)>0 THEN
+            spr_redo_count&(sprite_cur%)-=1
+
+            spr_redo_index%(sprite_cur%)-=1
+            IF spr_redo_index%(sprite_cur%)<0 THEN spr_redo_index%(sprite_cur%)=undo_max%
+
+            FOR U%=0 TO 319
+              VDU 31,U% MOD 20+10,U% DIV 20+3,spr_redo_buffer&(sprite_cur%,spr_redo_index%(sprite_cur%),U%)
+            NEXT
+            PROCsavesprite(sprite_cur%)
+
+            spr_undo_index%(sprite_cur%)+=1
+            IF spr_undo_index%(sprite_cur%)>undo_max% THEN spr_undo_index%(sprite_cur%)=0
+            IF spr_undo_count&(sprite_cur%)<undo_max% THEN spr_undo_count&(sprite_cur%)+=1
+
+          ENDIF
+
+      ENDCASE
 
       ENDPROC
 
@@ -6689,7 +6813,7 @@
       REM ##########################################################
       REM show palette and menus
       DEF PROCdrawmenu
-      LOCAL A$,D$,E$,F$,R$,U$,P$,c%
+      LOCAL A$,D$,E$,F$,R$,U$,P$,c%,r%,u%
 
       REM create palette with current colour as G(70) or T(84)
       c%=184-textfore%*13
@@ -6697,12 +6821,26 @@
         PRINTTAB(count%*2-2,0) CHR$(128+count%);CHR$(255+(count%=curcol%)*c%);
       NEXT count%
 
+      CASE menuext% OF
+        WHEN 0 : REM main canvas
+          r%=130+(redo_count&(frame%-1)=0)
+          u%=130+(undo_count&(frame%-1)=0)
+
+        WHEN 2 : REM sprite screen
+          r%=130+(spr_redo_count&(sprite_cur%)=0)
+          u%=130+(spr_undo_count&(sprite_cur%)=0)
+
+        OTHERWISE
+          r%=128
+          u%=129
+      ENDCASE
+
       REM format main menu
       A$=CHR$(135-animation%*5)
       D$=STR$(dither%+1)
       E$=CHR$(135-erase%*5)
-      R$=CHR$(130+(redo_count&(frame%-1)=0))
-      U$=CHR$(130+(undo_count&(frame%-1)=0))
+      R$=CHR$(r%)
+      U$=CHR$(u%)
       F$=RIGHT$("0"+STR$(frame%),2)
       P$=CHR$(67+copypaste%*13)
       PRINTTAB(14,0)tw$;"P";D$;P$;"FS";E$;"E";U$;"U";R$;"R";tw$;"CBF LS";A$;"A";tw$;F$;">P"
