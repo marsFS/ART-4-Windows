@@ -1395,7 +1395,10 @@
               PROCWAITMOUSE(0)
               IF fontcur%=0 THEN
                 A$=LEFT$(text$,40-TX%)
-                PRINTTAB(TX%,TY%)A$;
+                FOR X%=0 TO LEN(A$)-1
+                  VDU 31,TX%+X%,TY%,ASC(MID$(A$,X%+1,1))+128
+                NEXT
+                REM                PRINTTAB(TX%,TY%)A$;
               ELSE
                 PROCdrawfont(PX%,PY%,text$)
               ENDIF
@@ -1658,7 +1661,7 @@
                 IF K%>31 AND K%<127  AND TY%>0 THEN
                   PROCundosave
                   IF fontcur%=0 THEN
-                    VDU 31,TEXTX%,TY%,K%
+                    VDU 31,TEXTX%,TY%,K%+128
                     IF TEXTX%<39 THEN TEXTX%+=1
                   ELSE
                     IF fonts{(K%-32)}.a%<>0 THEN
@@ -3718,7 +3721,15 @@
                     PRINT#f%,STR$(fh%)
                     h%=1
                   ENDIF
-                  PRINT#f%,STR$(asc%)
+                  CASE asc% OF
+                    WHEN 35 : X%=96
+                    WHEN 95 : X%=35
+                    WHEN 96 : X%=95
+
+                    OTHERWISE
+                      X%=asc%
+                  ENDCASE
+                  PRINT#f%,STR$(X%)
                   PRINT#f%,STR$(fw%)
                   a$=""
                   FOR Y%=bmpy% TO bmpy%+fh%*cy%-cy% STEP cy%
@@ -5109,6 +5120,7 @@
           PROCloadspritefile(curdir$+n$(SEL%))
 
         WHEN 4 : REM font import
+
           PROCchangemode(6,1)
 
           IF F%=-1 THEN
@@ -5876,25 +5888,27 @@
         IF i$="TELEPAINT_FONT" THEN
           INPUT#f%,i$
           fonthgt%=VAL(i$)
-          REPEAT
-            INPUT#f%,i$
-            a%=VAL(i$)-32
-            fonts{(a%)}.a%=1
-            INPUT#f%,i$
-            fonts{(a%)}.w%=VAL(i$)
+          IF fonthgt%>0 THEN
+            REPEAT
+              INPUT#f%,i$
+              a%=VAL(i$)-32
+              fonts{(a%)}.a%=1
+              INPUT#f%,i$
+              fonts{(a%)}.w%=VAL(i$)
 
-            INPUT#f%,i$
-            FOR I%=1 TO fonts{(a%)}.w%*fonthgt%
-              fonts{(a%)}.d%(I%-1)=VAL(MID$(i$,I%,1))
-            NEXT
-          UNTIL EOF#f%
+              INPUT#f%,i$
+              FOR I%=1 TO fonts{(a%)}.w%*fonthgt%
+                fonts{(a%)}.d%(I%-1)=VAL(MID$(i$,I%,1))
+              NEXT
+            UNTIL EOF#f%
+          ENDIF
         ENDIF
         CLOSE#f%
 
         REM add default space char if not exists in font file
         IF fonts{(0)}.a%=0 THEN
           fonts{(0)}.a%=1
-          fonts{(0)}.w%=4
+          fonts{(0)}.w%=2
         ENDIF
       ENDIF
       ENDPROC
@@ -6483,7 +6497,7 @@
       REM ##########################################################
       REM shape and special sub menu
       DEF PROCoptionsmenu(R%)
-      LOCAL F%,X%,Y%,P%
+      LOCAL F%,X%,Y%,P%,I%,C%
       REM REDRAW EVERYTHING
       IF R%=1 THEN
 
@@ -6507,10 +6521,26 @@
 
         D$=CHR$(129+showcodes%)
 
-        REM PRINTTAB(35,1)tm$;"HELP"
         PROCprint40(11,tg$+"( )"+tw$+"TEXT")
-        PROCprint40(16,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
-        PROCprint40(18,"  [ ] ; { } \ | : ' "" < > / ?"+tc$+"SPC CAP" )
+
+        REM print non letters / numbers
+        C%=33
+        X%=2
+        Y%=16
+        FOR I%=0 TO 31
+          VDU 31,X%,Y%,C%
+          X%+=2
+          IF X%=38 THEN
+            X%=2
+            Y%+=2
+          ENDIF
+          C%+=1
+          IF C%=48 THEN C%=58
+          IF C%=65 THEN C%=91
+          IF C%=97 THEN C%=123
+        NEXT
+        REM        PROCprint40(16,"  , . ` ~ ! @ # $ % ^ & * ( ) - _ = +")
+        PRINTTAB(18,30)tc$;"SPC CAP"
 
         PRINTTAB(1,22)tb$;CHR$(157);ty$;"IMPORT  ";CHR$(156);"   ";tm$;CHR$(157);ty$;"HELP  ";CHR$(156);"  ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
 
