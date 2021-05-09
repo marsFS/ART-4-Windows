@@ -1555,7 +1555,7 @@
           toolsel%=2
 
         WHEN 17 : REM copy
-          IF menuext%<>4 THEN
+          IF menuext%<>6 THEN
             IF menuext%=0 THEN PROCframesave(frame%)
             menufrom%=menuext%
             menuext%=6
@@ -2500,23 +2500,13 @@
 
           WHEN 2 : REM copy paste
             CASE C% OF
-              WHEN 0 : REM copy
-                toolsel%=7
-                toolcursor%=17
+              WHEN 0,1,2,3,4,5 : REM copy menu tools
                 done%=1
-                copypaste%=0
-
-              WHEN 1 : REM paste
-                toolsel%=7
-                toolcursor%=17
-                done%=1
-                copypaste%=1
-
-              WHEN 2 : REM paste repeat
-                toolsel%=7
-                toolcursor%=17
-                done%=1
-                copypaste%=2
+                IF C%<2 THEN
+                  copypaste%=C%
+                  toolsel%=7
+                  toolcursor%=17
+                ENDIF
 
               WHEN 11,12 : REM opts / help
                 done%=1
@@ -2629,7 +2619,7 @@
                 PROCmenurestore
                 PROCdrawmenu
 
-              WHEN 2 : REM paste all frame
+              WHEN 2 : REM paste all frames
                 PROCmenurestore
                 PROCdrawmenu
                 PROCundosaveall
@@ -2637,6 +2627,24 @@
                 FOR C%=1 TO frame_max%
                   PROCpasteregion_buf(C%,copylockx%,copylocky%)
                 NEXT
+
+              WHEN 3 : REM dupe colour codes to all frames
+
+              WHEN 4 : REM copy frame to next frame
+                PROCmenurestore
+                PROCdrawmenu
+
+                X%=frame%+1
+                IF X%>frame_max% THEN X%=1
+                PROCcopyframe(frame%,X%,0,0,0)
+
+              WHEN 5 : REM copy frame to previous frame
+                PROCmenurestore
+                PROCdrawmenu
+
+                X%=frame%-1
+                IF X%<1 THEN X%=frame_max%
+                PROCcopyframe(frame%,X%,0,0,0)
 
               WHEN 11 : REM keyboard and options screen
                 menuext%=1
@@ -6586,10 +6594,12 @@
         WHEN 1 : REM dither
 
         WHEN 2 : REM copy paste
-          PROCmenutext(0,"COPY       ",SX%+20,menuadd%,14,(copypaste%=0)*-4)
-          PROCmenutext(1,"PASTE      ",SX%+20,menuadd%,14,(copypaste%=1)*-4)
-          PROCmenutext(2,"PASTE REP   ",SX%+20,menuadd%,14,0)
+          PROCmenutext(0,"COPY        ",SX%+20,menuadd%,14,(copypaste%=0)*-4)
+          PROCmenutext(1,"PASTE       ",SX%+20,menuadd%,14,(copypaste%=1)*-4)
+          PROCmenutext(2,"PASTE ALL   ",SX%+20,menuadd%,14,0)
           PROCmenutext(3,"DUPE COL ALL",SX%+20,menuadd%,14,0)
+          PROCmenutext(4,"DUPE FRM >> ",SX%+20,menuadd%,14,0)
+          PROCmenutext(5,"DUPE FRM << ",SX%+20,menuadd%,14,0)
 
           GCOL 0,8
           RECTANGLE SX%+20,menuadd%,SW%-40,2
