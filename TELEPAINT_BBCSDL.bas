@@ -107,20 +107,20 @@
       OTX%=0
       OTY%=0
 
-      REM special sub menu S1
-      S1W%=450 : REM menu width
-      S1H%=920 : REM menu height
-      S1X%=580 : REM menu start X
-      S1Y%=960-S1H% : REM menu start Y (offset 1 char down from top of screen)
+      REM sub menu pos data
+      sub_count%=4
+      sub_cur%=-1
+      DIM subm{(sub_count%) x%,y%,w%,h%}
 
-      REM fill sub menu S1
-      S2W%=450 : REM menu width
-      S2H%=920 : REM menu height
-      S2X%=540 : REM menu start X
-      S2Y%=960-S2H% : REM menu start Y (offset 1 char down from top of screen)
+      FOR I%=0 TO sub_count%
+        READ subm{(I%)}.x%
+        READ T%
+        READ subm{(I%)}.w%
+        READ subm{(I%)}.h%
+        subm{(I%)}.y%=T%-subm{(I%)}.h%
+      NEXT
 
       REM drawing region for point command, changes for sprite menu
-
 
       REM tool and animation vars
       curcol%=7
@@ -230,7 +230,6 @@
 
       REM dither pattern data
       DIM pat%(17,15)
-      RESTORE
       FOR I%=0 TO 17
         FOR H%=0 TO 15
           READ pat%(I%,H%)
@@ -401,11 +400,9 @@
                   WHEN 2 : REM sprite editor
                     PROCspritehandler
 
-                  WHEN 3 : REM sub menu 1
-                    PROCsub1handler
+                  WHEN 3,4,6 : REM sub menu
+                    PROCsubhandler
 
-                  WHEN 4 : REM sub menu 2
-                    PROCsub2handler
 
                   OTHERWISE : REM main drawin canvas
                     PROCmaincanvas
@@ -1185,6 +1182,7 @@
       REM ##########################################################
       REM MAIN CANVAS
       DEF PROCmaincanvas
+      LOCAL X%,Y%
       IF menuext%>0 THEN PROCmenurestore
 
       CASE toolsel% OF
@@ -1250,38 +1248,38 @@
 
         WHEN 7: REM copy / paste tool
 
-          IF copypaste%=0 THEN
-            menuext%=98
+          CASE copypaste% OF
+            WHEN 0
+              menuext%=98
 
-            startx%=TX%*2: starty%=TY%*3
-            OLD_PX%=TX%*2 : OLD_PY%=TY%*3
-            PROCpoint(startx%,starty%,2)
+              startx%=TX%*2: starty%=TY%*3
+              OLD_PX%=TX%*2 : OLD_PY%=TY%*3
+              PROCpoint(startx%,starty%,2)
 
-            REPEAT
-              PROCREADMOUSE
-              IF TX%*2+1<>OLD_PX% OR TY%*3+2<>OLD_PY% THEN
-                PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
-                PROCrectangle(startx%,starty%,TX%*2+1,TY%*3+2,2)
-                OLD_PX%=TX%*2+1
-                OLD_PY%=TY%*3+2
-              ENDIF
-            UNTIL MB%=0
-            REM PROCrectangle(startx%,starty%,TX%*2+1,TY%*3+2,2)
+              REPEAT
+                PROCREADMOUSE
+                IF TX%*2+1<>OLD_PX% OR TY%*3+2<>OLD_PY% THEN
+                  PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
+                  PROCrectangle(startx%,starty%,TX%*2+1,TY%*3+2,2)
+                  OLD_PX%=TX%*2+1
+                  OLD_PY%=TY%*3+2
+                ENDIF
+              UNTIL MB%=0
+              REM PROCrectangle(startx%,starty%,TX%*2+1,TY%*3+2,2)
 
-            copypaste%=1
+              copypaste%=1
 
-            PROCmenurestore
-            PROCcopyregion(startx%/2,starty%/3,TX%,TY%)
-            PROCdrawmenu
+              PROCmenurestore
+              PROCcopyregion(startx%/2,starty%/3,TX%,TY%)
+              PROCdrawmenu
 
-          ELSE
-            PROCWAITMOUSE(0)
-            PROCpasteregion(TX%,TY%)
-          ENDIF
+            WHEN 1 : REM paste single frame
+              PROCWAITMOUSE(0)
+              PROCpasteregion(TX%,TY%)
+              PROCframesave(frame%)
+              IF animation% THEN PROCloadnextframe(1,0)
 
-          PROCframesave(frame%)
-          IF animation% THEN PROCloadnextframe(1,0)
-
+          ENDCASE
         WHEN 3: REM FILL TOOL
           PROCundosave
           PROCfloodfill(PX%,PY%)
@@ -1533,6 +1531,7 @@
 
       IF menuext%=3 AND TX%<>19 THEN PROCmenurestore
       IF menuext%=4 AND TX%<>18 THEN PROCmenurestore
+      IF menuext%=6 AND TX%<>17 THEN PROCmenurestore
 
       CASE TX% OF
         WHEN 0 : REM display control codes
@@ -1556,10 +1555,21 @@
           toolsel%=2
 
         WHEN 17 : REM copy
-          IF toolsel%=7 THEN
-            copypaste%=(copypaste%+1) AND 1
+          IF menuext%<>4 THEN
+            IF menuext%=0 THEN PROCframesave(frame%)
+            menufrom%=menuext%
+            menuext%=6
+            sub_cur%=2
+
+            PROCinitsubmenu
           ELSE
-            toolsel%=7:toolcursor%=TX%
+            PROCmenurestore
+          ENDIF
+
+          IF toolsel%=7 THEN
+            REM copypaste%=(copypaste%+1) AND 1
+          ELSE
+            REM toolsel%=7:toolcursor%=TX%
           ENDIF
 
         WHEN 18 : REM fill menu
@@ -1567,8 +1577,9 @@
             IF menuext%=0 THEN PROCframesave(frame%)
             menufrom%=menuext%
             menuext%=4
+            sub_cur%=3
 
-            PROCinits2menu
+            PROCinitsubmenu
           ELSE
             PROCmenurestore
           ENDIF
@@ -1578,8 +1589,9 @@
             IF menuext%=0 THEN PROCframesave(frame%)
             menufrom%=menuext%
             menuext%=3
+            sub_cur%=4
 
-            PROCinits1menu
+            PROCinitsubmenu
           ELSE
             PROCmenurestore
           ENDIF
@@ -1625,9 +1637,11 @@
         WHEN 1 : REM keyboard and options
           IF TX%<>19 THEN PROCmenurestore
 
-        WHEN 3 : REM sub menu 1
+        WHEN 3 : REM sub menu 5
 
-        WHEN 4 : REM sub menu 2
+        WHEN 4 : REM sub menu 4
+
+        WHEN 6 : REM sub menu 2
 
         OTHERWISE
           PROCdrawmenu
@@ -2462,12 +2476,12 @@
 
       REM ##########################################################
       REM shape and special sub menu
-      DEF PROCsub1handler
+      DEF PROCsubhandler
       LOCAL done%,L%,C%
 
       PROCWAITMOUSE(0)
       C%=-1
-      IF MX%>S1X% AND MX%<S1X%+S1W% AND MY%>S1Y% AND MY%<S1Y%+S1H% THEN
+      IF MX%>subm{(sub_cur%)}.x% AND MX%<subm{(sub_cur%)}.x%+subm{(sub_cur%)}.w% AND MY%>subm{(sub_cur%)}.y% AND MY%<subm{(sub_cur%)}.y%+subm{(sub_cur%)}.h% THEN
         FOR L%=0 TO controls%
           IF controlrange{(L%)}.x1%>-1 THEN
             IF MX%>controlrange{(L%)}.x1% AND MX%<controlrange{(L%)}.x2% AND MY%>controlrange{(L%)}.y1% AND MY%<controlrange{(L%)}.y2% THEN
@@ -2479,230 +2493,284 @@
           ENDIF
         NEXT
 
-        CASE C% OF
-          WHEN 0 : REM line
-            shapesel%=0
+        CASE sub_cur% OF
+          WHEN 0 : REM paint
 
-          WHEN 1 : REM box
-            shapesel%=1
+          WHEN 1 : REM dither
 
-          WHEN 2 : REM circle
-            shapesel%=2
+          WHEN 2 : REM copy paste
+            CASE C% OF
+              WHEN 0 : REM copy
+                toolsel%=7
+                toolcursor%=17
+                done%=1
+                copypaste%=0
 
-          WHEN 3 : REM text
-            shapesel%=7
+              WHEN 1 : REM paste
+                toolsel%=7
+                toolcursor%=17
+                done%=1
+                copypaste%=1
 
-          WHEN 4 : REM flash
-            shapesel%=3
+              WHEN 2 : REM paste repeat
+                toolsel%=7
+                toolcursor%=17
+                done%=1
+                copypaste%=2
 
-          WHEN 5 : REM double
-            shapesel%=6
+              WHEN 11,12 : REM opts / help
+                done%=1
+            ENDCASE
 
-          WHEN 6 : REM separated
-            shapesel%=4
+          WHEN 3 : REM fill
+            CASE C% OF
+              WHEN 0 : REM flood fill
+                toolsel%=3
+                toolcursor%=18
+                done%=1
 
-          WHEN 7 : REM hold
-            shapesel%=5
-
-          WHEN 8 : REM show grid
-            gridshow%=(gridshow%+1) AND 1
-
-          WHEN 9 : REM animate lines
-            animateshape%=(animateshape%+1) AND 1
-
-          WHEN 10 : REM column mode
-            REM old shapesel%  8 & 9
-            colmode%=(colmode%+1) AND 1
-
-          WHEN 11 : REM fix x paste pos
-            copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
-
-          WHEN 12 : REM fix y paste pos
-            copylockyt%=(copylockyt%+1) AND 1 :REM lock vertical paste pos
-
-        ENDCASE
-
-        IF C%>=0 AND C%<17 THEN
-          PROCs1update(C%)
-
-          REM tool selected
-          IF C%>=0 AND C%<8 AND shapesel%>-1 THEN
-            toolsel%=4:toolcursor%=19
-            done%=1
-          ENDIF
-
-          REM other menus
-          IF C%>12 THEN
-            done%=1
-          ENDIF
-
-
-        ENDIF
-      ELSE
-        done%=1
-      ENDIF
-      REM IF SP%>sprite_max%-1 THEN SP%=-1
-      REM PRINTTAB(0,1)STR$(C%);" "; STR$(done%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
-      REM PROCWAITMOUSE(4)
-      REM PROCWAITMOUSE(0)
-
-      IF done%=1 THEN
-        PROCWAITMOUSE(0)
-
-        PROCchangemode(7,1)
-
-        CASE C% OF
-          WHEN 13 : REM sprites screen
-            menuext%=2
-            PROCspritemenu(1)
-            PROCdrawmenu
-
-          WHEN 14 : REM edit.tf export
-            frame%-=1
-            PROCloadnextframe(1,0)
-            PROCmenurestore
-            REM PROCdrawgrid
-            PROCexport_edittf
-
-          WHEN 15 : REM keyboard and options screen
-            menuext%=1
-            PROCoptionsmenu(1)
-            PROCdrawmenu
-
-          WHEN 16 : REM help screen
-            PROCdrawmenu
-            PROCshowhelp
-            PROCmenurestore
-
-          OTHERWISE
-            CASE menufrom% OF
-              WHEN 1
-                menuext%=1
-                PROCoptionsmenu(1)
-                PROCdrawmenu
-
-              WHEN 2
-                menuext%=2
-                PROCspritemenu(1)
-                PROCdrawmenu
+              WHEN 9,10 : REM gradient type
+                PROCsubupdate(C%)
+              WHEN 11,12 : REM opts / help
+                done%=1
 
               OTHERWISE
-                PROCmenurestore
-                PROCdrawmenu
-                REM PROCdrawgrid
+                toolsel%=1
+                toolcursor%=15
+                done%=1
 
             ENDCASE
-        ENDCASE
-      ENDIF
 
-      ENDPROC
-
-      REM ##########################################################
-      REM fill sub menu
-      DEF PROCsub2handler
-      LOCAL done%,L%,C%
-
-      PROCWAITMOUSE(0)
-      C%=-1
-
-      IF MX%>S2X% AND MX%<S2X%+S2W% AND MY%>S2Y% AND MY%<S2Y%+S2H% THEN
-
-        FOR L%=0 TO controls%
-          IF controlrange{(L%)}.x1%>-1 THEN
-            IF MX%>controlrange{(L%)}.x1% AND MX%<controlrange{(L%)}.x2% AND MY%>controlrange{(L%)}.y1% AND MY%<controlrange{(L%)}.y2% THEN
-              C%=L%
-              EXIT FOR
-            ENDIF
-          ELSE
-            EXIT FOR
-          ENDIF
-        NEXT
-
-        CASE C% OF
-          WHEN 0 : REM flood fill
-            toolsel%=3
-            toolcursor%=18
-            done%=1
-
-          WHEN 9,10 : REM gradient type
-            PROCs2update(C%)
-          WHEN 11,12 : REM opts / help
-            done%=1
-
-          OTHERWISE
-            toolsel%=1
-            toolcursor%=15
-            done%=1
-
-        ENDCASE
-      ELSE
-        done%=1
-      ENDIF
-      REM IF SP%>sprite_max%-1 THEN SP%=-1
-      REM PRINTTAB(0,1)STR$(C%);" "; STR$(done%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
-      REM PROCWAITMOUSE(4)
-      REM PROCWAITMOUSE(0)
-
-      IF done%=1 THEN
-        PROCWAITMOUSE(0)
-
-        PROCchangemode(7,1)
-
-        CASE C% OF
-          WHEN 1,2,3,4,5,6,7,8
-            PROCmenurestore
-            PROCdrawmenu
-            PROCundosave
+          WHEN 4 : REM special
 
             CASE C% OF
-              WHEN 1 : REM gradient left to right
-                PROCrectangle_g(2,3,79,74,0)
-              WHEN 2 : REM gradient right to left
-                PROCrectangle_g(79,3,2,74,0)
-              WHEN 3 : REM gradient top to bottom
-                PROCrectangle_g(2,3,79,74,1)
-              WHEN 4 : REM gradient bottom to top
-                PROCrectangle_g(2,74,79,3,1)
-              WHEN 5 : REM gradient top left to bottom right
-                PROCdiagonal_g(0,0,0,18)
-              WHEN 6 : REM gradient top right to bottom left
-                PROCdiagonal_g(1,0,0,18)
-              WHEN 7 : REM gradient bottom right to top left
-                PROCdiagonal_g(1,1,0,18)
-              WHEN 8 : REM gradient bottom left to top right
-                PROCdiagonal_g(0,1,0,18)
+              WHEN 0 : REM line
+                shapesel%=0
+
+              WHEN 1 : REM box
+                shapesel%=1
+
+              WHEN 2 : REM circle
+                shapesel%=2
+
+              WHEN 3 : REM text
+                shapesel%=7
+
+              WHEN 4 : REM flash
+                shapesel%=3
+
+              WHEN 5 : REM double
+                shapesel%=6
+
+              WHEN 6 : REM separated
+                shapesel%=4
+
+              WHEN 7 : REM hold
+                shapesel%=5
+
+              WHEN 8 : REM show grid
+                gridshow%=(gridshow%+1) AND 1
+
+              WHEN 9 : REM animate lines
+                animateshape%=(animateshape%+1) AND 1
+
+              WHEN 10 : REM column mode
+                REM old shapesel%  8 & 9
+                colmode%=(colmode%+1) AND 1
+
+              WHEN 11 : REM fix x paste pos
+                copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
+
+              WHEN 12 : REM fix y paste pos
+                copylockyt%=(copylockyt%+1) AND 1 :REM lock vertical paste pos
 
             ENDCASE
-            PROCframesave(frame%)
 
-          WHEN 9 : REM keyboard and options screen
-            menuext%=1
-            PROCoptionsmenu(1)
-            PROCdrawmenu
+            IF C%>=0 AND C%<17 THEN
+              PROCsubupdate(C%)
 
-          WHEN 10 : REM help screen
-            PROCdrawmenu
-            PROCshowhelp
-            PROCmenurestore
+              REM tool selected
+              IF C%>=0 AND C%<8 AND shapesel%>-1 THEN
+                toolsel%=4:toolcursor%=19
+                done%=1
+              ENDIF
 
-          OTHERWISE
-            CASE menufrom% OF
-              WHEN 1
+              REM other menus
+              IF C%>12 THEN
+                done%=1
+              ENDIF
+
+
+            ENDIF
+
+        ENDCASE
+
+      ELSE
+        done%=1
+      ENDIF
+      REM IF SP%>sprite_max%-1 THEN SP%=-1
+      REM PRINTTAB(0,1)STR$(C%);" "; STR$(done%); " ";STR$(shapesel%); : REM ",";STR$(MY%);"    "
+      REM PROCWAITMOUSE(4)
+      REM PROCWAITMOUSE(0)
+
+      IF done%=1 THEN
+        PROCWAITMOUSE(0)
+
+        PROCchangemode(7,1)
+
+        CASE sub_cur% OF
+          WHEN 0 : REM paint
+
+          WHEN 1 : REM dither
+
+          WHEN 2 : REM copy paste
+            CASE C% OF
+              WHEN 0,1
+                PROCmenurestore
+                PROCdrawmenu
+
+              WHEN 2 : REM paste all frame
+                PROCmenurestore
+                PROCdrawmenu
+                PROCundosaveall
+
+                FOR C%=1 TO frame_max%
+                  PROCpasteregion_buf(C%,copylockx%,copylocky%)
+                NEXT
+
+              WHEN 11 : REM keyboard and options screen
                 menuext%=1
                 PROCoptionsmenu(1)
                 PROCdrawmenu
 
-              WHEN 2
+              WHEN 12 : REM help screen
+                PROCdrawmenu
+                PROCshowhelp
+                PROCmenurestore
+
+              OTHERWISE
+                CASE menufrom% OF
+                  WHEN 1
+                    menuext%=1
+                    PROCoptionsmenu(1)
+                    PROCdrawmenu
+
+                  WHEN 2
+                    menuext%=2
+                    PROCspritemenu(1)
+                    PROCdrawmenu
+
+                  OTHERWISE
+                    PROCmenurestore
+                    PROCdrawmenu
+                    REM PROCdrawgrid
+
+                ENDCASE
+            ENDCASE
+
+          WHEN 3 : REM fill
+            CASE C% OF
+              WHEN 1,2,3,4,5,6,7,8
+                PROCmenurestore
+                PROCdrawmenu
+                PROCundosave
+
+                CASE C% OF
+                  WHEN 1 : REM gradient left to right
+                    PROCrectangle_g(2,3,79,74,0)
+                  WHEN 2 : REM gradient right to left
+                    PROCrectangle_g(79,3,2,74,0)
+                  WHEN 3 : REM gradient top to bottom
+                    PROCrectangle_g(2,3,79,74,1)
+                  WHEN 4 : REM gradient bottom to top
+                    PROCrectangle_g(2,74,79,3,1)
+                  WHEN 5 : REM gradient top left to bottom right
+                    PROCdiagonal_g(0,0,0,18)
+                  WHEN 6 : REM gradient top right to bottom left
+                    PROCdiagonal_g(1,0,0,18)
+                  WHEN 7 : REM gradient bottom right to top left
+                    PROCdiagonal_g(1,1,0,18)
+                  WHEN 8 : REM gradient bottom left to top right
+                    PROCdiagonal_g(0,1,0,18)
+
+                ENDCASE
+                PROCframesave(frame%)
+
+              WHEN 11 : REM keyboard and options screen
+                menuext%=1
+                PROCoptionsmenu(1)
+                PROCdrawmenu
+
+              WHEN 12 : REM help screen
+                PROCdrawmenu
+                PROCshowhelp
+                PROCmenurestore
+
+              OTHERWISE
+                CASE menufrom% OF
+                  WHEN 1
+                    menuext%=1
+                    PROCoptionsmenu(1)
+                    PROCdrawmenu
+
+                  WHEN 2
+                    menuext%=2
+                    PROCspritemenu(1)
+                    PROCdrawmenu
+
+                  OTHERWISE
+                    PROCmenurestore
+                    PROCdrawmenu
+                    REM PROCdrawgrid
+
+                ENDCASE
+            ENDCASE
+
+          WHEN 4 : REM special
+
+            CASE C% OF
+              WHEN 13 : REM sprites screen
                 menuext%=2
                 PROCspritemenu(1)
                 PROCdrawmenu
 
-              OTHERWISE
+              WHEN 14 : REM edit.tf export
+                frame%-=1
+                PROCloadnextframe(1,0)
                 PROCmenurestore
-                PROCdrawmenu
                 REM PROCdrawgrid
+                PROCexport_edittf
 
+              WHEN 15 : REM keyboard and options screen
+                menuext%=1
+                PROCoptionsmenu(1)
+                PROCdrawmenu
+
+              WHEN 16 : REM help screen
+                PROCdrawmenu
+                PROCshowhelp
+                PROCmenurestore
+
+              OTHERWISE
+                CASE menufrom% OF
+                  WHEN 1
+                    menuext%=1
+                    PROCoptionsmenu(1)
+                    PROCdrawmenu
+
+                  WHEN 2
+                    menuext%=2
+                    PROCspritemenu(1)
+                    PROCdrawmenu
+
+                  OTHERWISE
+                    PROCmenurestore
+                    PROCdrawmenu
+                    REM PROCdrawgrid
+
+                ENDCASE
             ENDCASE
+
         ENDCASE
       ENDIF
 
@@ -4623,7 +4691,7 @@
       ENDPROC
 
       REM ##########################################################
-      REM paste copypaste buffer yo current frame
+      REM paste copypaste buffer to current frame
       DEF PROCpasteregion(x1%,y1%)
       LOCAL s%,X%,Y%,C%
 
@@ -4649,13 +4717,43 @@
         NEXT
       ENDIF
 
+      REM ##########################################################
+      REM paste copypaste buffer to buffer
+      DEF PROCpasteregion_buf(f%,x1%,y1%)
+      LOCAL s%,X%,Y%,C%
+
+      s%=0
+
+      IF copylockxt% THEN x1%=copylockx%
+      IF copylockyt% THEN y1%=copylocky%
+
+      IF copysize%>0 THEN
+        REM PROCundosave
+        FOR X%=x1% TO x1%+copyx%
+          FOR Y%=y1%-1 TO y1%+copyy%-1
+            IF X%<40 AND X%>-1 AND Y%<25 AND Y%>0 THEN
+              C%=copy_buffer&(s%)
+              IF spr_trns%=0 THEN
+                frame_buffer&(f%-1,X%+Y%*40)=C%
+              ELSE
+                IF C%<>32 AND C%<>160 THEN frame_buffer&(f%-1,X%+Y%*40)=C%
+              ENDIF
+            ENDIF
+            s%+=1
+          NEXT
+        NEXT
+      ENDIF
+
       ENDPROC
 
       REM ##########################################################
       REM menu buffer restore frame
       DEF PROCmenurestore
 
-      IF menuext%=3 OR menuext%=4 THEN PROCchangemode(7,1)
+      IF menuext%=3 OR menuext%=4 OR menuext%=6 THEN
+        PROCchangemode(7,1)
+        sub_cur%=-1
+      ENDIF
       menuext%=0
 
       PROCframerestore(frame%)
@@ -6471,105 +6569,130 @@
 
       REM ##########################################################
       REM shape and special sub menu updater
-      DEF PROCs1update(C%)
-
-      menuadd%=932
-      PROCmenutext(0,"LINE       ",S1X%+20,menuadd%,14,(shapesel%=0)*-4)
-      PROCmenutext(1,"BOX        ",S1X%+20,menuadd%,14,(shapesel%=1)*-4)
-      PROCmenutext(2,"CIRCLE     ",S1X%+20,menuadd%,14,(shapesel%=2)*-4)
-      PROCmenutext(3,"TEXT       ",S1X%+20,menuadd%,14,(shapesel%=7)*-4)
-
-      IF C%=-1 THEN
-        GCOL 0,8
-        RECTANGLE S1X%+20,menuadd%,S1W%-40,2
-      ENDIF
-
-      menuadd%-=24
-      PROCmenutext(4,"FLSH (136) ",S1X%+20,menuadd%,14,(shapesel%=3)*-4)
-      PROCmenutext(5,"DBLH (141) ",S1X%+20,menuadd%,14,(shapesel%=6)*-4)
-      PROCmenutext(6,"SEPR (154) ",S1X%+20,menuadd%,14,(shapesel%=4)*-4)
-      PROCmenutext(7,"HOLD (158) ",S1X%+20,menuadd%,14,(shapesel%=5)*-4)
-
-      IF C%=-1 THEN
-        GCOL 0,8
-        RECTANGLE S1X%+20,menuadd%,S1W%-40,2
-      ENDIF
-
-      menuadd%-=24
-
-      REM update options
-      PROCgtext(CHR$(78+11*gridshow%),S1X%+404,menuadd%,9+gridshow%,0)
-      PROCgtext(CHR$(78+11*animateshape%),S1X%+404,menuadd%-48,9+animateshape%,0)
-      PROCgtext(CHR$(78+11*colmode%),S1X%+404,menuadd%-96,9+colmode%,0)
-      PROCgtext(CHR$(78+11*copylockxt%),S1X%+404,menuadd%-144,9+copylockxt%,0)
-      PROCgtext(CHR$(78+11*copylockyt%),S1X%+404,menuadd%-192,9+copylockyt%,0)
-
-      IF C%=-1 THEN
-        PROCmenutext(8,"SHOW GRID  ",S1X%+20,menuadd%,11,0)
-        PROCmenutext(9,"ANIM8 LINES",S1X%+20,menuadd%,11,0)
-        PROCmenutext(10,"COLUMN MODE",S1X%+20,menuadd%,11,0)
-        PROCmenutext(11,"PASTE FIX X",S1X%+20,menuadd%,11,0)
-        PROCmenutext(12,"PASTE FIX Y",S1X%+20,menuadd%,11,0)
-
-        GCOL 0,8
-        RECTANGLE S1X%+20,menuadd%,S1W%-40,2
-
-        menuadd%-=24
-        PROCmenutext(13,"SPRITES    ",S1X%+20,menuadd%,10,(C%=14)*-4)
-        PROCmenutext(14,"EDIT.TF    ",S1X%+20,menuadd%,10,(C%=15)*-4)
-        PROCmenutext(15,"KYBRD FONTS",S1X%+20,menuadd%,10,(C%=13)*-4)
-        PROCmenutext(16,"HELP       ",S1X%+20,menuadd%,10,(C%=16)*-4)
-      ENDIF
-
-      ENDPROC
-
-      REM ##########################################################
-      REM fill sub menu updater
-      DEF PROCs2update(C%)
+      DEF PROCsubupdate(C%)
+      LOCAL SX%,SY%,SW%,SH%
       LOCAL P%,L%
 
+      SX%=subm{(sub_cur%)}.x%
+      SY%=subm{(sub_cur%)}.y%
+      SW%=subm{(sub_cur%)}.w%
+      SH%=subm{(sub_cur%)}.h%
+
       menuadd%=932
-      PROCmenutext(0,"FILL       ",S2X%+20,menuadd%,14,(toolsel%=3)*-4)
-      PROCmenutext(1,"GRAD LEFT  ",S2X%+20,menuadd%,14,0)
-      PROCmenutext(2,"GRAD RIGHT ",S2X%+20,menuadd%,14,0)
-      PROCmenutext(3,"GRAD TOP   ",S2X%+20,menuadd%,14,0)
-      PROCmenutext(4,"GRAD BOTTOM",S2X%+20,menuadd%,14,0)
-      PROCmenutext(5,"GRAD TOP-L ",S2X%+20,menuadd%,14,0)
-      PROCmenutext(6,"GRAD TOP-R ",S2X%+20,menuadd%,14,0)
-      PROCmenutext(7,"GRAD BOT-R ",S2X%+20,menuadd%,14,0)
-      PROCmenutext(8,"GRAD BOT-L ",S2X%+20,menuadd%,14,0)
 
-      IF C%=-1 THEN
-        GCOL 0,8
-        RECTANGLE S2X%+20,menuadd%,S2W%-40,2
+      CASE sub_cur% OF
+        WHEN 0 : REM paint
 
-        menuadd%-=24
+        WHEN 1 : REM dither
 
-        PROCmenutext(9,"           ",S2X%+20,menuadd%,11,0)
+        WHEN 2 : REM copy paste
+          PROCmenutext(0,"COPY       ",SX%+20,menuadd%,14,(copypaste%=0)*-4)
+          PROCmenutext(1,"PASTE      ",SX%+20,menuadd%,14,(copypaste%=1)*-4)
+          PROCmenutext(2,"PASTE REP   ",SX%+20,menuadd%,14,0)
+          PROCmenutext(3,"DUPE COL ALL",SX%+20,menuadd%,14,0)
 
-        FOR P%=0 TO 35
-          FOR L%=0 TO 12
-            GCOL 0,pat%(P% DIV 2,P% MOD 4+(L% MOD 4)*4)*15
-            RECTANGLE FILL S2X%+20+P%*8,menuadd%-L%*4+60,6,2
-          NEXT
-        NEXT
-        PROCmenutext(10,"           ",S2X%+20,menuadd%,11,0)
+          GCOL 0,8
+          RECTANGLE SX%+20,menuadd%,SW%-40,2
 
-        GCOL 0,8
-        RECTANGLE S2X%+20,menuadd%,S2W%-40,2
+          menuadd%-=24
 
-        menuadd%-=24
+          PROCmenutext(11,"KBRD & OPTS",SX%+20,menuadd%,10,(C%=13)*-4)
+          PROCmenutext(12,"HELP       ",SX%+20,menuadd%,10,(C%=16)*-4)
 
-        PROCmenutext(11,"KBRD & OPTS",S2X%+20,menuadd%,10,(C%=13)*-4)
-        PROCmenutext(12,"HELP       ",S2X%+20,menuadd%,10,(C%=16)*-4)
-      ENDIF
+        WHEN 3 : REM fill
+
+          PROCmenutext(0,"FILL       ",SX%+20,menuadd%,14,(toolsel%=3)*-4)
+          PROCmenutext(1,"GRAD LEFT  ",SX%+20,menuadd%,14,0)
+          PROCmenutext(2,"GRAD RIGHT ",SX%+20,menuadd%,14,0)
+          PROCmenutext(3,"GRAD TOP   ",SX%+20,menuadd%,14,0)
+          PROCmenutext(4,"GRAD BOTTOM",SX%+20,menuadd%,14,0)
+          PROCmenutext(5,"GRAD TOP-L ",SX%+20,menuadd%,14,0)
+          PROCmenutext(6,"GRAD TOP-R ",SX%+20,menuadd%,14,0)
+          PROCmenutext(7,"GRAD BOT-R ",SX%+20,menuadd%,14,0)
+          PROCmenutext(8,"GRAD BOT-L ",SX%+20,menuadd%,14,0)
+
+          IF C%=-1 THEN
+            GCOL 0,8
+            RECTANGLE SX%+20,menuadd%,SW%-40,2
+
+            menuadd%-=24
+
+            PROCmenutext(9,"           ",SX%+20,menuadd%,11,0)
+
+            FOR P%=0 TO 35
+              FOR L%=0 TO 12
+                GCOL 0,pat%(P% DIV 2,P% MOD 4+(L% MOD 4)*4)*15
+                RECTANGLE FILL SX%+20+P%*8,menuadd%-L%*4+60,6,2
+              NEXT
+            NEXT
+            PROCmenutext(10,"           ",SX%+20,menuadd%,11,0)
+
+            GCOL 0,8
+            RECTANGLE SX%+20,menuadd%,SW%-40,2
+
+            menuadd%-=24
+
+            PROCmenutext(11,"KBRD & OPTS",SX%+20,menuadd%,10,(C%=13)*-4)
+            PROCmenutext(12,"HELP       ",SX%+20,menuadd%,10,(C%=16)*-4)
+          ENDIF
+
+        WHEN 4 : REM special
+          menuadd%=932
+          PROCmenutext(0,"LINE       ",SX%+20,menuadd%,14,(shapesel%=0)*-4)
+          PROCmenutext(1,"BOX        ",SX%+20,menuadd%,14,(shapesel%=1)*-4)
+          PROCmenutext(2,"CIRCLE     ",SX%+20,menuadd%,14,(shapesel%=2)*-4)
+          PROCmenutext(3,"TEXT       ",SX%+20,menuadd%,14,(shapesel%=7)*-4)
+
+          IF C%=-1 THEN
+            GCOL 0,8
+            RECTANGLE SX%+20,menuadd%,SW%-40,2
+          ENDIF
+
+          menuadd%-=24
+          PROCmenutext(4,"FLSH (136) ",SX%+20,menuadd%,14,(shapesel%=3)*-4)
+          PROCmenutext(5,"DBLH (141) ",SX%+20,menuadd%,14,(shapesel%=6)*-4)
+          PROCmenutext(6,"SEPR (154) ",SX%+20,menuadd%,14,(shapesel%=4)*-4)
+          PROCmenutext(7,"HOLD (158) ",SX%+20,menuadd%,14,(shapesel%=5)*-4)
+
+          IF C%=-1 THEN
+            GCOL 0,8
+            RECTANGLE SX%+20,menuadd%,SW%-40,2
+          ENDIF
+
+          menuadd%-=24
+
+          REM update options
+          PROCgtext(CHR$(78+11*gridshow%),SX%+404,menuadd%,9+gridshow%,0)
+          PROCgtext(CHR$(78+11*animateshape%),SX%+404,menuadd%-48,9+animateshape%,0)
+          PROCgtext(CHR$(78+11*colmode%),SX%+404,menuadd%-96,9+colmode%,0)
+          PROCgtext(CHR$(78+11*copylockxt%),SX%+404,menuadd%-144,9+copylockxt%,0)
+          PROCgtext(CHR$(78+11*copylockyt%),SX%+404,menuadd%-192,9+copylockyt%,0)
+
+          IF C%=-1 THEN
+            PROCmenutext(8,"SHOW GRID  ",SX%+20,menuadd%,11,0)
+            PROCmenutext(9,"ANIM8 LINES",SX%+20,menuadd%,11,0)
+            PROCmenutext(10,"COLUMN MODE",SX%+20,menuadd%,11,0)
+            PROCmenutext(11,"PASTE FIX X",SX%+20,menuadd%,11,0)
+            PROCmenutext(12,"PASTE FIX Y",SX%+20,menuadd%,11,0)
+
+            GCOL 0,8
+            RECTANGLE SX%+20,menuadd%,SW%-40,2
+
+            menuadd%-=24
+            PROCmenutext(13,"SPRITES    ",SX%+20,menuadd%,10,(C%=14)*-4)
+            PROCmenutext(14,"EDIT.TF    ",SX%+20,menuadd%,10,(C%=15)*-4)
+            PROCmenutext(15,"KYBRD FONTS",SX%+20,menuadd%,10,(C%=13)*-4)
+            PROCmenutext(16,"HELP       ",SX%+20,menuadd%,10,(C%=16)*-4)
+          ENDIF
+
+      ENDCASE
 
       ENDPROC
 
 
       REM ##########################################################
       REM initialise shape and special sub menu
-      DEF PROCinits1menu
+      DEF PROCinitsubmenu
 
       REM       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
       PROCchangemode(6,0)
@@ -6578,35 +6701,15 @@
 
 
       GCOL 0,0
-      RECTANGLE FILL S1X%,S1Y%,S1W%,S1H%
+      RECTANGLE FILL subm{(sub_cur%)}.x%,subm{(sub_cur%)}.y%,subm{(sub_cur%)}.w%,subm{(sub_cur%)}.h%
 
       GCOL 0,15
-      RECTANGLE S1X%+8,S1Y%+8,S1W%-16,S1H%-16
-      RECTANGLE S1X%+10,S1Y%+10,S1W%-20,S1H%-20
+      RECTANGLE subm{(sub_cur%)}.x%+8,subm{(sub_cur%)}.y%+8,subm{(sub_cur%)}.w%-16,subm{(sub_cur%)}.h%-16
+      RECTANGLE subm{(sub_cur%)}.x%+10,subm{(sub_cur%)}.y%+10,subm{(sub_cur%)}.w%-20,subm{(sub_cur%)}.h%-20
 
       PROCresetcontrols
-      PROCs1update(-1)
+      PROCsubupdate(-1)
 
-      ENDPROC
-
-      REM ##########################################################
-      REM initialise fill sub menu
-      DEF PROCinits2menu
-
-      REM       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
-      PROCchangemode(6,0)
-
-      REM OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
-
-      GCOL 0,0
-      RECTANGLE FILL S2X%,S2Y%,S2W%,S2H%
-
-      GCOL 0,15
-      RECTANGLE S2X%+8,S2Y%+8,S2W%-16,S2H%-16
-      RECTANGLE S2X%+10,S2Y%+10,S2W%-20,S2H%-20
-
-      PROCresetcontrols
-      PROCs2update(-1)
       ENDPROC
 
       REM ##########################################################
@@ -6842,7 +6945,7 @@
       R$=CHR$(r%)
       U$=CHR$(u%)
       F$=RIGHT$("0"+STR$(frame%),2)
-      P$=CHR$(67+copypaste%*13)
+      P$=CHR$(67-(copypaste%>0)*13)
       PRINTTAB(14,0)tw$;"P";D$;P$;"FS";E$;"E";U$;"U";R$;"R";tw$;"CBF LS";A$;"A";tw$;F$;">P"
 
       ENDPROC
@@ -7128,6 +7231,14 @@
 
       ENDPROC
 
+      REM drop down sub menu locations, X,TOP - W,H  (Y=TOP-W)
+      REM Paint, Dither, Copy, Fill, Special
+      DATA 448,960,450,920
+      DATA 480,960,450,520
+      DATA 512,960,450,520
+      DATA 544,960,450,920
+      DATA 576,960,450,920
+
       REM patternData
       DATA 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
       DATA 0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0
@@ -7147,9 +7258,6 @@
       DATA 1,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1
       DATA 1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1
       DATA 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
-
-      REM font names
-      DATA "TEXT","TOON","CENTRAL","CENTRAL2","CHALLENGE",""
 
       REM for future reference
 
