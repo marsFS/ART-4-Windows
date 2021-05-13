@@ -6,23 +6,21 @@
 
       REM *** LOAD SCREEN SORT BY NEWEST, NEEDS WORK!
 
-      REM *** LOAD SCREEN USABILITY
-
-      REM *** SCROLL OFF SCREEN E.G. NO WRAP
+      REM *** LOAD SCREEN USABILITY (IMPROVED A LITTLE)
 
       REM *** IMPLEMENT ANIMATED CIRCLE (REDO CIRCLE ROUTINE)
 
       REM *** IMAGE CONVERTER FOR IMPORTING BMP FILE, ADD MOVE FRAME OPTION (needs work)
 
-      REM *** SPRITES - EDIT SPRITES AND COPY TO FRAMES (in progress) 20x16 chars 40x48 pixels
-
-      REM *** SPRITES - HOT KEYS. NEW: 'E'RASE, OTHERS?  EXISTING: CURSORS NEXT / PREV SPRITE
-
       REM *** SPRITES - ADD MASKING AND TRANSPARENCY FOR EACH SPRITE SET
 
-      REM *** SPRITES - ADD UNDO / REDO FOR EACH SPRITE
-
       REM *** GRADIENTS - ADD min, max, weight (in progress)
+
+      REM *** SELECT TOOL, SELECT AN AREA TO TRANSFORM: MIRROR, REFLECT, NEGATIVE, FLIP H, FLIP V, ERASE, SCROLL
+
+      REM *** TRANSITION EFFECTS, SCROLL FRAME IN / OUT - LEFT, RIGHT, UP, DOWN  , FRAME DISOLVE... OTHERS?
+
+      REM *** SHIFT CURSOR - MOVE COPY SELECTION AREA ONE PIXEL - CUT AND PASTE PIXEL RESOLUTION
 
       REM *** END TODO LIST ***
 
@@ -46,9 +44,8 @@
       HIMEM = PAGE+40000000
 
       INSTALL @lib$+"sortlib"
-      REM INSTALL @lib$+"aagfxlib"
 
-      version$="v0.22"
+      version$="v0.23"
 
       DEBUG%=0 : REM for displaying mouse and other debug details while editing source
 
@@ -1665,13 +1662,18 @@
       REM ##########################################################
       REM check keyboard
       DEF PROCkeyboardhandler
+      LOCAL nf%, shift%
 
       CASE menuext% OF
         WHEN M_canvas% : REM keyboard handler
 
+          shift%=INKEY(-1)
+
           REM TEXT AT CURSOR HANDLER, IF MOUSE IS MOVED, NEW TEXT POS IS SET
           K%=INKEY(0)
           IF K%>1 THEN
+            REM  PRINTTAB(0,1)STR$(K%);"  ";STR$(shift%);"  ";
+
             REM SAVE UNDO ONLY FOR CURRENT 'LINE' OF TEXT
             IF TX%<>OTX% OR TY%<>OTY% AND TY%>0 THEN
               OTX%=TX%
@@ -1694,15 +1696,42 @@
                   PROCframesave(frame%)
                 ENDIF
 
+              WHEN 128 : REM left + ctrl
+
+                REM copy current frame to prev frame
+                nf%=frame%-1
+                IF nf%<1 THEN nf%=frame_max%
+
+                PROCcopyframe(frame%,nf%,0,0,0)
+
+                PROCWAITNOKEY(0,-1)
+
+              WHEN 129 : REM left + ctrl
+                REM copy current frame to next frame
+                nf%=frame%+1
+                IF nf%>frame_max% THEN nf%=1
+                PROCcopyframe(frame%,nf%,0,0,0)
+
               WHEN 136 : REM left cursor
-                PROCloadnextframe(-1,1) : REM SAVE CURRENT FRAME AND LOAD PREVIOUS FRAME
-                REM PROCWAITNOKEY(0,-1)
+                IF shift% THEN
+
+                ELSE
+
+                  REM save current frame and load previous frame
+                  PROCloadnextframe(-1,1)
+                ENDIF
 
               WHEN 137 : REM right cursor
-                PROCloadnextframe(1,1) : REM SAVE CURRENT FRAME AND LOAD NEXT FRAME
-                REM PROCWAITNOKEY(0,-1)
+                IF shift% THEN
+
+                ELSE
+
+                  REM save current frame and load next frame
+                  PROCloadnextframe(1,1)
+                ENDIF
 
               OTHERWISE
+
                 REM ADD VALID CHARS AND INCREASE TEXT POS
                 IF K%>31 AND K%<127  AND TY%>0 THEN
                   PROCundosave
@@ -1721,7 +1750,29 @@
             ENDCASE
           ENDIF
 
-        WHEN M_keyboard% : REM special sub menu
+        WHEN M_keyboard% : REM keyboard screen
+          REM type text on keyboard screen
+          K%=INKEY(0)
+          IF K%>1 THEN
+
+            REM handle specific keypresses
+            CASE K% OF
+              WHEN 8 : REM backspace
+                IF text$<>"" THEN
+                  text$=LEFT$(text$,LEN(text$)-1)
+                  PROCkeyboardmenu(0)
+                ENDIF
+
+              OTHERWISE
+                REM ADD VALID CHARS AND INCREASE TEXT POS
+                IF K%>31 AND K%<127  AND TY%>0 THEN
+                  IF LEN(text$)<30 THEN
+                    text$+=CHR$(K%)
+                    PROCkeyboardmenu(0)
+                  ENDIF
+                ENDIF
+            ENDCASE
+          ENDIF
 
         WHEN M_sprites% : REM sprite menu
 
@@ -1761,6 +1812,7 @@
       REM SPECIAL DIALOG
       DEF PROCkybrfontdhandler
       LOCAL of%
+
       PROCWAITMOUSE(0)
       CASE TY% OF
 
@@ -1780,10 +1832,10 @@
             caps%=(caps%+1) AND 1
           ELSE
             IF TY%=18 AND TX%>28 AND TX%<33 THEN
-              text$=text$+CHR$(32)
+              text$+=CHR$(32)
             ELSE
               C%=GET(TX%,TY%)
-              IF C%<>32 AND C%<127 THEN text$=text$+CHR$(C%)
+              IF C%<>32 AND C%<127 THEN text$+=CHR$(C%)
             ENDIF
           ENDIF
           text$=LEFT$(text$,30)
@@ -2508,13 +2560,13 @@
                   toolcursor%=17
                 ENDIF
 
-              WHEN 6 : REM fix x paste pos
+              WHEN 12 : REM fix x paste pos
                 copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
 
-              WHEN 7 : REM fix y paste pos
+              WHEN 13 : REM fix y paste pos
                 copylockyt%=(copylockyt%+1) AND 1 :REM lock vertical paste pos
 
-              WHEN 8 : REM paste transparent
+              WHEN 14 : REM paste transparent
                 copy_trns%=(copy_trns%+1) AND 1
             ENDCASE
 
@@ -6737,12 +6789,25 @@
           PROCmenutext(4,"SOLID BLOCK ",SX%+20,menuadd%,14,(toolsel%=T_dither5&)*-4,-48)
 
         WHEN 2 : REM copy paste
-          PROCmenutext(0,"COPY        ",SX%+20,menuadd%,14,(copypaste%=0)*-4,-48)
-          PROCmenutext(1,"PASTE       ",SX%+20,menuadd%,14,(copypaste%=1)*-4,-48)
-          PROCmenutext(2,"PST ALL FRMS",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(3,"CPY COLS ALL",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(4,"DUPE FRM >> ",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(5,"DUPE FRM << ",SX%+20,menuadd%,14,0,-48)
+          PROCmenutext(0,"COPY        ",SX%+20,menuadd%,14,(toolsel%=T_copy&)*-4,-48)
+          PROCmenutext(1,"PASTE       ",SX%+20,menuadd%,14,(toolsel%=T_paste&)*-4,-48)
+
+          GCOL 0,8
+          RECTANGLE SX%+20,menuadd%,SW%-40,2
+
+          menuadd%-=24
+
+          PROCmenutext(2,"PST ALL FRMS",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(3,"CPY COLS ALL",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(4,"DUPE FRM >> ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(5,"DUPE FRM << ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(6,"MIRROR      ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(7,"REFLECT     ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(8,"FLIP HORZ   ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(9,"FLIP VERT   ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(10,"NEGATIVE    ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(11,"ERASE       ",SX%+20,menuadd%,10,0,-48)
+
 
           GCOL 0,8
           RECTANGLE SX%+20,menuadd%,SW%-40,2
@@ -6754,9 +6819,9 @@
           PROCgtext(CHR$(78+11*copy_trns%),SX%+404,menuadd%-96,9+copy_trns%,0)
 
           IF C%=-1 THEN
-            PROCmenutext(6,"PASTE FIX X",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(7,"PASTE FIX Y",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(8,"TRANSPARENT",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(12,"PASTE FIX X",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(13,"PASTE FIX Y",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(14,"TRANSPARENT",SX%+20,menuadd%,11,0,-48)
           ENDIF
 
         WHEN 3 : REM fill
@@ -6777,6 +6842,7 @@
 
             menuadd%-=24
 
+            REM gradient fill options
             PROCaddcontrange(9,SX%+40,menuadd%,SX%+320,menuadd%-48)
             GCOL 0,9
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
@@ -6791,8 +6857,6 @@
                 ENDIF
               NEXT
             NEXT
-
-            REM PROCmenutext(10,"           ",SX%+20,menuadd%,11,0,-60)
 
             PROCaddcontrange(9,SX%+40,menuadd%,SX%+320,menuadd%-48)
             GCOL 0,11
@@ -6810,8 +6874,6 @@
                   I%-=3
                   IF I%<0 THEN I%=0
               ENDCASE
-              REM PRINTTAB(0,1)STR$(I%);"  ";STR$(P%);"  ";
-              REM              A=GET
 
               FOR L%=0 TO 12
                 IF pat%(I%,P% MOD 4+(L% MOD 4)*4)=1 THEN
@@ -6820,7 +6882,6 @@
               NEXT
             NEXT
 
-            REM PROCmenutext(11,"           ",SX%+20,menuadd%,11,0,-60)
             PROCaddcontrange(9,SX%+40,menuadd%,SX%+320,menuadd%-48)
             GCOL 0,12
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
@@ -6838,15 +6899,37 @@
 
               ENDIF
 
-              REM PRINTTAB(0,1)STR$(I%);"  ";STR$(P%);"  ";
-              REM              A=GET
-
               FOR L%=0 TO 12
                 IF pat%(I%,P% MOD 4+(L% MOD 4)*4) THEN
                   RECTANGLE FILL SX%+40+P%*8,menuadd%-L%*4+60,6,2
                 ENDIF
               NEXT
             NEXT
+
+            PROCaddcontrange(9,SX%+40,menuadd%,SX%+320,menuadd%-48)
+            GCOL 0,13
+            RECTANGLE FILL SX%+40,menuadd%+2,284,-50
+            GCOL 0,11
+
+            menuadd%-=60
+            I%=0
+            FOR P%=0 TO 35
+              CASE P% OF
+                WHEN 20,21,22,23,24,25,26
+                  I%+=2
+                  IF I%>17 THEN I%=17
+                WHEN 28,29,30,31,32,33,34
+                  I%-=2
+                  IF I%<0 THEN I%=0
+              ENDCASE
+
+              FOR L%=0 TO 12
+                IF pat%(I%,P% MOD 4+(L% MOD 4)*4)=1 THEN
+                  RECTANGLE FILL SX%+40+P%*8,menuadd%-L%*4+60,6,2
+                ENDIF
+              NEXT
+            NEXT
+
 
           ENDIF
 
@@ -7418,7 +7501,7 @@
       REM Paint, Dither, Copy, Fill, Special
       DATA 448,960,460,860
       DATA 480,960,460,280
-      DATA 512,960,460,500
+      DATA 512,960,460,800
       DATA 544,960,460,920
       DATA 576,960,460,568
 
