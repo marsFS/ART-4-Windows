@@ -27,3 +27,8 @@ Current TelePaint features:
 * Gradient fills
 * Import sprites and BMP files (specific format required)
 * Added Fonts, ensure to download M7_FONTS folder
+* Added Transformation tools and reworked menus
+* Added hotkeys:
+* * CTRL + C  Open Selection Tool
+* * SHIFT + Cursors - Move selected region around in pixel increments
+* * CRTL + Left / Right - Copy current frame to prev / next frame
