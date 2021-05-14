@@ -177,6 +177,11 @@
       copylocky%=-1
       copylockxt%=0
       copylockyt%=0
+      copymovepx%=0
+      copymovepy%=0
+      copymovepw%=0
+      copymoveph%=0
+      copymovef%=0
       copy_trns%=1
       colmode%=0        : REM column mode for fore and back tools
       shapetype%=0      : REM enclosed shape type 0=outline, 1=filled, 2=empty
@@ -311,6 +316,9 @@
 
       REM frame buffer 24x40 chars
       DIM frame_buffer&(frame_max%-1,959)
+
+      REM move pixel buffer 80x72 pixels
+      DIM move_buffer&(5759)
 
       REM 20x16 chars @320 bytes : 40x48 pixels @1920 bytes
       DIM sprite_buffer&(sprite_max%-1,319)
@@ -1662,17 +1670,18 @@
       REM ##########################################################
       REM check keyboard
       DEF PROCkeyboardhandler
-      LOCAL nf%, shift%
+      LOCAL nf%, ctrl%, shift%
 
       CASE menuext% OF
         WHEN M_canvas% : REM keyboard handler
 
           shift%=INKEY(-1)
+          ctrl%=INKEY(-2)
 
           REM TEXT AT CURSOR HANDLER, IF MOUSE IS MOVED, NEW TEXT POS IS SET
           K%=INKEY(0)
           IF K%>1 THEN
-            REM  PRINTTAB(0,1)STR$(K%);"  ";STR$(shift%);"  ";
+            REM PRINTTAB(0,1)STR$(K%);"  ";STR$(shift%);"  ";
 
             REM SAVE UNDO ONLY FOR CURRENT 'LINE' OF TEXT
             IF TX%<>OTX% OR TY%<>OTY% AND TY%>0 THEN
@@ -1682,6 +1691,9 @@
 
             REM handle specific keypresses
             CASE K% OF
+              WHEN 3 : REM ctrl + c
+                IF ctrl% THEN PROCselectregion
+
               WHEN 8 : REM backspace
                 IF TEXTX%>TX% AND TY%>0 THEN
                   PROCundosave
@@ -1714,7 +1726,7 @@
 
               WHEN 136 : REM left cursor
                 IF shift% THEN
-
+                  PROCmoveregion(-1,0)
                 ELSE
 
                   REM save current frame and load previous frame
@@ -1723,11 +1735,21 @@
 
               WHEN 137 : REM right cursor
                 IF shift% THEN
-
+                  PROCmoveregion(1,0)
                 ELSE
 
                   REM save current frame and load next frame
                   PROCloadnextframe(1,1)
+                ENDIF
+
+              WHEN 138 : REM down cursor
+                IF shift% THEN
+                  PROCmoveregion(0,1)
+                ENDIF
+
+              WHEN 139 : REM up cursor
+                IF shift% THEN
+                  PROCmoveregion(0,-1)
                 ENDIF
 
               OTHERWISE
@@ -2465,6 +2487,7 @@
       REM shape and special sub menu
       DEF PROCsubhandler
       LOCAL done%,L%,C%
+      PRIVATE F%
 
       PROCWAITMOUSE(0)
       C%=-1
@@ -2510,10 +2533,10 @@
               WHEN 12 : REM shape - empty
                 shapetype%=2
               WHEN 13 : REM dec font
-                L%=fontcur%
+                F%=fontcur%
                 IF fontcur%>0 THEN fontcur%-=1
               WHEN 14 : REM inc font
-                L%=fontcur%
+                F%=fontcur%
                 IF fontcur%<fontmax% THEN
                   fontcur%+=1
                   IF fontname$(fontcur%)="" THEN fontcur%-=1
@@ -2552,13 +2575,11 @@
 
           WHEN 2 : REM copy paste
             CASE C% OF
-              WHEN 0,1,2,3,4,5 : REM copy menu tools
+              WHEN 0,1 : REM copy menu tools
                 done%=1
-                IF C%<2 THEN
-                  copypaste%=C%
-                  toolsel%=T_paste&
-                  toolcursor%=17
-                ENDIF
+                copypaste%=C%
+                toolsel%=T_paste&
+                toolcursor%=17
 
               WHEN 12 : REM fix x paste pos
                 copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
@@ -2568,6 +2589,10 @@
 
               WHEN 14 : REM paste transparent
                 copy_trns%=(copy_trns%+1) AND 1
+
+              OTHERWISE
+                done%=1
+
             ENDCASE
 
             PROCsubupdate(0)
@@ -2645,10 +2670,6 @@
         CASE sub_cur% OF
           WHEN 0 : REM paint menu
             CASE C% OF
-              WHEN 13,14
-                IF fontcur%<>L% AND fontcur%>0 THEN PROCloadfont(fontname$(fontcur%))
-                PROCmenurestore
-                PROCdrawmenu
 
               WHEN 15 : REM keyboard and options screen
                 menuext%=M_keyboard%
@@ -2662,6 +2683,8 @@
 
             ENDCASE
 
+            IF fontcur%<>F% AND fontcur%>0 THEN PROCloadfont(fontname$(fontcur%))
+
           WHEN 1 : REM dither menu
             PROCmenurestore
             PROCdrawmenu
@@ -2674,84 +2697,7 @@
 
                 REM show control codes while copying
                 IF C%=0 THEN
-                  menuext%=78
-
-                  PROCcontrolcodes
-                  PROCdrawgrid
-
-                  REM get start char location
-                  SX%=TX%
-                  SY%=TY%
-
-                  boxx%=SX%*32
-                  boxy%=(25-SY%)*40
-                  X%=32
-                  Y%=-40
-                  VDU 4
-                  GCOL 3,15
-                  RECTANGLE boxx%,boxy%,X%,Y%
-
-                  REPEAT
-                    PROCREADMOUSE
-                    IF (TX%<>SX% OR TY%<>SY%) AND TY%>0 THEN
-                      RECTANGLE boxx%,boxy%,X%,Y%
-                      SX%=TX%
-                      SY%=TY%
-                      boxx%=SX%*32
-                      boxy%=(25-SY%)*40
-
-                      RECTANGLE boxx%,boxy%,X%,Y%
-                    ELSE
-                      WAIT 2
-                    ENDIF
-                  UNTIL MB%=4
-
-                  OX%=TX%
-                  OY%=TY%
-
-                  REPEAT
-                    PROCREADMOUSE
-                    IF OX%<>TX% OR OY%<>TY% THEN
-                      RECTANGLE boxx%,boxy%,X%,Y%
-
-                      IF TX%<SX% THEN
-                        boxx%=SX%*32+32
-                        X%=-((SX%-TX%)*32+32)
-                      ELSE
-                        boxx%=SX%*32
-                        X%=(TX%-SX%)*32+32
-                      ENDIF
-
-                      IF TY%<SY% THEN
-                        boxy%=(25-SY%)*40-40
-                        Y%=(SY%-TY%)*40+40
-                        IF boxy%+Y%>960 THEN Y%-=40
-                      ELSE
-                        boxy%=(25-SY%)*40
-                        Y%=-((TY%-SY%)*40+40)
-                      ENDIF
-
-                      RECTANGLE boxx%,boxy%,X%,Y%
-
-                      OX%=TX%
-                      OY%=TY%
-
-                    ELSE
-                      WAIT 2
-
-                    ENDIF
-                  UNTIL MB%=0
-                  RECTANGLE boxx%,boxy%,X%,Y%
-
-                  PROCchangemode(7,1)
-                  frame%-=1
-                  PROCloadnextframe(1,0)
-
-                  PROCcopyregion(SX%,SY%,TX%,TY%)
-                  copypaste%=1
-                  menuext%=M_canvas%
-                  PROCdrawmenu
-
+                  PROCselectregion
                 ENDIF
 
               WHEN 2 : REM paste all frames
@@ -2780,6 +2726,40 @@
                 X%=frame%-1
                 IF X%<1 THEN X%=frame_max%
                 PROCcopyframe(frame%,X%,0,0,0)
+
+              WHEN 6 : REM mirror
+                PROCmenurestore
+                PROCdrawmenu
+                PROCmirrorregion
+
+              WHEN 7 : REM refelect
+                PROCmenurestore
+                PROCdrawmenu
+                PROCreflectregion
+
+              WHEN 8 : REM flip horizontal
+                PROCmenurestore
+                PROCdrawmenu
+                PROCfliphregion
+
+              WHEN 9 : REM flip vertical
+                PROCmenurestore
+                PROCdrawmenu
+                PROCflipvregion
+
+              WHEN 10 : REM negative
+                PROCmenurestore
+                PROCdrawmenu
+                PROCnegativeregion
+
+              WHEN 11 : REM erase
+                PROCmenurestore
+                PROCdrawmenu
+                IF copymovef%=frame% THEN
+                  PROCundosave
+                  PROCeraseregion
+                  PROCframesave(frame%)
+                ENDIF
 
               WHEN 11 : REM keyboard and options screen
                 menuext%=M_keyboard%
@@ -4800,9 +4780,96 @@
       ENDPROC
 
       REM ##########################################################
+      REM selct region of current frame and call copyregion
+      DEF PROCselectregion
+      LOCAL X%,Y%,SX%,SY%,OX%,OY%,boxx%,boxy%
+      menuext%=78
+
+      PROCcontrolcodes
+      PROCdrawgrid
+
+      REM get start char location
+      SX%=TX%
+      SY%=TY%
+
+      boxx%=SX%*32
+      boxy%=(25-SY%)*40
+      X%=32
+      Y%=-40
+      VDU 4
+      GCOL 3,15
+      RECTANGLE boxx%,boxy%,X%,Y%
+
+      REPEAT
+        PROCREADMOUSE
+        IF (TX%<>SX% OR TY%<>SY%) AND TY%>0 THEN
+          RECTANGLE boxx%,boxy%,X%,Y%
+          SX%=TX%
+          SY%=TY%
+          boxx%=SX%*32
+          boxy%=(25-SY%)*40
+
+          RECTANGLE boxx%,boxy%,X%,Y%
+        ELSE
+          WAIT 2
+        ENDIF
+      UNTIL MB%=4
+
+      OX%=TX%
+      OY%=TY%
+
+      REPEAT
+        PROCREADMOUSE
+        IF OX%<>TX% OR OY%<>TY% THEN
+          RECTANGLE boxx%,boxy%,X%,Y%
+
+          IF TX%<SX% THEN
+            boxx%=SX%*32+32
+            X%=-((SX%-TX%)*32+32)
+          ELSE
+            boxx%=SX%*32
+            X%=(TX%-SX%)*32+32
+          ENDIF
+
+          IF TY%<SY% THEN
+            boxy%=(25-SY%)*40-40
+            Y%=(SY%-TY%)*40+40
+            IF boxy%+Y%>960 THEN Y%-=40
+          ELSE
+            boxy%=(25-SY%)*40
+            Y%=-((TY%-SY%)*40+40)
+          ENDIF
+
+          RECTANGLE boxx%,boxy%,X%,Y%
+
+          OX%=TX%
+          OY%=TY%
+
+        ELSE
+          WAIT 2
+
+        ENDIF
+      UNTIL MB%=0
+      RECTANGLE boxx%,boxy%,X%,Y%
+
+      PROCchangemode(7,1)
+      frame%-=1
+      PROCloadnextframe(1,0)
+
+      PROCcopyregion(SX%,SY%,TX%,TY%)
+      copypaste%=1
+      menuext%=M_canvas%
+      toolsel%=T_paste&
+      toolcursor%=17
+
+      PROCdrawmenu
+
+      ENDPROC
+
+      REM ##########################################################
       REM copy region of current frame to copypaste buffer
       DEF PROCcopyregion(x1%,y1%,x2%,y2%)
-      LOCAL s%,X%,Y%
+      LOCAL C%,X%,Y%,PX%,PY%
       IF x1%>x2% THEN SWAP x1%,x2%
       IF y1%>y2% THEN SWAP y1%,y2%
 
@@ -4816,27 +4883,48 @@
       IF y2%<1 THEN y2%=1
       IF y2%>24 THEN y2%=24
 
-      s%=0
+      C%=0
 
       FOR X%=x1% TO x2%
         FOR Y%=y1% TO y2%
-          copy_buffer&(s%)=GET(X%,Y%)
-          s%+=1
+          copy_buffer&(C%)=GET(X%,Y%)
+          C%+=1
         NEXT
       NEXT
       copyx%=x2%-x1%
       copyy%=y2%-y1%
-      copysize%=s%
+      copysize%=C%
 
       copylockx%=x1%
       copylocky%=y1%
+
+      REM create a pixel buffer of the selected region for moving around
+      copymovepx%=x1%*2
+      copymovepy%=y1%*3
+      copymovepw%=copyx%*2+1
+      copymoveph%=copyy%*3+2
+      copymovef%=frame%
+
+      REM copy pixels to buffer
+      FOR Y%=0 TO copymoveph%
+        PY%=copymovepy%+Y%
+        FOR X%=0 TO copymovepw%
+          PX%=copymovepx%+X%
+          IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
+            C%=FNpoint_buf(PX%,PY%,frame%)
+          ELSE
+            C%=0
+          ENDIF
+          move_buffer&(X%+Y%*(copymovepw%+1))=C%
+        NEXT
+      NEXT
 
       ENDPROC
 
       REM ##########################################################
       REM paste copypaste buffer to current frame
       DEF PROCpasteregion(x1%,y1%)
-      LOCAL s%,X%,Y%,C%
+      LOCAL C%,X%,Y%,C%
 
       s%=0
 
@@ -4889,6 +4977,187 @@
       ENDIF
 
       ENDPROC
+
+      REM ##########################################################
+      REM move selected region to a new location
+      DEF PROCmoveregion(h%,v%)
+      LOCAL X%,Y%,PX%,PY%,C%
+
+      IF copymovef%=frame% THEN
+        PROCundosave
+
+        REM erase old pixels
+        PROCeraseregion
+
+        REM change position
+        copymovepx%+=h%
+        copymovepy%+=v%
+
+        REM plot pixels in new location
+        FOR Y%=0 TO copymoveph%
+          PY%=copymovepy%+Y%
+          FOR X%=0 TO copymovepw%
+            PX%=copymovepx%+X%
+            IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
+              IF move_buffer&(X%+Y%*(copymovepw%+1))=1 THEN PROCpoint(PX%,PY%,1)
+            ENDIF
+          NEXT
+        NEXT
+
+        PROCframesave(frame%)
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
+      REM mirror selected region horizontally
+      DEF PROCmirrorregion
+      LOCAL X%,Y%,PX%,PY%
+
+      IF copymovef%=frame% THEN
+        PROCundosave
+
+        REM plot pixels in mirrored location
+        FOR Y%=0 TO copymoveph%
+          PY%=copymovepy%+Y%
+          FOR X%=0 TO copymovepw%
+            PX%=copymovepx%+copymovepw%*2-X%-1
+            IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
+              IF move_buffer&(X%+Y%*(copymovepw%+1))=1 THEN PROCpoint(PX%,PY%,1)
+            ENDIF
+          NEXT
+        NEXT
+
+        PROCframesave(frame%)
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
+      REM reflect selected region vertically
+      DEF PROCreflectregion
+      LOCAL X%,Y%,PX%,PY%
+
+      IF copymovef%=frame% THEN
+        PROCundosave
+
+        REM plot pixels in reflected location
+        FOR Y%=0 TO copymoveph%
+          PY%=copymovepy%+copymoveph%*2-Y%-1
+          FOR X%=0 TO copymovepw%
+            PX%=copymovepx%+X%
+            IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
+              IF move_buffer&(X%+Y%*(copymovepw%+1))=1 THEN PROCpoint(PX%,PY%,1)
+            ENDIF
+          NEXT
+        NEXT
+
+        PROCframesave(frame%)
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
+      REM flip selected region horizontally
+      DEF PROCfliphregion
+      LOCAL X%,Y%,PX%,PY%
+
+      IF copymovef%=frame% THEN
+        PROCundosave
+
+        REM erase old pixels
+        PROCeraseregion
+
+        REM plot pixels in new location
+        FOR Y%=0 TO copymoveph%
+          PY%=copymovepy%+Y%
+          FOR X%=0 TO copymovepw%
+            PX%=copymovepx%+copymovepw%-X%
+            IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
+              IF move_buffer&(X%+Y%*(copymovepw%+1))=1 THEN PROCpoint(PX%,PY%,1)
+            ENDIF
+          NEXT
+        NEXT
+
+        PROCframesave(frame%)
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
+      REM flip selected region vertically
+      DEF PROCflipvregion
+      LOCAL X%,Y%,PX%,PY%
+
+      IF copymovef%=frame% THEN
+        PROCundosave
+
+        REM erase old pixels
+        PROCeraseregion
+
+        REM plot pixels in new location
+        FOR Y%=0 TO copymoveph%
+          PY%=copymovepy%+copymoveph%-Y%
+          FOR X%=0 TO copymovepw%
+            PX%=copymovepx%+X%
+            IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
+              IF move_buffer&(X%+Y%*(copymovepw%+1))=1 THEN PROCpoint(PX%,PY%,1)
+            ENDIF
+          NEXT
+        NEXT
+
+        PROCframesave(frame%)
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
+      REM apply negative to selected region vertically
+      DEF PROCnegativeregion
+      LOCAL X%,Y%,PX%,PY%
+
+      IF copymovef%=frame% THEN
+        PROCundosave
+
+        REM erase old pixels
+        PROCeraseregion
+
+        REM plot pixels in new location
+        FOR Y%=0 TO copymoveph%
+          PY%=copymovepy%+Y%
+          FOR X%=0 TO copymovepw%
+            PX%=copymovepx%+X%
+            IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
+              IF move_buffer&(X%+Y%*(copymovepw%+1))=0 THEN PROCpoint(PX%,PY%,1)
+            ENDIF
+          NEXT
+        NEXT
+
+        PROCframesave(frame%)
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
+      REM erase region
+      DEF PROCeraseregion
+      LOCAL X%,Y%,PX%,PY%
+
+      IF copymovef%=frame% THEN
+
+        REM erase old pixels
+        FOR Y%=0 TO copymoveph%
+          PY%=copymovepy%+Y%
+          FOR X%=0 TO copymovepw%
+            PX%=copymovepx%+X%
+            IF move_buffer&(X%+Y%*(copymovepw%+1))=1 IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN PROCpoint(PX%,PY%,0)
+          NEXT
+        NEXT
+
+      ENDIF
+
+      ENDPROC
+
 
       REM ##########################################################
       REM menu buffer restore frame
@@ -6501,9 +6770,7 @@
 
       showcodes%=0
       PROCframesave(frame%)
-      REM      OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
       PROCchangemode(6,0)
-      REM OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
       PROCdrawgrid
 
       REM control code special chars
