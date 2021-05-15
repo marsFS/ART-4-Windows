@@ -24,11 +24,12 @@ Current TelePaint features:
 * Configured for BBC Micro Mode 7 (40x25 chars, 78x72 sixels)
 * Save and load files in BIN and/or BMP format
 * Configure up to 100 animation frames and 48 sprites
-* Gradient fills
 * Import sprites and BMP files (specific format required)
-* Added Fonts, ensure to download M7_FONTS folder
-* Added Transformation tools and reworked menus
+* Added Fonts, requires download of M7_FONTS folder
+* Added Transformation tools
+* Implemented gradients correctly
+* Reworked sub menus system
 * Added hotkeys:
-* * CTRL + C  Open Selection Tool
-* * SHIFT + Cursors - Move selected region around in pixel increments
-* * CRTL + Left / Right - Copy current frame to prev / next frame
+* * CTRL + C  : Open Selection Tool
+* * SHIFT + Cursors   : Move selected region around in pixel increments
+* * CRTL + Left / Right  : Copy current frame to prev / next frame
