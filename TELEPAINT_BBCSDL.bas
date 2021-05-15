@@ -20,8 +20,6 @@
 
       REM *** TRANSITION EFFECTS, SCROLL FRAME IN / OUT - LEFT, RIGHT, UP, DOWN  , FRAME DISOLVE... OTHERS?
 
-      REM *** SHIFT CURSOR - MOVE COPY SELECTION AREA ONE PIXEL - CUT AND PASTE PIXEL RESOLUTION
-
       REM *** END TODO LIST ***
 
       REM *** Added internal mode changes between Mode 6 and Mode 7 to eliminate screen repos
@@ -185,6 +183,7 @@
       copy_trns%=1
       colmode%=0        : REM column mode for fore and back tools
       shapetype%=0      : REM enclosed shape type 0=outline, 1=filled, 2=empty
+      gradtype%=0
       toolcursor%=15
       animateshape%=0
       animategap%=0
@@ -859,7 +858,7 @@
 
       REM ##########################################################
       REM RECTANGLE ROUTINE
-      DEF PROCrectangle(x1%,y1%,x2%,y2%,m%)
+      DEF PROCrectangle(x1%,y1%,x2%,y2%,m%,f%)
 
       REM CHECK FOR SPECIAL CASES TO PRESERVE EOR OPERATIONS
       IF x1%=x2% AND y1%=y2% THEN
@@ -868,6 +867,7 @@
         IF x1%=x2% OR y1%=y2% THEN
           PROCbresenham(x1%,y1%,x2%,y2%,m%)
         ELSE
+          IF x1%>x2% THEN SWAP x1%,x2%
           PROCbresenham(x1%,y1%,x2%,y1%,m%)
           PROCbresenham(x1%,y2%,x2%,y2%,m%)
           IF ABS(y2%-y1%)>1 THEN
@@ -875,6 +875,12 @@
             FOR Y%=y1%+1 TO y2%-1
               PROCpoint(x1%,Y%,m%)
               PROCpoint(x2%,Y%,m%)
+              CASE shapetype% OF
+                WHEN 1 : REM filled
+                  IF f%=1 THEN PROCbresenham(x1%,Y%,x2%,Y%,m%)
+                WHEN 2 : REM outline / empty
+                  IF shapetype%=2 AND f%=1 THEN PROCbresenham(x1%+1,Y%,x2%-1,Y%,1-m%)
+              ENDCASE
             NEXT
           ENDIF
         ENDIF
@@ -904,19 +910,19 @@
 
       REM ##########################################################
       REM rectangle with gradient
-      DEF PROCrectangle_g(x1%,y1%,x2%,y2%,d%)
+      DEF PROCrectangle_g(x1%,y1%,x2%,y2%,d%,dv%)
 
-      LOCAL lx%,ly%,dc%,gR,gRd,gAdd,dv%,p%
+      LOCAL lx%,ly%,dc%,gR,gRd,gAdd,p%
 
       REM Calculate direction vector, gradient value And gradient Default values
-      dv%=1 : gR=0 : gRd=0
+      gR=0 : gRd=0
       IF x1%>x2% THEN
         SWAP x1%,x2%
-        IF d%=0 THEN dv%=-1
+        REM   IF d%=0 THEN dv%=-1
       ENDIF
       IF y1%>y2% THEN
         SWAP y1%,y2%
-        IF d%=1 THEN dv%=-1
+        REM IF d%=1 THEN dv%=-1
       ENDIF
       IF dv%=-1 THEN
         gR=17.9: gRd=17.9
@@ -956,65 +962,75 @@
 
       REM ##########################################################
       REM diabonal gradient
-      DEF PROCdiagonal_g(x1%,y1%,min%,max%)
-      LOCAL h%,v%,l%,d%,x2%,y2%,gR,gAdd
+      DEF PROCdiagonal_g(x1%,y1%,x2%,y2%,p%,d%)
+      LOCAL h%,v%,l%,gR,gAdd,min%,max%,L%
 
-      REM determine left or right
-      IF x1%=0 THEN
-        h%=1
-        x2%=0
-      ELSE
-        h%=-1
-        x1%=79
-        x2%=79
-      ENDIF
+      IF x1%>x2% THEN SWAP x1%,x2%
+      IF y1%>y2% THEN SWAP y1%,y2%
 
-      REM determine up or down
-      IF y1%=0 THEN
-        v%=1
-        y2%=0
-      ELSE
-        v%=-1
-        y1%=74
-        y2%=74
-      ENDIF
+      xmin%=x1%
+      xmax%=x2%
+      ymin%=y1%
+      ymax%=y2%
+
+      CASE d% OF
+        WHEN 0 : REM top left
+          x2%=x1%
+          y2%=y1%
+          h%=1
+          v%=1
+        WHEN 1 : REM top right
+          x1%=x2%
+          y2%=y1%
+          h%=-1
+          v%=1
+        WHEN 2 : REM bottom right
+          x1%=x2%
+          y1%=y2%
+          h%=-1
+          v%=-1
+        WHEN 3 : REM bottom left
+    1     x2%=x1%
+          y1%=y2%
+          h%=1
+          v%=-1
+
+      ENDCASE
+
+      L%=(xmax%-xmin%)+(ymax%-ymin%)
 
       REM preset gradient value
-      gR=min%
-      gAdd=18/150
+      min%=0
+      max%=18
+      gR=0
+      gAdd=18/L%
       IF min%>max% THEN gAdd=-gAdd
       pc%=0
 
-      REM define direction
-      IF h%=1 AND v%=1 THEN d%=0
-      IF h%=-1 AND v%=1 THEN d%=1
-      IF h%=-1 AND v%=-1 THEN d%=2
-      IF h%=1 AND v%=-1 THEN d%=3
-
-      REM main loop 79+74
-      FOR l%=0 TO 152
+      REM main loop
+      FOR l%=0 TO L%-1
         CASE d% OF
           WHEN 0 : REM top left
-            IF y1%<74 THEN
+            IF y1%<ymax% THEN
               y1%+=v%
             ELSE
               x1%+=h%
             ENDIF
 
-            IF x2%<79 THEN
+            IF x2%<xmax% THEN
               x2%+=h%
             ELSE
               y2%+=v%
             ENDIF
 
           WHEN 1 : REM top right
-            IF y2%<74 THEN
+            IF y2%<ymax% THEN
               y2%+=v%
             ELSE
               x2%+=h%
             ENDIF
 
-            IF x1%>0 THEN
+            IF x1%>xmin% THEN
               x1%+=h%
             ELSE
               y1%+=v%
@@ -1022,26 +1038,26 @@
 
 
           WHEN 2 : REM bottom right
-            IF y2%>0 THEN
+            IF y2%>ymin% THEN
               y2%+=v%
             ELSE
               x2%+=h%
             ENDIF
 
-            IF x1%>0 THEN
+            IF x1%>xmin% THEN
               x1%+=h%
             ELSE
               y1%+=v%
             ENDIF
 
           WHEN 3 : REM bottom left
-            IF y1%>0 THEN
+            IF y1%>ymin% THEN
               y1%+=v%
             ELSE
               x1%+=h%
             ENDIF
 
-            IF x2%<79 THEN
+            IF x2%<xmax% THEN
               x2%+=h%
             ELSE
               y2%+=v%
@@ -1053,8 +1069,6 @@
         IF gR>17.9 THEN gR=17.9
         IF gR<0 THEN gR=0
         PROCbresenham_p(x1%,y1%,x2%,y2%,1-erase%,gR)
-        REM PRINTTAB(0,0)STR$(x1%);",";STR$(y1%);" : ";STR$(x2%);",";STR$(y2%);" : ";STR$(gR);"    ";
-        REM A=GET
 
       NEXT
 
@@ -1356,8 +1370,8 @@
             IF animation% THEN PROCloadnextframe(1,0)
           ENDIF
 
-        WHEN T_box& : REM rectangle tool
-          IF animateshape% THEN
+        WHEN T_box&,T_gradl&,T_gradr&,T_gradt&,T_gradb&,T_gradtl&,T_gradtr&,T_gradbr&,T_gradbl& : REM rectangle / grad tools
+          IF animateshape% AND toolsel%=T_box& THEN
             PROCundosaveall
             PROCdrawmenu
           ELSE
@@ -1371,15 +1385,15 @@
           REPEAT
             PROCREADMOUSE
             IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
-              PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
-              PROCrectangle(startx%,starty%,PX%,PY%,2)
+              PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2,0)
+              PROCrectangle(startx%,starty%,PX%,PY%,2,0)
               OLD_PX%=PX%
               OLD_PY%=PY%
             ENDIF
           UNTIL MB%=0
           REM PROCrectangle(startx%,starty%,PX%,PY%,2)
           PROCmenurestore
-          IF animateshape%=1 THEN
+          IF animateshape%=1 AND toolsel%=T_box& THEN
             oldframe%=frame%
             PROCframesave(frame%)
             animatelencount%=animatelen%
@@ -1388,7 +1402,29 @@
             frame%=oldframe%-1
             PROCloadnextframe(1,0)
           ELSE
-            PROCrectangle(startx%,starty%,PX%,PY%,1-erase%)
+
+            CASE toolsel% OF
+              WHEN T_box& : REM rectangle
+                PROCrectangle(startx%,starty%,PX%,PY%,1-erase%,1)
+              WHEN T_gradl& : REM gradient left to right
+                PROCrectangle_g(startx%,starty%,PX%,PY%,0,1)
+              WHEN T_gradr& : REM gradient right to left
+                PROCrectangle_g(startx%,starty%,PX%,PY%,0,-1)
+              WHEN T_gradt& : REM gradient top to bottom
+                PROCrectangle_g(startx%,starty%,PX%,PY%,1,1)
+              WHEN T_gradb& : REM gradient bottom to top
+                PROCrectangle_g(startx%,starty%,PX%,PY%,1,-1)
+              WHEN T_gradtl& : REM gradient top left to bottom right
+                PROCdiagonal_g(startx%,starty%,PX%,PY%,0,0)
+              WHEN T_gradtr& : REM gradient top right to bottom left
+                PROCdiagonal_g(startx%,starty%,PX%,PY%,0,1)
+              WHEN T_gradbr& : REM gradient bottom right to top left
+                PROCdiagonal_g(startx%,starty%,PX%,PY%,0,2)
+              WHEN T_gradbl& : REM gradient bottom left to top right
+                PROCdiagonal_g(startx%,starty%,PX%,PY%,0,3)
+
+            ENDCASE
+
             PROCframesave(frame%)
             IF animation% THEN PROCloadnextframe(1,0)
           ENDIF
@@ -2014,15 +2050,15 @@
                 IF PX%>prx%-1 THEN PX%=prx%-1
                 IF PY%<9 THEN PY%=9
                 IF PY%>pry%-1 THEN PY%=pry%-1
-                PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2)
-                PROCrectangle(startx%,starty%,PX%,PY%,2)
+                PROCrectangle(startx%,starty%,OLD_PX%,OLD_PY%,2,0)
+                PROCrectangle(startx%,starty%,PX%,PY%,2,0)
                 OLD_PX%=PX%
                 OLD_PY%=PY%
               ENDIF
             UNTIL MB%=0
 
             PROCdrawsprite
-            PROCrectangle(startx%,starty%,PX%,PY%,1-erase%)
+            PROCrectangle(startx%,starty%,PX%,PY%,1-erase%,1)
             PROCsavesprite(sprite_cur%)
 
           WHEN T_circle&: REM circle
@@ -2599,24 +2635,18 @@
 
           WHEN 3 : REM fill
             CASE C% OF
-              WHEN 0 : REM flood fill
-                toolsel%=T_fill&
-                toolcursor%=18
 
-              WHEN 1,2,3,4,5,6,7,8 : REM gradients
+              WHEN 0,1,2,3,4,5,6,7,8 : REM flood fill / gradients
                 toolsel%=C%+T_fill&
                 toolcursor%=18
 
-              WHEN 9,10 : REM gradient type
+              WHEN 9,10,11,12 : REM gradient type
+                gradtype%=C%-9
 
             ENDCASE
+            PROCsubupdate(C%)
 
-            IF C%>-1 AND C%<11 THEN
-              PROCsubupdate(C%)
-
-
-              done%=1
-            ENDIF
+            IF C%>-1 AND C%<9 THEN  done%=1
 
           WHEN 4 : REM special
 
@@ -2793,31 +2823,9 @@
 
           WHEN 3 : REM fill
             CASE C% OF
-              WHEN 1,2,3,4,5,6,7,8
+              WHEN 1,2,3,4,5,6,7,8 : REM gradients
                 PROCmenurestore
                 PROCdrawmenu
-                PROCundosave
-
-                CASE C% OF
-                  WHEN 1 : REM gradient left to right
-                    PROCrectangle_g(2,3,79,74,0)
-                  WHEN 2 : REM gradient right to left
-                    PROCrectangle_g(79,3,2,74,0)
-                  WHEN 3 : REM gradient top to bottom
-                    PROCrectangle_g(2,3,79,74,1)
-                  WHEN 4 : REM gradient bottom to top
-                    PROCrectangle_g(2,74,79,3,1)
-                  WHEN 5 : REM gradient top left to bottom right
-                    PROCdiagonal_g(0,0,0,18)
-                  WHEN 6 : REM gradient top right to bottom left
-                    PROCdiagonal_g(1,0,0,18)
-                  WHEN 7 : REM gradient bottom right to top left
-                    PROCdiagonal_g(1,1,0,18)
-                  WHEN 8 : REM gradient bottom left to top right
-                    PROCdiagonal_g(0,1,0,18)
-
-                ENDCASE
-                PROCframesave(frame%)
 
               WHEN 11 : REM keyboard and options screen
                 menuext%=M_keyboard%
@@ -7094,14 +7102,17 @@
         WHEN 3 : REM fill
 
           PROCmenutext(0,"FILL SOLID ",SX%+20,menuadd%,14,(toolsel%=T_fill&)*-4,-48)
-          PROCmenutext(1,"GRAD LEFT  ",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(2,"GRAD RIGHT ",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(3,"GRAD TOP   ",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(4,"GRAD BOTTOM",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(5,"GRAD TOP-L ",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(6,"GRAD TOP-R ",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(7,"GRAD BOT-R ",SX%+20,menuadd%,14,0,-48)
-          PROCmenutext(8,"GRAD BOT-L ",SX%+20,menuadd%,14,0,-48)
+          PROCmenutext(1,"GRAD LEFT  ",SX%+20,menuadd%,14,(toolsel%=T_gradl&)*-4,-48)
+          PROCmenutext(2,"GRAD RIGHT ",SX%+20,menuadd%,14,(toolsel%=T_gradr&)*-4,-48)
+          PROCmenutext(3,"GRAD TOP   ",SX%+20,menuadd%,14,(toolsel%=T_gradt&)*-4,-48)
+          PROCmenutext(4,"GRAD BOTTOM",SX%+20,menuadd%,14,(toolsel%=T_gradb&)*-4,-48)
+          PROCmenutext(5,"GRAD TOP-L ",SX%+20,menuadd%,14,(toolsel%=T_gradtl&)*-4,-48)
+          PROCmenutext(6,"GRAD TOP-R ",SX%+20,menuadd%,14,(toolsel%=T_gradtr&)*-4,-48)
+          PROCmenutext(7,"GRAD BOT-R ",SX%+20,menuadd%,14,(toolsel%=T_gradbr&)*-4,-48)
+          PROCmenutext(8,"GRAD BOT-L ",SX%+20,menuadd%,14,(toolsel%=T_gradbl&)*-4,-48)
+          FOR I%=0 TO 3
+            PROCgtext("O",SX%+404,menuadd%-24-I%*60,12+(gradtype%=I%)*2,0)
+          NEXT
 
           IF C%=-1 THEN
             GCOL 0,8
@@ -7110,7 +7121,7 @@
             menuadd%-=24
 
             REM gradient fill options
-            PROCaddcontrange(9,SX%+40,menuadd%,SX%+320,menuadd%-48)
+            PROCaddcontrange(9,SX%+40,menuadd%-50,SX%+324,menuadd%)
             GCOL 0,9
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
             GCOL 0,11
@@ -7125,7 +7136,7 @@
               NEXT
             NEXT
 
-            PROCaddcontrange(9,SX%+40,menuadd%,SX%+320,menuadd%-48)
+            PROCaddcontrange(10,SX%+40,menuadd%-50,SX%+324,menuadd%-2)
             GCOL 0,11
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
             GCOL 0,12
@@ -7149,7 +7160,7 @@
               NEXT
             NEXT
 
-            PROCaddcontrange(9,SX%+40,menuadd%,SX%+320,menuadd%-48)
+            PROCaddcontrange(11,SX%+40,menuadd%-50,SX%+324,menuadd%-2)
             GCOL 0,12
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
             GCOL 0,14
@@ -7173,7 +7184,7 @@
               NEXT
             NEXT
 
-            PROCaddcontrange(9,SX%+40,menuadd%,SX%+320,menuadd%-48)
+            PROCaddcontrange(12,SX%+40,menuadd%-50,SX%+324,menuadd%-2)
             GCOL 0,13
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
             GCOL 0,11
@@ -7424,10 +7435,10 @@
       REM ##########################################################
       REM save control range
       DEF PROCaddcontrange(n%,x1%,y1%,x2%,y2%)
-      controlrange{(n%)}.x1%=x%-1
-      controlrange{(n%)}.y1%=y%-sy%+2
-      controlrange{(n%)}.x2%=x%+sx%
-      controlrange{(n%)}.y2%=y%+8
+      controlrange{(n%)}.x1%=x1%
+      controlrange{(n%)}.y1%=y1%
+      controlrange{(n%)}.x2%=x2%
+      controlrange{(n%)}.y2%=y2%
       ENDPROC
 
       REM ##########################################################
