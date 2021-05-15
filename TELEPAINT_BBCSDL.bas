@@ -167,6 +167,7 @@
       bakcol%=0
       textfore%=0
       toolsel%=T_paint&
+      toolcursor%=15
       copypaste%=0
       copysize%=0
       copyx%=0
@@ -184,7 +185,6 @@
       colmode%=0        : REM column mode for fore and back tools
       shapetype%=0      : REM enclosed shape type 0=outline, 1=filled, 2=empty
       gradtype%=0
-      toolcursor%=15
       animateshape%=0
       animategap%=0
       animategapcount%=0
@@ -282,6 +282,13 @@
       FOR I%=0 TO 17
         FOR H%=0 TO 15
           READ pat%(I%,H%)
+        NEXT
+      NEXT
+
+      DIM grad%(3,17)
+      FOR I%=0 TO 3
+        FOR H%=0 TO 17
+          READ grad%(I%,H%)
         NEXT
       NEXT
 
@@ -933,13 +940,15 @@
       ELSE
         gAdd=18/(x2%-x1%)*dv%
       ENDIF
+
       FOR lx%=x1% TO x2%
         IF d% THEN gR=gRd
+
         FOR ly%=y1% TO y2%
           REM range check, set pattern colour and plot
           IF lx%>xMin% AND lx%<xMax% AND ly%>yMin% AND ly%<yMax% THEN
             p%=lx% MOD 4+(ly% MOD 4)*4
-            dc%=pat%(INT(gR),p%)
+            dc%=pat%(grad%(gradtype%,INT(gR)),p%)
           ENDIF
 
           PROCpoint(lx%,ly%,dc%)
@@ -955,6 +964,7 @@
           gR+=gAdd
           IF gR>17.9 THEN gR=17.9
           IF gR<0 THEN gR=0
+
         ENDIF
       NEXT
 
@@ -1068,7 +1078,7 @@
         IF gR>max% OR gR<min% THEN gAdd=-gAdd
         IF gR>17.9 THEN gR=17.9
         IF gR<0 THEN gR=0
-        PROCbresenham_p(x1%,y1%,x2%,y2%,1-erase%,gR)
+        PROCbresenham_p(x1%,y1%,x2%,y2%,1-erase%,grad%(gradtype%,INT(gR)))
 
       NEXT
 
@@ -1897,7 +1907,7 @@
             ENDIF
           ENDIF
           text$=LEFT$(text$,30)
-          toolsel%=T_text&
+          REM toolsel%=T_text&
 
         WHEN 20 : REM text controls
           CASE TX% OF
@@ -2579,12 +2589,12 @@
                 ENDIF
 
               WHEN 15 : REM keyboard font screen
-
+                done%=1
             ENDCASE
 
             PROCsubupdate(0)
 
-            IF C%>-1 AND C%<5 OR C%=15 THEN
+            IF C%>-1 AND C%<5 THEN
               done%=1
               toolcursor%=15
             ENDIF
@@ -2739,7 +2749,12 @@
                   PROCpasteregion_buf(X%,copylockx%,copylocky%)
                 NEXT
 
-              WHEN 3 : REM dupe colour codes to all frames
+              WHEN 3 : REM dupe all codes to all frames
+                PROCmenurestore
+                PROCdrawmenu
+                PROCundosaveall
+
+                PROCcopycodes_buf(frame%)
 
               WHEN 4 : REM copy frame to next frame
                 PROCmenurestore
@@ -4987,6 +5002,26 @@
       ENDPROC
 
       REM ##########################################################
+      REM copy control codes to all frames
+      DEF PROCcopycodes_buf(s%)
+      LOCAL X%,Y%,C%,F%
+
+      FOR F%=1 TO frame_max%
+        IF s%<>F% THEN
+          REM PROCundosave
+          FOR X%=0 TO 39
+            FOR Y%=0 TO 23
+              C%=frame_buffer&(s%-1,X%+Y%*40)
+              IF C%>128 AND C%<160 THEN
+                frame_buffer&(F%-1,X%+Y%*40)=C%
+              ENDIF
+            NEXT
+          NEXT
+        ENDIF
+      NEXT
+      ENDPROC
+
+      REM ##########################################################
       REM move selected region to a new location
       DEF PROCmoveregion(h%,v%)
       LOCAL X%,Y%,PX%,PY%,C%
@@ -6999,11 +7034,11 @@
 
       CASE sub_cur% OF
         WHEN 0 : REM paint
-          PROCmenutext(0,"PAINT      ",SX%+20,menuadd%,14,(toolsel%=T_paint&)*-4,-48)
-          PROCmenutext(1,"LINE       ",SX%+20,menuadd%,14,(toolsel%=T_line&)*-4,-48)
-          PROCmenutext(2,"BOX        ",SX%+20,menuadd%,14,(toolsel%=T_box&)*-4,-48)
-          PROCmenutext(3,"CIRCLE     ",SX%+20,menuadd%,14,(toolsel%=T_circle&)*-4,-48)
-          PROCmenutext(4,"TEXT       ",SX%+20,menuadd%,14,(toolsel%=T_text&)*-4,-48)
+          PROCmenutext(0,"PAINT        ",SX%+20,menuadd%,14,(toolsel%=T_paint&)*-4,-48)
+          PROCmenutext(1,"LINE         ",SX%+20,menuadd%,14,(toolsel%=T_line&)*-4,-48)
+          PROCmenutext(2,"BOX          ",SX%+20,menuadd%,14,(toolsel%=T_box&)*-4,-48)
+          PROCmenutext(3,"CIRCLE       ",SX%+20,menuadd%,14,(toolsel%=T_circle&)*-4,-48)
+          PROCmenutext(4,"TEXT         ",SX%+20,menuadd%,14,(toolsel%=T_text&)*-4,-48)
 
           GCOL 0,8
           RECTANGLE SX%+20,menuadd%,SW%-40,2
@@ -7019,7 +7054,7 @@
           PROCgtext(LEFT$(fontname$(fontcur%)+"         ",10),SX%+20,menuadd%-432,13,0)
 
           IF C%=-1 THEN
-            PROCmenutext(5,"ANIM8 LINES",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(5,"ANIM8 LINES  ",SX%+20,menuadd%,11,0,-48)
             PROCgtext("GAP",SX%+20,menuadd%,14,0)
             PROCmenutext(6," - ",SX%+128,menuadd%,14,4,0)
             PROCmenutext(7," + ",SX%+332,menuadd%,14,4,-48)
@@ -7034,9 +7069,9 @@
 
             PROCgtext("SHAPE OPTIONS",SX%+20,menuadd%,8,0)
             menuadd%-=48
-            PROCmenutext(10,"OUTLINE     ",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(11,"FILLED      ",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(12,"EMPTY       ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(10,"OUTLINE      ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(11,"FILLED       ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(12,"EMPTY        ",SX%+20,menuadd%,11,0,-48)
 
             GCOL 0,8
             RECTANGLE SX%+20,menuadd%,SW%-40,2
@@ -7052,36 +7087,36 @@
 
             menuadd%-=24
 
-            PROCmenutext(15,"KYBRD FONTS",SX%+20,menuadd%,10,(C%=13)*-4,-48)
+            PROCmenutext(15,"KYBRD FONTS  ",SX%+20,menuadd%,10,(C%=13)*-4,-48)
 
           ENDIF
 
         WHEN 1 : REM dither
-          PROCmenutext(0,"DITHER 1    ",SX%+20,menuadd%,14,(toolsel%=T_dither1&)*-4,-48)
-          PROCmenutext(1,"DITHER 2    ",SX%+20,menuadd%,14,(toolsel%=T_dither2&)*-4,-48)
-          PROCmenutext(2,"DITHER 3    ",SX%+20,menuadd%,14,(toolsel%=T_dither3&)*-4,-48)
-          PROCmenutext(3,"DITHER 4    ",SX%+20,menuadd%,14,(toolsel%=T_dither4&)*-4,-48)
-          PROCmenutext(4,"SOLID BLOCK ",SX%+20,menuadd%,14,(toolsel%=T_dither5&)*-4,-48)
+          PROCmenutext(0,"DITHER 1     ",SX%+20,menuadd%,14,(toolsel%=T_dither1&)*-4,-48)
+          PROCmenutext(1,"DITHER 2     ",SX%+20,menuadd%,14,(toolsel%=T_dither2&)*-4,-48)
+          PROCmenutext(2,"DITHER 3     ",SX%+20,menuadd%,14,(toolsel%=T_dither3&)*-4,-48)
+          PROCmenutext(3,"DITHER 4     ",SX%+20,menuadd%,14,(toolsel%=T_dither4&)*-4,-48)
+          PROCmenutext(4,"SOLID BLOCK  ",SX%+20,menuadd%,14,(toolsel%=T_dither5&)*-4,-48)
 
         WHEN 2 : REM copy paste
-          PROCmenutext(0,"COPY        ",SX%+20,menuadd%,14,(toolsel%=T_copy&)*-4,-48)
-          PROCmenutext(1,"PASTE       ",SX%+20,menuadd%,14,(toolsel%=T_paste&)*-4,-48)
+          PROCmenutext(0,"COPY         ",SX%+20,menuadd%,14,(toolsel%=T_copy&)*-4,-48)
+          PROCmenutext(1,"PASTE        ",SX%+20,menuadd%,14,(toolsel%=T_paste&)*-4,-48)
 
           GCOL 0,8
           RECTANGLE SX%+20,menuadd%,SW%-40,2
 
           menuadd%-=24
 
-          PROCmenutext(2,"PST ALL FRMS",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(3,"CPY COLS ALL",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(4,"DUPE FRM >> ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(5,"DUPE FRM << ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(6,"MIRROR      ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(7,"REFLECT     ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(8,"FLIP HORZ   ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(9,"FLIP VERT   ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(10,"NEGATIVE    ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(11,"ERASE       ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(2,"PASTE TO ALL ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(3,"CPY CODES ALL",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(4,"COPY FRAME > ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(5,"COPY FRAME < ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(6,"MIRROR       ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(7,"REFLECT      ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(8,"FLIP HORZ    ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(9,"FLIP VERT    ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(10,"NEGATIVE     ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(11,"ERASE        ",SX%+20,menuadd%,10,0,-48)
 
 
           GCOL 0,8
@@ -7094,24 +7129,24 @@
           PROCgtext(CHR$(78+11*copy_trns%),SX%+404,menuadd%-96,9+copy_trns%,0)
 
           IF C%=-1 THEN
-            PROCmenutext(12,"PASTE FIX X",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(13,"PASTE FIX Y",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(14,"TRANSPARENT",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(12,"PASTE FIX X  ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(13,"PASTE FIX Y  ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(14,"TRANSPARENT  ",SX%+20,menuadd%,11,0,-48)
           ENDIF
 
         WHEN 3 : REM fill
 
-          PROCmenutext(0,"FILL SOLID ",SX%+20,menuadd%,14,(toolsel%=T_fill&)*-4,-48)
-          PROCmenutext(1,"GRAD LEFT  ",SX%+20,menuadd%,14,(toolsel%=T_gradl&)*-4,-48)
-          PROCmenutext(2,"GRAD RIGHT ",SX%+20,menuadd%,14,(toolsel%=T_gradr&)*-4,-48)
-          PROCmenutext(3,"GRAD TOP   ",SX%+20,menuadd%,14,(toolsel%=T_gradt&)*-4,-48)
-          PROCmenutext(4,"GRAD BOTTOM",SX%+20,menuadd%,14,(toolsel%=T_gradb&)*-4,-48)
-          PROCmenutext(5,"GRAD TOP-L ",SX%+20,menuadd%,14,(toolsel%=T_gradtl&)*-4,-48)
-          PROCmenutext(6,"GRAD TOP-R ",SX%+20,menuadd%,14,(toolsel%=T_gradtr&)*-4,-48)
-          PROCmenutext(7,"GRAD BOT-R ",SX%+20,menuadd%,14,(toolsel%=T_gradbr&)*-4,-48)
-          PROCmenutext(8,"GRAD BOT-L ",SX%+20,menuadd%,14,(toolsel%=T_gradbl&)*-4,-48)
+          PROCmenutext(0,"FILL SOLID   ",SX%+20,menuadd%,14,(toolsel%=T_fill&)*-4,-48)
+          PROCmenutext(1,"GRAD LEFT    ",SX%+20,menuadd%,14,(toolsel%=T_gradl&)*-4,-48)
+          PROCmenutext(2,"GRAD RIGHT   ",SX%+20,menuadd%,14,(toolsel%=T_gradr&)*-4,-48)
+          PROCmenutext(3,"GRAD TOP     ",SX%+20,menuadd%,14,(toolsel%=T_gradt&)*-4,-48)
+          PROCmenutext(4,"GRAD BOTTOM  ",SX%+20,menuadd%,14,(toolsel%=T_gradb&)*-4,-48)
+          PROCmenutext(5,"GRAD TOP-L   ",SX%+20,menuadd%,14,(toolsel%=T_gradtl&)*-4,-48)
+          PROCmenutext(6,"GRAD TOP-R   ",SX%+20,menuadd%,14,(toolsel%=T_gradtr&)*-4,-48)
+          PROCmenutext(7,"GRAD BOT-R   ",SX%+20,menuadd%,14,(toolsel%=T_gradbr&)*-4,-48)
+          PROCmenutext(8,"GRAD BOT-L   ",SX%+20,menuadd%,14,(toolsel%=T_gradbl&)*-4,-48)
           FOR I%=0 TO 3
-            PROCgtext("O",SX%+404,menuadd%-24-I%*60,12+(gradtype%=I%)*2,0)
+            PROCgtext("O",SX%+404,menuadd%-32-I%*60,12+(gradtype%=I%)*2,0)
           NEXT
 
           IF C%=-1 THEN
@@ -7121,7 +7156,7 @@
             menuadd%-=24
 
             REM gradient fill options
-            PROCaddcontrange(9,SX%+40,menuadd%-50,SX%+324,menuadd%)
+            PROCaddcontrange(9,SX%+40,menuadd%-50,SX%+440,menuadd%)
             GCOL 0,9
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
             GCOL 0,11
@@ -7136,7 +7171,7 @@
               NEXT
             NEXT
 
-            PROCaddcontrange(10,SX%+40,menuadd%-50,SX%+324,menuadd%-2)
+            PROCaddcontrange(10,SX%+40,menuadd%-50,SX%+440,menuadd%-2)
             GCOL 0,11
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
             GCOL 0,12
@@ -7160,7 +7195,7 @@
               NEXT
             NEXT
 
-            PROCaddcontrange(11,SX%+40,menuadd%-50,SX%+324,menuadd%-2)
+            PROCaddcontrange(11,SX%+40,menuadd%-50,SX%+440,menuadd%-2)
             GCOL 0,12
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
             GCOL 0,14
@@ -7184,7 +7219,7 @@
               NEXT
             NEXT
 
-            PROCaddcontrange(12,SX%+40,menuadd%-50,SX%+324,menuadd%-2)
+            PROCaddcontrange(12,SX%+40,menuadd%-50,SX%+440,menuadd%-2)
             GCOL 0,13
             RECTANGLE FILL SX%+40,menuadd%+2,284,-50
             GCOL 0,11
@@ -7212,10 +7247,10 @@
           ENDIF
 
         WHEN 4 : REM special
-          PROCmenutext(0,"FLSH (136) ",SX%+20,menuadd%,14,(toolsel%=T_flash&)*-4,-48)
-          PROCmenutext(1,"DBLH (141) ",SX%+20,menuadd%,14,(toolsel%=T_double&)*-4,-48)
-          PROCmenutext(2,"SEPR (154) ",SX%+20,menuadd%,14,(toolsel%=T_separate&)*-4,-48)
-          PROCmenutext(3,"HOLD (158) ",SX%+20,menuadd%,14,(toolsel%=T_hold&)*-4,-48)
+          PROCmenutext(0,"FLSH (136)   ",SX%+20,menuadd%,14,(toolsel%=T_flash&)*-4,-48)
+          PROCmenutext(1,"DBLH (141)   ",SX%+20,menuadd%,14,(toolsel%=T_double&)*-4,-48)
+          PROCmenutext(2,"SEPR (154)   ",SX%+20,menuadd%,14,(toolsel%=T_separate&)*-4,-48)
+          PROCmenutext(3,"HOLD (158)   ",SX%+20,menuadd%,14,(toolsel%=T_hold&)*-4,-48)
 
           IF C%=-1 THEN
             GCOL 0,8
@@ -7229,17 +7264,17 @@
           PROCgtext(CHR$(78+11*colmode%),SX%+404,menuadd%-48,9+colmode%,0)
 
           IF C%=-1 THEN
-            PROCmenutext(4,"SHOW GRID  ",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(5,"COLUMN MODE",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(4,"SHOW GRID    ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(5,"COLUMN MODE  ",SX%+20,menuadd%,11,0,-48)
 
             GCOL 0,8
             RECTANGLE SX%+20,menuadd%,SW%-40,2
 
             menuadd%-=24
-            PROCmenutext(6,"SPRITES    ",SX%+20,menuadd%,10,(C%=14)*-4,-48)
-            PROCmenutext(7,"EDIT.TF    ",SX%+20,menuadd%,10,(C%=15)*-4,-48)
-            PROCmenutext(8,"KYBRD FONTS",SX%+20,menuadd%,10,(C%=13)*-4,-48)
-            PROCmenutext(9,"HELP       ",SX%+20,menuadd%,10,(C%=16)*-4,-48)
+            PROCmenutext(6,"SPRITES      ",SX%+20,menuadd%,10,(C%=14)*-4,-48)
+            PROCmenutext(7,"EDIT.TF      ",SX%+20,menuadd%,10,(C%=15)*-4,-48)
+            PROCmenutext(8,"KYBRD FONTS  ",SX%+20,menuadd%,10,(C%=13)*-4,-48)
+            PROCmenutext(9,"HELP         ",SX%+20,menuadd%,10,(C%=16)*-4,-48)
           ENDIF
 
       ENDCASE
@@ -7266,6 +7301,7 @@
 
       PROCresetcontrols
       PROCsubupdate(-1)
+      PROCsubupdate(0)
 
       ENDPROC
 
@@ -7439,6 +7475,8 @@
       controlrange{(n%)}.y1%=y1%
       controlrange{(n%)}.x2%=x2%
       controlrange{(n%)}.y2%=y2%
+      REM GCOL 0,11
+      REM RECTANGLE x1%,y1%,x2%-x1%,y2%-y1%
       ENDPROC
 
       REM ##########################################################
@@ -7780,7 +7818,7 @@
       DATA 448,960,460,860
       DATA 480,960,460,280
       DATA 512,960,460,800
-      DATA 544,960,460,920
+      DATA 544,960,460,740
       DATA 576,960,460,568
 
       REM patternData
@@ -7802,6 +7840,13 @@
       DATA 1,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1
       DATA 1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1
       DATA 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+
+      REM gradient patterns
+      REM                   *
+      DATA 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17
+      DATA 0,0,0,0,4,8,11,14,17,16,14,11,8,4,0,0,0,0
+      DATA 0,2,4,6,8,10,12,14,17,16,14,12,10,8,6,4,2,0
+      DATA 0,0,0,0,0,0,0,0,0,5,9,13,17,13,9,5,0,0
 
       REM for future reference
 
