@@ -14,10 +14,6 @@
 
       REM *** SPRITES - ADD MASKING AND TRANSPARENCY FOR EACH SPRITE SET
 
-      REM *** GRADIENTS - ADD min, max, weight (in progress)
-
-      REM *** SELECT TOOL, SELECT AN AREA TO TRANSFORM: MIRROR, REFLECT, NEGATIVE, FLIP H, FLIP V, ERASE, SCROLL
-
       REM *** TRANSITION EFFECTS, SCROLL FRAME IN / OUT - LEFT, RIGHT, UP, DOWN  , FRAME DISOLVE... OTHERS?
 
       REM *** END TODO LIST ***
@@ -921,6 +917,8 @@
 
       LOCAL lx%,ly%,dc%,gR,gRd,gAdd,p%
 
+      IF x1%=x2% OR y1%=y2% THEN ENDPROC
+
       REM Calculate direction vector, gradient value And gradient Default values
       gR=0 : gRd=0
       IF x1%>x2% THEN
@@ -974,6 +972,8 @@
       REM diabonal gradient
       DEF PROCdiagonal_g(x1%,y1%,x2%,y2%,p%,d%)
       LOCAL h%,v%,l%,gR,gAdd,min%,max%,L%
+
+      IF x1%=x2% OR y1%=y2% THEN ENDPROC
 
       IF x1%>x2% THEN SWAP x1%,x2%
       IF y1%>y2% THEN SWAP y1%,y2%
@@ -2715,15 +2715,31 @@
                 menuext%=M_keyboard%
                 PROCkeyboardmenu(1)
                 PROCdrawmenu
-
               OTHERWISE
-                PROCmenurestore
-                PROCdrawmenu
 
+                CASE menufrom% OF
+                  WHEN 1
+                    menuext%=M_keyboard%
+                    PROCkeyboardmenu(1)
+                    PROCdrawmenu
+
+                  WHEN 2
+                    menuext%=M_sprites%
+                    PROCspritemenu(1)
+                    PROCdrawmenu
+
+                  OTHERWISE
+                    PROCmenurestore
+                    PROCdrawmenu
+                    REM PROCdrawgrid
+
+                ENDCASE
 
             ENDCASE
 
             IF fontcur%<>F% AND fontcur%>0 THEN PROCloadfont(fontname$(fontcur%))
+
+
 
           WHEN 1 : REM dither menu
             PROCmenurestore
@@ -4969,6 +4985,7 @@
             s%+=1
           NEXT
         NEXT
+
       ENDIF
       ENDPROC
 
@@ -4979,14 +4996,12 @@
 
       s%=0
 
-      IF copylockxt% THEN x1%=copylockx%
-      IF copylockyt% THEN y1%=copylocky%
-
       IF copysize%>0 THEN
         REM PROCundosave
         FOR X%=x1% TO x1%+copyx%
           FOR Y%=y1%-1 TO y1%+copyy%-1
-            IF X%<40 AND X%>-1 AND Y%<25 AND Y%>0 THEN
+
+            IF X%<40 AND X%>-1 AND Y%<24 AND Y%>-1 THEN
               C%=copy_buffer&(s%)
               IF copy_trns%=0 THEN
                 frame_buffer&(f%-1,X%+Y%*40)=C%
