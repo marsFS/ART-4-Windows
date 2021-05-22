@@ -1264,7 +1264,7 @@
       REM ##########################################################
       REM main canvas
       DEF PROCmaincanvas
-      LOCAL X%,Y%
+      LOCAL X%,Y%,A%
       IF menuext%>0 THEN PROCmenurestore
 
       CASE toolsel% OF
@@ -1480,7 +1480,13 @@
           IF fontcur%=0 THEN
             A$=LEFT$(text$,40-TX%)
             FOR X%=0 TO LEN(A$)-1
-              VDU 31,TX%+X%,TY%,ASC(MID$(A$,X%+1,1))+128
+              A%=ASC(MID$(A$,X%+1,1))
+              CASE A% OF
+                WHEN 35 : A%=96
+                WHEN 95 : A%=35
+                WHEN 96 : A%=95
+              ENDCASE
+              VDU 31,TX%+X%,TY%,A% : REM ASC(MID$(A$,X%+1,1))+128
             NEXT
             REM                PRINTTAB(TX%,TY%)A$;
           ELSE
