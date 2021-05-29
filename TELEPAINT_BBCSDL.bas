@@ -1325,6 +1325,7 @@
           IF animation% THEN PROCloadnextframe(1,0)
 
         WHEN T_brush1&,T_brush2&,T_brush3&,T_brush4&,T_brush5& : REM brush tools
+          PROCundosave
           OLD_PX%=-1
           REPEAT
             PROCREADMOUSE
