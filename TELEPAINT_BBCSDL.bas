@@ -82,24 +82,30 @@
       T_dither3&=6
       T_dither4&=7
       T_dither5&=8
-      T_fill&=9
-      T_gradl&=10
-      T_gradr&=11
-      T_gradt&=12
-      T_gradb&=13
-      T_gradtl&=14
-      T_gradtr&=15
-      T_gradbr&=16
-      T_gradbl&=17
-      T_copy&=18
-      T_paste&=19
-      T_text&=20
-      T_flash&=21
-      T_double&=22
-      T_separate&=23
-      T_hold&=24
-      T_backg&=25
-      T_foreg&=26
+      T_brush1&=9
+      T_brush2&=10
+      T_brush3&=11
+      T_brush4&=12
+      T_brush5&=13
+      T_fill&=14
+      T_gradl&=15
+      T_gradr&=16
+      T_gradt&=17
+      T_gradb&=18
+      T_gradtl&=19
+      T_gradtr&=20
+      T_gradbr&=21
+      T_gradbl&=22
+      REM cursor at tool for the tools below
+      T_copy&=23
+      T_paste&=24
+      T_text&=25
+      T_flash&=26
+      T_double&=27
+      T_separate&=28
+      T_hold&=29
+      T_backg&=30
+      T_foreg&=31
 
       REM drawing bounds used for < and >
       xMin%=1
@@ -1290,21 +1296,11 @@
               IF dither%=2 THEN DA%=4
               IF dither%=3 THEN DA%=8
 
-              X%=(PX% DIV DA%)*DA%
-              Y%=(PY% DIV DA%)*DA%
-
-              PROCpoint(X%,Y%,1-erase%)
-              PROCpoint(X%+D%,Y%+D%,1-erase%)
             WHEN 4 : REM solid
-              IF TX%>0 AND TX%<40 AND TY%>0 AND TY%<25 THEN
-                char%=255-erase%*95 : REM SOLID BLOCK #255
-                VDU 31,TX%,TY%,char%
-              ENDIF
-            WHEN 5
-
-            WHEN 6
+              char%=255-erase%*95 : REM SOLID BLOCK #255
 
           ENDCASE
+          OLD_PX%=-1
           REPEAT
             PROCREADMOUSE
             IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
@@ -1320,6 +1316,45 @@
                     char%=255-erase%*95 : REM SOLID BLOCK #255
                     VDU 31,TX%,TY%,char%
                   ENDIF
+              ENDCASE
+            ENDIF
+            OLD_PX%=PX%
+            OLD_PY%=PY%
+          UNTIL MB%=0
+          PROCframesave(frame%)
+          IF animation% THEN PROCloadnextframe(1,0)
+
+        WHEN T_brush1&,T_brush2&,T_brush3&,T_brush4&,T_brush5& : REM brush tools
+          OLD_PX%=-1
+          REPEAT
+            PROCREADMOUSE
+            IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+              CASE toolsel% OF
+                WHEN T_brush1& : REM brush 2   \
+                  FOR X%=-2 TO 2
+                    PROCpoint(PX%+X%,PY%+X%,1-erase%)
+                  NEXT
+                WHEN T_brush2& : REM brush 2   /
+                  FOR X%=-2 TO 2
+                    PROCpoint(PX%+X%,PY%-X%,1-erase%)
+                  NEXT
+
+                WHEN T_brush3& : REM brush 3  -
+                  FOR X%=-2 TO 2
+                    PROCpoint(PX%+X%,PY%,1-erase%)
+                  NEXT
+
+                WHEN T_brush4& : REM brush 4 |
+                  FOR X%=-2 TO 2
+                    PROCpoint(PX%,PY%+X%,1-erase%)
+                  NEXT
+
+                WHEN T_brush5& : REM brush 5
+                  FOR X%=-3 TO 3
+                    PROCbresenham(PX%-3-(ABS(X%)>2),PY%+X%,PX%+3+(ABS(X%)>2),PY%+X%,1-erase%)
+                  NEXT
+
+
               ENDCASE
             ENDIF
             OLD_PX%=PX%
@@ -2027,6 +2062,45 @@
 
             PROCsavesprite(sprite_cur%)
 
+          WHEN T_brush1&,T_brush2&,T_brush3&,T_brush4&,T_brush5&
+            PROCundosave
+            OLD_PX%=-1
+            REPEAT
+              PROCREADMOUSE
+              IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+                CASE toolsel% OF
+                  WHEN T_brush1& : REM brush 1  \
+                    FOR X%=-2 TO 2
+                      PROCpoint(PX%+X%,PY%+X%,1-erase%)
+                    NEXT
+                  WHEN T_brush2& : REM brush 2   /
+                    FOR X%=-2 TO 2
+                      PROCpoint(PX%+X%,PY%-X%,1-erase%)
+                    NEXT
+
+                  WHEN T_brush3& : REM brush 3  -
+                    FOR X%=-2 TO 2
+                      PROCpoint(PX%+X%,PY%,1-erase%)
+                    NEXT
+
+                  WHEN T_brush4& : REM brush 4 |
+                    FOR X%=-2 TO 2
+                      PROCpoint(PX%,PY%+X%,1-erase%)
+                    NEXT
+
+                  WHEN T_brush5& : REM brush 5  *
+                    FOR X%=-3 TO 3
+                      PROCbresenham(PX%-3-(ABS(X%)>2),PY%+X%,PX%+3+(ABS(X%)>2),PY%+X%,1-erase%)
+                    NEXT
+
+
+                ENDCASE
+              ENDIF
+              OLD_PX%=PX%
+              OLD_PY%=PY%
+            UNTIL MB%=0
+            PROCsavesprite(sprite_cur%)
+
           WHEN T_line&: REM line tool
             PROCundosave
 
@@ -2617,12 +2691,24 @@
                 toolsel%=T_dither4&
               WHEN 4 : REM solid block
                 toolsel%=T_dither5&
+              WHEN 5 : REM brush 1
+                toolsel%=T_brush1&
+              WHEN 6 : REM brush 2
+                toolsel%=T_brush2&
+              WHEN 7 : REM brush 3
+                toolsel%=T_brush3&
+              WHEN 8 : REM brush 4
+                toolsel%=T_brush4&
+              WHEN 9 : REM brush 5
+                toolsel%=T_brush5&
+
+
             ENDCASE
 
-            IF C%>-1 AND C%<5 THEN
+            IF C%>-1 AND C%<10 THEN
               done%=1
               toolcursor%=16
-              dither%=toolsel%-T_dither1&
+              IF C%<5 THEN dither%=toolsel%-T_dither1&
             ENDIF
 
           WHEN 2 : REM copy paste
@@ -2748,8 +2834,23 @@
 
 
           WHEN 1 : REM dither menu
-            PROCmenurestore
-            PROCdrawmenu
+            CASE menufrom% OF
+              WHEN 1
+                menuext%=M_keyboard%
+                PROCkeyboardmenu(1)
+                PROCdrawmenu
+
+              WHEN 2
+                menuext%=M_sprites%
+                PROCspritemenu(1)
+                PROCdrawmenu
+
+              OTHERWISE
+                PROCmenurestore
+                PROCdrawmenu
+                REM PROCdrawgrid
+
+            ENDCASE
 
           WHEN 2 : REM copy paste menu
             CASE C% OF
@@ -3210,13 +3311,13 @@
 
                       ENDIF
                     NEXT
-                    done%=1
-                    menuext%=77
+                    REM done%=1
+                    REM menuext%=77
 
                   WHEN 31 : REM undo
                     PROCundorestoreall
-                    done%=1
-                    menuext%=77
+                    REM done%=1
+                    REM menuext%=77
 
                   WHEN 32 : REM spare
 
@@ -3443,10 +3544,10 @@
       VDU 5
 
       FOR X%=0 TO LEN(A$)-1
-        GCOL 0,8
+        GCOL 0,4
         MOVE X%*40+308,990
         PRINTMID$(A$,X%+1,1)
-        GCOL 0,15
+        GCOL 0,14
         MOVE X%*40+312,994
         PRINTMID$(A$,X%+1,1)
 
@@ -3546,7 +3647,7 @@
       PROCanimcontrol(28,"LOAD",menuadd%,940,7,15,0)
       PROCanimcontrol(29,"SAVE",menuadd%,940,7,15,0)
       PROCanimcontrol(30,"PLOT",menuadd%,940,7,14,4)
-      PROCanimcontrol(31,"UNDO",menuadd%,940,7,8,0)
+      PROCanimcontrol(31,"UNDO",menuadd%,940,7,3,0)
       PROCanimcontrol(32,"----",menuadd%,940,7,8,0)
       PROCanimcontrol(33,"RSET",menuadd%,940,7,1,0)
       REM PROCanimcontrol(34,"----",menuadd%,940,7,8,0)
@@ -3632,12 +3733,12 @@
           OX%=X%
           OY%=Y%
         ENDIF
-        PRINTTAB(32,0)"MX:";STR$(MX% DIV 8);"  ";
-        PRINTTAB(32,1)"MY:";STR$(MY% DIV 8);"  ";
-        PRINTTAB(32,2)"PX:";STR$((MX% DIV 8)-40);"  ";
-        PRINTTAB(32,3)"PY:";STR$(76-(MY% DIV 8));"  ";
-        PRINTTAB(32,4)"CX:";STR$((X% DIV 16)-20);"  ";
-        PRINTTAB(32,5)"CY:";STR$(25-(Y% DIV 24));"  ";
+        REM PRINTTAB(32,0)"MX:";STR$(MX% DIV 8);"  ";
+        REM PRINTTAB(32,1)"MY:";STR$(MY% DIV 8);"  ";
+        REM PRINTTAB(32,2)"PX:";STR$((MX% DIV 8)-40);"  ";
+        REM PRINTTAB(32,3)"PY:";STR$(76-(MY% DIV 8));"  ";
+        PRINTTAB(32,0)"CX:";STR$((X% DIV 16)-20);"  ";
+        PRINTTAB(32,1)"CY:";STR$(25-(Y% DIV 24));"  ";
 
         REM save the position on click
         IF MB%=4 THEN
@@ -3664,7 +3765,7 @@
               FOR X%=0 TO fonts{(I%)}.w%-1
                 c%=fonts{(I%)}.d%(X%+Y%*fonts{(I%)}.w%)()
                 IF spr_trns%=0 THEN c%=(c%+1) AND 1
-                PROCpoint(X%+x%,y%+fonthgt%-Y%,c%)
+                PROCpoint(X%+x%,y%+fonthgt%-Y%,c%-erase%)
               NEXT
             NEXT
             x%+=fonts{(I%)}.w%
@@ -7119,6 +7220,24 @@
           PROCmenutext(3,"DITHER 4     ",SX%+20,menuadd%,14,(toolsel%=T_dither4&)*-4,-48)
           PROCmenutext(4,"SOLID BLOCK  ",SX%+20,menuadd%,14,(toolsel%=T_dither5&)*-4,-48)
 
+          GCOL 0,8
+          RECTANGLE SX%+20,menuadd%,SW%-40,2
+
+          menuadd%-=24
+          PROCmenutext(5,"BRUSH 1     ",SX%+20,menuadd%,14,(toolsel%=T_brush1&)*-4,-48)
+          GCOL 0,14
+          LINE SX%+310,menuadd%+42,SX%+330,menuadd%+22
+          LINE SX%+310,menuadd%+44,SX%+332,menuadd%+22
+          LINE SX%+312,menuadd%+44,SX%+332,menuadd%+24
+
+          PROCmenutext(6,"BRUSH 2  /  ",SX%+20,menuadd%,14,(toolsel%=T_brush2&)*-4,-48)
+          PROCmenutext(7,"BRUSH 3  -  ",SX%+20,menuadd%,14,(toolsel%=T_brush3&)*-4,-48)
+          PROCmenutext(8,"BRUSH 4     ",SX%+20,menuadd%,14,(toolsel%=T_brush4&)*-4,-48)
+          GCOL 0,14
+          RECTANGLE FILL SX%+328,menuadd%+22,2,24
+          PROCmenutext(9,"BRUSH 5  *  ",SX%+20,menuadd%,14,(toolsel%=T_brush5&)*-4,-48)
+
+
         WHEN 2 : REM copy paste
           PROCmenutext(0,"COPY         ",SX%+20,menuadd%,14,(toolsel%=T_copy&)*-4,-48)
           PROCmenutext(1,"PASTE        ",SX%+20,menuadd%,14,(toolsel%=T_paste&)*-4,-48)
@@ -7837,7 +7956,7 @@
       REM drop down sub menu locations, X,TOP - W,H  (Y=TOP-W)
       REM Paint, Dither, Copy, Fill, Special
       DATA 448,960,460,860
-      DATA 480,960,460,280
+      DATA 480,960,460,548
       DATA 512,960,460,800
       DATA 544,960,460,740
       DATA 576,960,460,568
