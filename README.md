@@ -29,6 +29,7 @@ Current TelePaint features:
 * Added Transformation tools
 * Implemented gradients correctly
 * Reworked sub menus system
+* Added 5 new brushes
 * Added hotkeys:
 * * CTRL + C  : Open Selection Tool
 * * SHIFT + Cursors   : Move selected region around in pixel increments
