@@ -87,25 +87,27 @@
       T_brush3&=11
       T_brush4&=12
       T_brush5&=13
-      T_fill&=14
-      T_gradl&=15
-      T_gradr&=16
-      T_gradt&=17
-      T_gradb&=18
-      T_gradtl&=19
-      T_gradtr&=20
-      T_gradbr&=21
-      T_gradbl&=22
+      T_brush6&=14
+      T_brush7&=15
+      T_fill&=16
+      T_gradl&=17
+      T_gradr&=18
+      T_gradt&=19
+      T_gradb&=20
+      T_gradtl&=21
+      T_gradtr&=22
+      T_gradbr&=23
+      T_gradbl&=24
       REM cursor at tool for the tools below
-      T_copy&=23
-      T_paste&=24
-      T_text&=25
-      T_flash&=26
-      T_double&=27
-      T_separate&=28
-      T_hold&=29
-      T_backg&=30
-      T_foreg&=31
+      T_copy&=25
+      T_paste&=26
+      T_text&=27
+      T_flash&=28
+      T_double&=29
+      T_separate&=30
+      T_hold&=31
+      T_backg&=32
+      T_foreg&=33
 
       REM drawing bounds used for < and >
       xMin%=1
@@ -885,12 +887,14 @@
             FOR Y%=y1%+1 TO y2%-1
               PROCpoint(x1%,Y%,m%)
               PROCpoint(x2%,Y%,m%)
-              CASE shapetype% OF
-                WHEN 1 : REM filled
-                  IF f%=1 THEN PROCbresenham(x1%,Y%,x2%,Y%,m%)
-                WHEN 2 : REM outline / empty
-                  IF shapetype%=2 AND f%=1 THEN PROCbresenham(x1%+1,Y%,x2%-1,Y%,1-m%)
-              ENDCASE
+              IF f%=1 THEN
+                CASE shapetype% OF
+                  WHEN 1 : REM filled
+                    PROCbresenham(x1%,Y%,x2%,Y%,m%)
+                  WHEN 2 : REM outline / empty
+                    PROCbresenham(x1%+1,Y%,x2%-1,Y%,1-m%)
+                ENDCASE
+              ENDIF
             NEXT
           ENDIF
         ENDIF
@@ -1007,7 +1011,7 @@
           h%=-1
           v%=-1
         WHEN 3 : REM bottom left
-    1     x2%=x1%
+          x2%=x1%
           y1%=y2%
           h%=1
           v%=-1
@@ -1093,7 +1097,7 @@
 
       REM ##########################################################
       REM CIRCLE ROUTINE
-      DEF PROCcircle(x1%,y1%,r%,m%)
+      DEF PROCcircle(x1%,y1%,r%,m%,f%)
       LOCAL p,x%,y%
 
       r%=ABS(r%)
@@ -1101,7 +1105,7 @@
       x%=0
       y%=r%
 
-      PROCcirclepoints(x1%,y1%,x%,y%,m%)
+      PROCcirclepoints(x1%,y1%,x%,y%,m%,f%)
 
       WHILE x%<y%
         x%+=1
@@ -1111,30 +1115,65 @@
           y%-=1
           p+=2*(x%-y%)+1
         ENDIF
-        PROCcirclepoints(x1%,y1%,x%,y%,m%)
+
+        PROCcirclepoints(x1%,y1%,x%,y%,m%,f%)
+
       ENDWHILE
 
       ENDPROC
 
       REM ##########################################################
       REM THIS PLOTS THE POINTS FOR CIRCLE ROUTINE
-      DEF PROCcirclepoints(cx%,cy%,x%,y%,m%)
+      DEF PROCcirclepoints(cx%,cy%,x%,y%,m%,f%)
       IF x%=0 THEN
         PROCpoint(cx%,cy%+y%,m%)
         PROCpoint(cx%,cy%-y%,m%)
         PROCpoint(cx%+y%,cy%,m%)
         PROCpoint(cx%-y%,cy%,m%)
+        IF f%=1 THEN
+          CASE shapetype% OF
+            WHEN 1 : REM filled
+              PROCbresenham(cx%,cy%+y%,cx%,cy%-y%,m%)
+              PROCbresenham(cx%-y%,cy%,cx%+y%,cy%,m%)
+            WHEN 2 : REM outline / empty
+              PROCbresenham(cx%,cy%+y%-1,cx%,cy%-y%+1,1-m%)
+              PROCbresenham(cx%-y%+1,cy%,cx%+y%-1,cy%,1-m%)
+          ENDCASE
+        ENDIF
+
       ELSE
         IF x%<=y% THEN
           PROCpoint(cx%+x%,cy%+y%,m%)
           PROCpoint(cx%-x%,cy%+y%,m%)
           PROCpoint(cx%+x%,cy%-y%,m%)
           PROCpoint(cx%-x%,cy%-y%,m%)
+          IF f%=1 THEN
+            CASE shapetype% OF
+              WHEN 1 : REM filled
+                PROCbresenham(cx%+x%,cy%+y%,cx%+x%,cy%-y%,m%)
+                PROCbresenham(cx%-x%,cy%+y%,cx%-x%,cy%-y%,m%)
+              WHEN 2 : REM outline / empty
+                PROCbresenham(cx%+x%,cy%+y%-1,cx%+x%,cy%-y%+1,1-m%)
+                PROCbresenham(cx%-x%,cy%+y%-1,cx%-x%,cy%-y%+1,1-m%)
+            ENDCASE
+          ENDIF
+
           IF x%<y% THEN
             PROCpoint(cx%+y%,cy%+x%,m%)
             PROCpoint(cx%-y%,cy%+x%,m%)
             PROCpoint(cx%+y%,cy%-x%,m%)
             PROCpoint(cx%-y%,cy%-x%,m%)
+            IF f%=1 THEN
+              CASE shapetype% OF
+                WHEN 1 : REM filled
+                  PROCbresenham(cx%-y%,cy%+x%,cx%+y%,cy%+x%,m%)
+                  PROCbresenham(cx%-y%,cy%-x%,cx%+y%,cy%-x%,m%)
+                WHEN 2 : REM outline / empty
+                  PROCbresenham(cx%-y%+1,cy%+x%,cx%+y%-1,cy%+x%,1-m%)
+                  PROCbresenham(cx%-y%+1,cy%-x%,cx%+y%-1,cy%-x%,1-m%)
+              ENDCASE
+            ENDIF
+
           ENDIF
         ENDIF
       ENDIF
@@ -1325,7 +1364,7 @@
           PROCframesave(frame%)
           IF animation% THEN PROCloadnextframe(1,0)
 
-        WHEN T_brush1&,T_brush2&,T_brush3&,T_brush4&,T_brush5& : REM brush tools
+        WHEN T_brush1&,T_brush2&,T_brush3&,T_brush4&,T_brush5&,T_brush6&,T_brush7& : REM brush tools
           PROCundosave
 
           OLD_PX%=-1
@@ -1352,7 +1391,17 @@
                     PROCpoint(PX%,PY%+X%,1-erase%)
                   NEXT
 
-                WHEN T_brush5& : REM brush 5
+                WHEN T_brush5& : REM brush 5 * 1
+                  FOR X%=-1 TO 1
+                    PROCbresenham(PX%-1,PY%+X%,PX%+1,PY%+X%,1-erase%)
+                  NEXT
+
+                WHEN T_brush6& : REM brush 6 * 2
+                  FOR X%=-2 TO 2
+                    PROCbresenham(PX%-2-(ABS(X%)>1),PY%+X%,PX%+2+(ABS(X%)>1),PY%+X%,1-erase%)
+                  NEXT
+
+                WHEN T_brush7& : REM brush 7 * 3
                   FOR X%=-3 TO 3
                     PROCbresenham(PX%-3-(ABS(X%)>2),PY%+X%,PX%+3+(ABS(X%)>2),PY%+X%,1-erase%)
                   NEXT
@@ -1486,14 +1535,14 @@
           REPEAT
             PROCREADMOUSE
             IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
-              PROCcircle(startx%,starty%,startx%-OLD_PX%,2)
-              PROCcircle(startx%,starty%,startx%-PX%,2)
+              PROCcircle(startx%,starty%,startx%-OLD_PX%,2,0)
+              PROCcircle(startx%,starty%,startx%-PX%,2,0)
               OLD_PX%=PX%
               OLD_PY%=PY%
             ENDIF
           UNTIL MB%=0
           PROCmenurestore
-          PROCcircle(startx%,starty%,startx%-PX%,1-erase%)
+          PROCcircle(startx%,starty%,startx%-PX%,1-erase%,1)
           PROCframesave(frame%)
           IF animation% THEN PROCloadnextframe(1,0)
 
@@ -2065,7 +2114,7 @@
 
             PROCsavesprite(sprite_cur%)
 
-          WHEN T_brush1&,T_brush2&,T_brush3&,T_brush4&,T_brush5&
+          WHEN T_brush1&,T_brush2&,T_brush3&,T_brush4&,T_brush5&,T_brush6&,T_brush7&
             PROCundosave
             OLD_PX%=-1
             REPEAT
@@ -2091,11 +2140,20 @@
                       PROCpoint(PX%,PY%+X%,1-erase%)
                     NEXT
 
-                  WHEN T_brush5& : REM brush 5  *
+                  WHEN T_brush5& : REM brush 5 * 1
+                    FOR X%=-1 TO 1
+                      PROCbresenham(PX%-1,PY%+X%,PX%+1,PY%+X%,1-erase%)
+                    NEXT
+
+                  WHEN T_brush6& : REM brush 6 * 2
+                    FOR X%=-2 TO 2
+                      PROCbresenham(PX%-2-(ABS(X%)>1),PY%+X%,PX%+2+(ABS(X%)>1),PY%+X%,1-erase%)
+                    NEXT
+
+                  WHEN T_brush7& : REM brush 7 * 3
                     FOR X%=-3 TO 3
                       PROCbresenham(PX%-3-(ABS(X%)>2),PY%+X%,PX%+3+(ABS(X%)>2),PY%+X%,1-erase%)
                     NEXT
-
 
                 ENDCASE
               ENDIF
@@ -2163,15 +2221,15 @@
             REPEAT
               PROCREADMOUSE
               IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
-                PROCcircle(startx%,starty%,startx%-OLD_PX%,2)
-                PROCcircle(startx%,starty%,startx%-PX%,2)
+                PROCcircle(startx%,starty%,startx%-OLD_PX%,2,0)
+                PROCcircle(startx%,starty%,startx%-PX%,2,0)
                 OLD_PX%=PX%
                 OLD_PY%=PY%
               ENDIF
             UNTIL MB%=0
 
             PROCdrawsprite
-            PROCcircle(startx%,starty%,startx%-PX%,1-erase%)
+            PROCcircle(startx%,starty%,startx%-PX%,1-erase%,1)
             PROCsavesprite(sprite_cur%)
 
           WHEN T_flash&,T_double&,T_separate&,T_hold& : REM special control codes
@@ -2708,11 +2766,15 @@
                 toolsel%=T_brush4&
               WHEN 9 : REM brush 5
                 toolsel%=T_brush5&
+              WHEN 10 : REM brush 6
+                toolsel%=T_brush6&
+              WHEN 11 : REM brush 7
+                toolsel%=T_brush7&
 
 
             ENDCASE
 
-            IF C%>-1 AND C%<10 THEN
+            IF C%>-1 AND C%<12 THEN
               done%=1
               toolcursor%=16
               IF C%<5 THEN dither%=toolsel%-T_dither1&
@@ -3819,8 +3881,11 @@
             FOR Y%=0 TO fonthgt%-1
               FOR X%=0 TO fonts{(I%)}.w%-1
                 c%=fonts{(I%)}.d%(X%+Y%*fonts{(I%)}.w%)()
-                IF spr_trns%=0 THEN c%=(c%+1) AND 1
-                PROCpoint(X%+x%,y%+fonthgt%-Y%,c%-erase%)
+                IF spr_trns%=1 AND c%=0 THEN
+                  REM nothing
+                ELSE
+                  PROCpoint(X%+x%,y%+fonthgt%-Y%,c%-erase%)
+                ENDIF
               NEXT
             NEXT
             x%+=fonts{(I%)}.w%
@@ -7279,18 +7344,20 @@
           RECTANGLE SX%+20,menuadd%,SW%-40,2
 
           menuadd%-=24
-          PROCmenutext(5,"BRUSH 1     ",SX%+20,menuadd%,14,(toolsel%=T_brush1&)*-4,-48)
+          PROCmenutext(5,"BRUSH       ",SX%+20,menuadd%,14,(toolsel%=T_brush1&)*-4,-48)
           GCOL 0,14
           LINE SX%+310,menuadd%+42,SX%+330,menuadd%+22
           LINE SX%+310,menuadd%+44,SX%+332,menuadd%+22
           LINE SX%+312,menuadd%+44,SX%+332,menuadd%+24
 
-          PROCmenutext(6,"BRUSH 2  /  ",SX%+20,menuadd%,14,(toolsel%=T_brush2&)*-4,-48)
-          PROCmenutext(7,"BRUSH 3  -  ",SX%+20,menuadd%,14,(toolsel%=T_brush3&)*-4,-48)
-          PROCmenutext(8,"BRUSH 4     ",SX%+20,menuadd%,14,(toolsel%=T_brush4&)*-4,-48)
+          PROCmenutext(6,"BRUSH    /  ",SX%+20,menuadd%,14,(toolsel%=T_brush2&)*-4,-48)
+          PROCmenutext(7,"BRUSH    -  ",SX%+20,menuadd%,14,(toolsel%=T_brush3&)*-4,-48)
+          PROCmenutext(8,"BRUSH       ",SX%+20,menuadd%,14,(toolsel%=T_brush4&)*-4,-48)
           GCOL 0,14
           RECTANGLE FILL SX%+328,menuadd%+22,2,24
-          PROCmenutext(9,"BRUSH 5  *  ",SX%+20,menuadd%,14,(toolsel%=T_brush5&)*-4,-48)
+          PROCmenutext(9,"BRUSH   * 1 ",SX%+20,menuadd%,14,(toolsel%=T_brush5&)*-4,-48)
+          PROCmenutext(10,"BRUSH   * 2 ",SX%+20,menuadd%,14,(toolsel%=T_brush6&)*-4,-48)
+          PROCmenutext(11,"BRUSH   * 3 ",SX%+20,menuadd%,14,(toolsel%=T_brush7&)*-4,-48)
 
 
         WHEN 2 : REM copy paste
@@ -8011,7 +8078,7 @@
       REM drop down sub menu locations, X,TOP - W,H  (Y=TOP-W)
       REM Paint, Dither, Copy, Fill, Special
       DATA 448,960,460,860
-      DATA 480,960,460,548
+      DATA 480,960,460,636
       DATA 512,960,460,800
       DATA 544,960,460,740
       DATA 576,960,460,568
