@@ -3459,7 +3459,7 @@
                       PROCanimupdate(X%)
                     ENDIF
                   WHEN 40 : REM inc delta per frame count
-                    IF sprlist{(spr_lstcount%)}.d%<8 THEN
+                    IF sprlist{(spr_lstcount%)}.d%<12 THEN
                       sprlist{(spr_lstcount%)}.d%+=1
                       PROCanimupdate(X%)
                     ENDIF
@@ -3616,7 +3616,7 @@
 
       REM D
       IF c%>8 OR c%=0 THEN
-        PROCgtext(STR$(sprlist{(spr_lstcount%)}.d%),23*32,604,tc%,bc%)
+        PROCgtext(RIGHT$(" "+STR$(sprlist{(spr_lstcount%)}.d%),2),23*32,604,tc%,bc%)
       ENDIF
 
       VDU 4
@@ -3676,9 +3676,9 @@
       PROCgtext("START POS:",0,604,lc%,0)
       PROCgtext("X:",0,552,tc%,0)
       PROCgtext("Y:",0,500,tc%,0)
-      PROCgtext("  PER   FRAME(S)",544,604,lc%,0)
+      PROCgtext("  PER    FRAME(S)",544,604,lc%,0)
 
-      menuadd%=1080
+      menuadd%=1100
       PROCanimcontrol(39,"<",menuadd%,604,8,bc%,0)
       PROCanimcontrol(40,">",menuadd%,604,8,bc%,0)
 
