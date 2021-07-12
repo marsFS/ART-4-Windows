@@ -77,37 +77,38 @@
       T_line&=1
       T_box&=2
       T_circle&=3
-      T_dither1&=4
-      T_dither2&=5
-      T_dither3&=6
-      T_dither4&=7
-      T_dither5&=8
-      T_brush1&=9
-      T_brush2&=10
-      T_brush3&=11
-      T_brush4&=12
-      T_brush5&=13
-      T_brush6&=14
-      T_brush7&=15
-      T_fill&=16
-      T_gradl&=17
-      T_gradr&=18
-      T_gradt&=19
-      T_gradb&=20
-      T_gradtl&=21
-      T_gradtr&=22
-      T_gradbr&=23
-      T_gradbl&=24
+      T_symmetry&=4
+      T_dither1&=5
+      T_dither2&=6
+      T_dither3&=7
+      T_dither4&=8
+      T_dither5&=9
+      T_brush1&=10
+      T_brush2&=11
+      T_brush3&=12
+      T_brush4&=13
+      T_brush5&=14
+      T_brush6&=15
+      T_brush7&=16
+      T_fill&=17
+      T_gradl&=18
+      T_gradr&=19
+      T_gradt&=20
+      T_gradb&=21
+      T_gradtl&=22
+      T_gradtr&=23
+      T_gradbr&=24
+      T_gradbl&=25
       REM cursor at tool for the tools below
-      T_copy&=25
-      T_paste&=26
-      T_text&=27
-      T_flash&=28
-      T_double&=29
-      T_separate&=30
-      T_hold&=31
-      T_backg&=32
-      T_foreg&=33
+      T_copy&=26
+      T_paste&=27
+      T_text&=28
+      T_flash&=29
+      T_double&=30
+      T_separate&=31
+      T_hold&=32
+      T_backg&=33
+      T_foreg&=34
 
       REM drawing bounds used for < and >
       xMin%=1
@@ -1406,7 +1407,6 @@
                     PROCbresenham(PX%-3-(ABS(X%)>2),PY%+X%,PX%+3+(ABS(X%)>2),PY%+X%,1-erase%)
                   NEXT
 
-
               ENDCASE
             ENDIF
             OLD_PX%=PX%
@@ -1543,6 +1543,27 @@
           UNTIL MB%=0
           PROCmenurestore
           PROCcircle(startx%,starty%,startx%-PX%,1-erase%,1)
+          PROCframesave(frame%)
+          IF animation% THEN PROCloadnextframe(1,0)
+
+        WHEN T_symmetry& : REM symmetry tool
+          PROCundosave
+          PROCpoint(PX%,PY%,1-erase%)
+          PROCpoint(79-PX%,PY%,1-erase%)
+          PROCpoint(79-PX%,74-PY%,1-erase%)
+          PROCpoint(PX%,74-PY%,1-erase%)
+
+          REPEAT
+            PROCREADMOUSE
+            IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+              PROCpoint(PX%,PY%,1-erase%)
+              PROCpoint(79-PX%,PY%,1-erase%)
+              PROCpoint(79-PX%,74-PY%,1-erase%)
+              PROCpoint(PX%,74-PY%,1-erase%)
+              OLD_PX%=PX%
+              OLD_PY%=PY%
+            ENDIF
+          UNTIL MB%=0
           PROCframesave(frame%)
           IF animation% THEN PROCloadnextframe(1,0)
 
@@ -2069,8 +2090,8 @@
                 ENDIF
               UNTIL MB%=0
               PROCsavesprite(sprite_cur%)
-
             ENDIF
+
           WHEN T_dither1&,T_dither2&,T_dither3&,T_dither4&,T_dither5& : REM dither tools
             PROCundosave
             CASE dither% OF
@@ -2231,6 +2252,25 @@
             PROCdrawsprite
             PROCcircle(startx%,starty%,startx%-PX%,1-erase%,1)
             PROCsavesprite(sprite_cur%)
+
+          WHEN T_symmetry&: REM symmetry tool
+            IF PX%>19 AND PX%<prx% AND PY%>8 AND PY%<pry% THEN
+              PROCundosave
+              PROCpoint(PX%,PY%,1-erase%)
+
+              REPEAT
+                PROCREADMOUSE
+                IF PX%>19 AND PX%<prx% AND PY%>8 AND PY%<pry% THEN
+                  IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
+                    PROCpoint(PX%,PY%,1-erase%)
+                    OLD_PX%=PX%
+                    OLD_PY%=PY%
+                  ENDIF
+                ENDIF
+              UNTIL MB%=0
+              PROCsavesprite(sprite_cur%)
+
+            ENDIF
 
           WHEN T_flash&,T_double&,T_separate&,T_hold& : REM special control codes
             PROCundosave
@@ -2705,41 +2745,43 @@
                 toolsel%=T_box&
               WHEN 3 : REM circle
                 toolsel%=T_circle&
-              WHEN 4 : REM text
+              WHEN 4 : REM symmetry
+                toolsel%=T_symmetry&
+              WHEN 5 : REM text
                 toolsel%=T_text&
-              WHEN 5 : REM animate lines toggle
+              WHEN 6 : REM animate lines toggle
                 animateshape%=(animateshape%+1) AND 1
-              WHEN 6 : REM dec line gap
+              WHEN 7 : REM dec line gap
                 IF animategap%>0 THEN animategap%-=1
-              WHEN 7 : REM inc line gap
+              WHEN 8 : REM inc line gap
                 IF animategap%<10 THEN animategap%+=1
-              WHEN 8 : REM dec line len
+              WHEN 9 : REM dec line len
                 IF animatelen%>1 THEN animatelen%-=1
-              WHEN 9 : REM inc line len
+              WHEN 10 : REM inc line len
                 IF animatelen%<10 THEN animatelen%+=1
-              WHEN 10 : REM shape - outline
+              WHEN 11 : REM shape - outline
                 shapetype%=0
-              WHEN 11 : REM shape - filled
+              WHEN 12 : REM shape - filled
                 shapetype%=1
-              WHEN 12 : REM shape - empty
+              WHEN 13 : REM shape - empty
                 shapetype%=2
-              WHEN 13 : REM dec font
+              WHEN 14 : REM dec font
                 F%=fontcur%
                 IF fontcur%>0 THEN fontcur%-=1
-              WHEN 14 : REM inc font
+              WHEN 15 : REM inc font
                 F%=fontcur%
                 IF fontcur%<fontmax% THEN
                   fontcur%+=1
                   IF fontname$(fontcur%)="" THEN fontcur%-=1
                 ENDIF
 
-              WHEN 15 : REM keyboard font screen
+              WHEN 16 : REM keyboard font screen
                 done%=1
             ENDCASE
 
             PROCsubupdate(0)
 
-            IF C%>-1 AND C%<5 THEN
+            IF C%>-1 AND C%<6 THEN
               done%=1
               toolcursor%=15
             ENDIF
@@ -2770,7 +2812,6 @@
                 toolsel%=T_brush6&
               WHEN 11 : REM brush 7
                 toolsel%=T_brush7&
-
 
             ENDCASE
 
@@ -7280,7 +7321,8 @@
           PROCmenutext(1,"LINE         ",SX%+20,menuadd%,14,(toolsel%=T_line&)*-4,-48)
           PROCmenutext(2,"BOX          ",SX%+20,menuadd%,14,(toolsel%=T_box&)*-4,-48)
           PROCmenutext(3,"CIRCLE       ",SX%+20,menuadd%,14,(toolsel%=T_circle&)*-4,-48)
-          PROCmenutext(4,"TEXT         ",SX%+20,menuadd%,14,(toolsel%=T_text&)*-4,-48)
+          PROCmenutext(4,"SYMMETRY     ",SX%+20,menuadd%,14,(toolsel%=T_symmetry&)*-4,-48)
+          PROCmenutext(5,"TEXT         ",SX%+20,menuadd%,14,(toolsel%=T_text&)*-4,-48)
 
           GCOL 0,8
           RECTANGLE SX%+20,menuadd%,SW%-40,2
@@ -7296,13 +7338,13 @@
           PROCgtext(LEFT$(fontname$(fontcur%)+"         ",10),SX%+20,menuadd%-432,13,0)
 
           IF C%=-1 THEN
-            PROCmenutext(5,"ANIM8 LINES  ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(6,"ANIM8 LINES  ",SX%+20,menuadd%,11,0,-48)
             PROCgtext("GAP",SX%+20,menuadd%,14,0)
-            PROCmenutext(6," - ",SX%+128,menuadd%,14,4,0)
-            PROCmenutext(7," + ",SX%+332,menuadd%,14,4,-48)
+            PROCmenutext(7," - ",SX%+128,menuadd%,14,4,0)
+            PROCmenutext(8," + ",SX%+332,menuadd%,14,4,-48)
             PROCgtext("LEN",SX%+20,menuadd%,14,0)
-            PROCmenutext(8," - ",SX%+128,menuadd%,14,4,0)
-            PROCmenutext(9," + ",SX%+332,menuadd%,14,4,-48)
+            PROCmenutext(9," - ",SX%+128,menuadd%,14,4,0)
+            PROCmenutext(10," + ",SX%+332,menuadd%,14,4,-48)
 
             GCOL 0,8
             RECTANGLE SX%+20,menuadd%,SW%-40,2
@@ -7311,9 +7353,9 @@
 
             PROCgtext("SHAPE OPTIONS",SX%+20,menuadd%,8,0)
             menuadd%-=48
-            PROCmenutext(10,"OUTLINE      ",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(11,"FILLED       ",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(12,"EMPTY        ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(11,"OUTLINE      ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(12,"FILLED       ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(13,"EMPTY        ",SX%+20,menuadd%,11,0,-48)
 
             GCOL 0,8
             RECTANGLE SX%+20,menuadd%,SW%-40,2
@@ -7321,15 +7363,15 @@
             menuadd%-=24
 
             PROCgtext("FONT:",SX%+20,menuadd%,14,0)
-            PROCmenutext(13," < ",SX%+192,menuadd%,14,4,0)
-            PROCmenutext(14," > ",SX%+332,menuadd%,14,4,-96)
+            PROCmenutext(14," < ",SX%+192,menuadd%,14,4,0)
+            PROCmenutext(15," > ",SX%+332,menuadd%,14,4,-96)
 
             GCOL 0,8
             RECTANGLE SX%+20,menuadd%,SW%-40,2
 
             menuadd%-=24
 
-            PROCmenutext(15,"KYBRD FONTS  ",SX%+20,menuadd%,10,(C%=13)*-4,-48)
+            PROCmenutext(16,"KYBRD FONTS  ",SX%+20,menuadd%,10,(C%=13)*-4,-48)
 
           ENDIF
 
@@ -8077,7 +8119,7 @@
 
       REM drop down sub menu locations, X,TOP - W,H  (Y=TOP-W)
       REM Paint, Dither, Copy, Fill, Special
-      DATA 448,960,460,860
+      DATA 448,960,460,920
       DATA 480,960,460,636
       DATA 512,960,460,800
       DATA 544,960,460,740
