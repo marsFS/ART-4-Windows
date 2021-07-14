@@ -2829,13 +2829,13 @@
                 toolsel%=T_paste&
                 toolcursor%=17
 
-              WHEN 12 : REM fix x paste pos
+              WHEN 14 : REM fix x paste pos
                 copylockxt%=(copylockxt%+1) AND 1 : REM lock horizontal paste pos
 
-              WHEN 13 : REM fix y paste pos
+              WHEN 15 : REM fix y paste pos
                 copylockyt%=(copylockyt%+1) AND 1 :REM lock vertical paste pos
 
-              WHEN 14 : REM paste transparent
+              WHEN 16 : REM paste transparent
                 copy_trns%=(copy_trns%+1) AND 1
 
               OTHERWISE
@@ -3005,32 +3005,42 @@
                 IF X%<1 THEN X%=frame_max%
                 PROCcopyframe(frame%,X%,0,0,0)
 
-              WHEN 6 : REM mirror
+              WHEN 6 : REM mirror selection
                 PROCmenurestore
                 PROCdrawmenu
-                PROCmirrorregion
+                PROCmirrorregion(0)
 
-              WHEN 7 : REM refelect
+              WHEN 7 : REM mirror left screen
                 PROCmenurestore
                 PROCdrawmenu
-                PROCreflectregion
+                PROCmirrorregion(1)
 
-              WHEN 8 : REM flip horizontal
+              WHEN 8 : REM refelect selection
+                PROCmenurestore
+                PROCdrawmenu
+                PROCreflectregion(0)
+
+              WHEN 9 : REM refelect top screen
+                PROCmenurestore
+                PROCdrawmenu
+                PROCreflectregion(1)
+
+              WHEN 10 : REM flip horizontal
                 PROCmenurestore
                 PROCdrawmenu
                 PROCfliphregion
 
-              WHEN 9 : REM flip vertical
+              WHEN 11 : REM flip vertical
                 PROCmenurestore
                 PROCdrawmenu
                 PROCflipvregion
 
-              WHEN 10 : REM negative
+              WHEN 12 : REM negative
                 PROCmenurestore
                 PROCdrawmenu
                 PROCnegativeregion
 
-              WHEN 11 : REM erase
+              WHEN 13 : REM erase
                 PROCmenurestore
                 PROCdrawmenu
                 IF copymovef%=frame% THEN
@@ -3039,15 +3049,6 @@
                   PROCframesave(frame%)
                 ENDIF
 
-              WHEN 11 : REM keyboard and options screen
-                menuext%=M_keyboard%
-                PROCkeyboardmenu(1)
-                PROCdrawmenu
-
-              WHEN 12 : REM help screen
-                PROCdrawmenu
-                PROCshowhelp
-                PROCmenurestore
 
               OTHERWISE
                 CASE menufrom% OF
@@ -5089,7 +5090,7 @@
       REM ##########################################################
       REM selct region of current frame and call copyregion
       DEF PROCselectregion
-      LOCAL X%,Y%,SX%,SY%,OX%,OY%,boxx%,boxy%
+      LOCAL X%,Y%,SX%,SY%,OX%,OY%,boxx%,boxy%,C$
       menuext%=78
 
       PROCcontrolcodes
@@ -5107,9 +5108,14 @@
       GCOL 3,15
       RECTANGLE boxx%,boxy%,X%,Y%
 
+      C$="S:"+RIGHT$("0"+STR$(SX%),2)+","+RIGHT$("0"+STR$(SY%),2)+" E:"+RIGHT$("0"+STR$(TX%),2)+","+RIGHT$("0"+STR$(TY%),2)
+      PROCgtext(C$,0,996,14,4)
+
+
       REPEAT
         PROCREADMOUSE
         IF (TX%<>SX% OR TY%<>SY%) AND TY%>0 THEN
+          GCOL 3,15
           RECTANGLE boxx%,boxy%,X%,Y%
           SX%=TX%
           SY%=TY%
@@ -5117,6 +5123,10 @@
           boxy%=(25-SY%)*40
 
           RECTANGLE boxx%,boxy%,X%,Y%
+
+          C$="S:"+RIGHT$("0"+STR$(SX%),2)+","+RIGHT$("0"+STR$(SY%),2)+" E:"+RIGHT$("0"+STR$(TX%),2)+","+RIGHT$("0"+STR$(TY%),2)
+          PROCgtext(C$,0,996,14,4)
+
         ELSE
           WAIT 2
         ENDIF
@@ -5128,6 +5138,7 @@
       REPEAT
         PROCREADMOUSE
         IF OX%<>TX% OR OY%<>TY% THEN
+          GCOL 3,15
           RECTANGLE boxx%,boxy%,X%,Y%
 
           IF TX%<SX% THEN
@@ -5151,6 +5162,9 @@
 
           OX%=TX%
           OY%=TY%
+
+          C$="S:"+RIGHT$("0"+STR$(SX%),2)+","+RIGHT$("0"+STR$(SY%),2)+" E:"+RIGHT$("0"+STR$(TX%),2)+","+RIGHT$("0"+STR$(TY%),2)
+          PROCgtext(C$,0,996,14,4)
 
         ELSE
           WAIT 2
@@ -5337,19 +5351,37 @@
 
       REM ##########################################################
       REM mirror selected region horizontally
-      DEF PROCmirrorregion
-      LOCAL X%,Y%,PX%,PY%
+      DEF PROCmirrorregion(M%)
+      LOCAL X%,Y%,PX%,PY%,CW%,CH%,CX%,CY%,C%
 
-      IF copymovef%=frame% THEN
+      IF copymovef%=frame% OR M%=1 THEN
         PROCundosave
 
+        IF M%=0 THEN
+          CW%=copymovepw%
+          CH%=copymoveph%
+          CX%=copymovepx%
+          CY%=copymovepy%
+        ELSE
+          CW%=39
+          CH%=72
+          CX%=2
+          CY%=3
+        ENDIF
+
         REM plot pixels in mirrored location
-        FOR Y%=0 TO copymoveph%
-          PY%=copymovepy%+Y%
-          FOR X%=0 TO copymovepw%
-            PX%=copymovepx%+copymovepw%*2-X%-1
+        FOR Y%=0 TO CH%
+          PY%=CY%+Y%
+          FOR X%=0 TO CW%
+            PX%=CX%+CW%*2-X%-1
             IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
-              IF move_buffer&(X%+Y%*(copymovepw%+1))=1 THEN PROCpoint(PX%,PY%,1)
+              IF M%=0 THEN
+                C%=move_buffer&(X%+Y%*(CW%+1))
+                IF C%=1 OR copy_trns%=0 THEN PROCpoint(PX%,PY%,C%)
+              ELSE
+                C%=FNpoint(X%+CX%,Y%+CY%)
+                IF C%=1 OR copy_trns%=0 THEN PROCpoint(79-X%,Y%+CY%,C%)
+              ENDIF
             ENDIF
           NEXT
         NEXT
@@ -5361,19 +5393,39 @@
 
       REM ##########################################################
       REM reflect selected region vertically
-      DEF PROCreflectregion
-      LOCAL X%,Y%,PX%,PY%
+      DEF PROCreflectregion(M%)
+      LOCAL X%,Y%,PX%,PY%,CW%,CH%,CX%,CY%,C%
 
-      IF copymovef%=frame% THEN
+      IF copymovef%=frame% OR M%=1 THEN
         PROCundosave
 
+        IF M%=0 THEN
+          CW%=copymovepw%
+          CH%=copymoveph%
+          CX%=copymovepx%
+          CY%=copymovepy%
+        ELSE
+          CW%=78
+          CH%=35
+          CX%=2
+          CY%=3
+        ENDIF
+
         REM plot pixels in reflected location
-        FOR Y%=0 TO copymoveph%
-          PY%=copymovepy%+copymoveph%*2-Y%-1
-          FOR X%=0 TO copymovepw%
-            PX%=copymovepx%+X%
+        FOR Y%=0 TO CH%
+          PY%=CY%+CH%*2-Y%-1
+          FOR X%=0 TO CW%
+            PX%=CX%+X%
             IF PX%>1 AND PX%<80 AND PY%>2 AND PY%<75 THEN
-              IF move_buffer&(X%+Y%*(copymovepw%+1))=1 THEN PROCpoint(PX%,PY%,1)
+              REM               IF move_buffer&(X%+Y%*(CW%+1))=1 THEN PROCpoint(PX%,PY%,1)
+              IF M%=0 THEN
+                C%=move_buffer&(X%+Y%*(CW%+1))
+                IF C%=1 OR copy_trns%=0 THEN PROCpoint(PX%,PY%,C%)
+              ELSE
+                C%=FNpoint(X%+CX%,Y%+CY%)
+                IF C%=1 OR copy_trns%=0 THEN PROCpoint(X%+CX%,74-Y%,C%)
+              ENDIF
+
             ENDIF
           NEXT
         NEXT
@@ -7415,12 +7467,14 @@
           PROCmenutext(3,"CPY CODES ALL",SX%+20,menuadd%,10,0,-48)
           PROCmenutext(4,"COPY FRAME > ",SX%+20,menuadd%,10,0,-48)
           PROCmenutext(5,"COPY FRAME < ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(6,"MIRROR       ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(7,"REFLECT      ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(8,"FLIP HORZ    ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(9,"FLIP VERT    ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(10,"NEGATIVE     ",SX%+20,menuadd%,10,0,-48)
-          PROCmenutext(11,"ERASE        ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(6,"MIRROR SEL   ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(7,"MIRROR LEFT  ",SX%+20,menuadd%,13,0,-48)
+          PROCmenutext(8,"REFLECT SEL  ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(9,"REFLECT TOP  ",SX%+20,menuadd%,13,0,-48)
+          PROCmenutext(10,"FLIP HORZ    ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(11,"FLIP VERT    ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(12,"NEGATIVE     ",SX%+20,menuadd%,10,0,-48)
+          PROCmenutext(13,"ERASE        ",SX%+20,menuadd%,10,0,-48)
 
 
           GCOL 0,8
@@ -7433,9 +7487,9 @@
           PROCgtext(CHR$(78+11*copy_trns%),SX%+404,menuadd%-96,9+copy_trns%,0)
 
           IF C%=-1 THEN
-            PROCmenutext(12,"PASTE FIX X  ",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(13,"PASTE FIX Y  ",SX%+20,menuadd%,11,0,-48)
-            PROCmenutext(14,"TRANSPARENT  ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(14,"PASTE FIX X  ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(15,"PASTE FIX Y  ",SX%+20,menuadd%,11,0,-48)
+            PROCmenutext(16,"TRANSPARENT  ",SX%+20,menuadd%,11,0,-48)
           ENDIF
 
         WHEN 3 : REM fill
@@ -8121,7 +8175,7 @@
       REM Paint, Dither, Copy, Fill, Special
       DATA 448,960,460,920
       DATA 480,960,460,636
-      DATA 512,960,460,800
+      DATA 512,960,460,920
       DATA 544,960,460,740
       DATA 576,960,460,568
 
