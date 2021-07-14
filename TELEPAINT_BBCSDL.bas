@@ -5363,7 +5363,7 @@
           CX%=copymovepx%
           CY%=copymovepy%
         ELSE
-          CW%=39
+          CW%=38
           CH%=72
           CX%=2
           CY%=3
