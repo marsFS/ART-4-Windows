@@ -769,13 +769,18 @@
       REM update grid
       DEF PROCdrawgrid
       LOCAL X%
-      SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
+
       CASE menuext% OF
         WHEN M_canvas%,78
+          SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
           FOR X%=0 TO 39
             SYS "SDL_RenderDrawLine", @memhdc%, X%*16, 499, X%*16, 20
             IF X%<25 THEN SYS "SDL_RenderDrawLine", @memhdc%, 0, X%*20, 639, X%*20
           NEXT
+          REM quater screen
+          SYS "SDL_SetRenderDrawColor", @memhdc%, 127, 127, 127, 0
+          SYS "SDL_RenderDrawLine", @memhdc%, 41*8, 499, 41*8, 20
+          SYS "SDL_RenderDrawLine", @memhdc%, 0, 13*20, 639, 13*20
       ENDCASE
       *REFRESH
 
