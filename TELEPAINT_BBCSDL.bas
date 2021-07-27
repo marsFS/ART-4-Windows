@@ -843,12 +843,13 @@
 
       REM ##########################################################
       REM LINE ROUTINE FOR BUFFER USE m% TO PERFORM 0=ERASE / 1=DRAW / 2=EOR
-      DEF PROCbresenham_buf(x1%,y1%,x2%,y2%,m%)
-      LOCAL dx%, dy%, sx%, sy%, e
+      DEF PROCbresenham_buf(x1%,y1%,x2%,y2%,m%,z%)
+      LOCAL dx%, dy%, sx%, sy%, e, rx%, ry%
       dx% = ABS(x2% - x1%) : sx% = SGN(x2% - x1%)
       dy% = ABS(y2% - y1%) : sy% = SGN(y2% - y1%)
       IF dx% > dy% e = dx% / 2 ELSE e = dy% / 2
 
+      rx%=x1% : ty%=y1%
       REPEAT
         IF animategapcount%=0 THEN
 
@@ -860,12 +861,26 @@
             animatelencount%=animatelen%
             animategapcount%=animategap%
             frame%=frame%+1
-            IF frame%>frame_max% THEN frame%=1
+            REM            IF frame%>frame_max% THEN frame%=1
+            IF frame%>frame_max% THEN
+              IF z%=1 THEN
+                EXIT REPEAT
+              ELSE
+                frame%=1
+              ENDIF
+            ENDIF
           ENDIF
         ELSE
           animategapcount%-=1
         ENDIF
-        IF x1% = x2% IF y1% = y2% EXIT REPEAT
+        REM        IF x1% = x2% IF y1% = y2% EXIT REPEAT
+        IF x1% = x2% IF y1% = y2% THEN
+          IF z%=1 THEN
+            x1%=rx% : y1%=ty%
+          ELSE
+            EXIT REPEAT
+          ENDIF
+        ENDIF
         IF dx% > dy% THEN
           x1% += sx% : e -= dy% : IF e < 0 e += dx% : y1% += sy%
         ELSE
@@ -916,14 +931,14 @@
         PROCpoint(x1%,y1%,m%)
       ELSE
         IF x1%=x2% OR y1%=y2% THEN
-          PROCbresenham_buf(x1%,y1%,x2%,y2%,m%)
+          PROCbresenham_buf(x1%,y1%,x2%,y2%,m%,0)
         ELSE
           IF x1%>x2% THEN SWAP x1%,x2%
           IF y1%>y2% THEN SWAP y1%,y2%
-          PROCbresenham_buf(x1%,y1%,x2%,y1%,m%)
-          PROCbresenham_buf(x2%,y1%+1,x2%,y2%-1,m%)
-          PROCbresenham_buf(x2%,y2%,x1%,y2%,m%)
-          PROCbresenham_buf(x1%,y2%-1,x1%,y1%+1,m%)
+          PROCbresenham_buf(x1%,y1%,x2%,y1%,m%,0)
+          PROCbresenham_buf(x2%,y1%+1,x2%,y2%-1,m%,0)
+          PROCbresenham_buf(x2%,y2%,x1%,y2%,m%,0)
+          PROCbresenham_buf(x1%,y2%-1,x1%,y1%+1,m%,0)
         ENDIF
       ENDIF
       ENDPROC
@@ -1463,7 +1478,7 @@
             PROCframesave(frame%)
             animatelencount%=animatelen%
             animategapcount%=0
-            PROCbresenham_buf(startx%,starty%,PX%,PY%,1-erase%)
+            PROCbresenham_buf(startx%,starty%,PX%,PY%,1-erase%,1)
             frame%=oldframe%-1
             PROCloadnextframe(1,0)
           ELSE
