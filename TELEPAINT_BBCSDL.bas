@@ -6829,6 +6829,7 @@
               IF INKEY(-122) AND MX%<1278 THEN MX%+=2
               IF INKEY(-58) AND MY%<998 THEN MY%+=2
               IF INKEY(-42) AND MY%>0 THEN MY%-=2
+              IF INKEY(-74) THEN MB%=4
 
               IF OLDMX%<>MX% OR OLDMY%<>MY% THEN MOUSE TO MX%,MY%
 
@@ -6879,10 +6880,22 @@
             GCOL 3,9
             RECTANGLE FILL 1108,960,108,40
 
-            PROCWAITMOUSE(4)
+            REM check if next sprite should be loaded< either click yes with mouse or press Y or ENTER
+            NSPR%=0
+
+            REPEAT
+              PROCREADMOUSE
+
+              WAIT 2
+
+              IF INKEY(-69) OR INKEY(-74) THEN NSPR%=1
+              IF INKEY(-86) THEN NSPR%=2
+
+            UNTIL MB%=4 OR NSPR%>0
+
             PROCWAITMOUSE(0)
 
-            IF TY%=0 AND TX%>30 AND TX%<34 THEN
+            IF (TY%=0 AND TX%>30 AND TX%<34) OR NSPR%=1 THEN
 
               REM reset selection
               startx%=-1
