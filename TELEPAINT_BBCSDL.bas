@@ -2933,7 +2933,7 @@
           WHEN 0 : REM paint menu
             CASE C% OF
 
-              WHEN 15 : REM keyboard and options screen
+              WHEN 16 : REM keyboard and options screen
                 menuext%=M_keyboard%
                 PROCkeyboardmenu(1)
                 PROCdrawmenu
