@@ -2,10 +2,11 @@
 ART 4 Windows is a retro drawing utility, original written in BBC Basic for Windows and latest version is written in Pure Basic compiled to EXE
 
 Current Executable Versions:
-* ART4EVA_PB_007_x86.exe - Current Release - Windows executable
-* ART4EVA_PB_008_x86.exe - Experimental Release - Windows executable
-* ART4WIN_024.exe - Last Release of BBC Basic for Windows version - Windows executable
-* ART_EXA_PB_015_x86.exe - Exa Gear interface layout version - Windows executable
+* ART4EVA_PB_009_x86.exe - Current Release - Windows x86 executable 
+* ART4EVA_PB_009_x64.exe - Current Release - Windows x64 executable 
+* ART4EVA_PB_007_x86.exe - Pre menu change build - Windows x86 executable
+* ART4WIN_024.exe - Last Release of BBC Basic for Windows version - Windows x86 executable
+* ART_EXA_PB_015_x86.exe - Exa Gear interface layout version - Windows x86 executable
 * TELEPAINT_BBCSDL.zip - Windows compatible executable and library files for BBC Basic for SDL version of Telepaint
 
 Current Source Versions:
@@ -20,7 +21,7 @@ Current ART features (needs updating for each version):
 * Added Gradient Editor
 * Added Selection Transformation tools
 * BB4W Version creates temporary undo files in BMP format
-* ART_PB_xxx version now supports flashing colours and colour cycling animation for colours 8-15
+* ART_PB_xxx version now supports flashing colours and colour cycling animation for colours 8-15, can configure to use 2-15 for flashing in options menu
 * ART_EXA_PB_xxx version has smaller screen footprint to suit mobile devices (EXA Gear)
 
 Current TelePaint features:
