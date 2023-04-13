@@ -1569,17 +1569,17 @@
         WHEN T_symmetry& : REM symmetry tool
           PROCundosave
           PROCpoint(PX%,PY%,1-erase%)
-          PROCpoint(79-PX%,PY%,1-erase%)
-          PROCpoint(79-PX%,74-PY%,1-erase%)
-          PROCpoint(PX%,74-PY%,1-erase%)
+          PROCpoint(79-(PX%-2),PY%,1-erase%)
+          PROCpoint(79-(PX%-2),74-(PY%-3),1-erase%)
+          PROCpoint(PX%,74-(PY%-3),1-erase%)
 
           REPEAT
             PROCREADMOUSE
             IF PX%<>OLD_PX% OR PY%<>OLD_PY% THEN
               PROCpoint(PX%,PY%,1-erase%)
-              PROCpoint(79-PX%,PY%,1-erase%)
-              PROCpoint(79-PX%,74-PY%,1-erase%)
-              PROCpoint(PX%,74-PY%,1-erase%)
+              PROCpoint(79-(PX%-2),PY%,1-erase%)
+              PROCpoint(79-(PX%-2),74-(PY%-3),1-erase%)
+              PROCpoint(PX%,74-(PY%-3),1-erase%)
               OLD_PX%=PX%
               OLD_PY%=PY%
             ENDIF
@@ -1843,6 +1843,7 @@
           PROCdrawmenu
       ENDCASE
 
+      IF gridshow%=1 THEN PROCdrawgrid
 
       ENDPROC
 
@@ -4821,6 +4822,8 @@
       FOR U%=0 TO 959
         frame_buffer&(f%-1,U%)=GET(U% MOD 40,U% DIV 40+1)
       NEXT
+
+      IF gridshow%=1 THEN PROCdrawgrid
 
       ENDPROC
 
