@@ -32,6 +32,8 @@
 
       REM *** https://edit.tf/#0:<1167 BYTES FOR 25 ROWS>
 
+      REM *** https://zxnet.co.uk/teletext/editor/#0:<1167 BYTES FOR 25 ROWS>
+
       BB4W = INKEY$(-256) == "W"
 
       REM ALLOCATE 40MB FOR BUFFERS
@@ -3140,14 +3142,21 @@
                 PROCloadnextframe(1,0)
                 PROCmenurestore
                 REM PROCdrawgrid
-                PROCexport_edittf
+                PROCexport_edittf(0)
 
-              WHEN 8 : REM keyboard and options screen
+              WHEN 8 : REM zxnet export
+                frame%-=1
+                PROCloadnextframe(1,0)
+                PROCmenurestore
+                REM PROCdrawgrid
+                PROCexport_edittf(1)
+
+              WHEN 9 : REM keyboard and options screen
                 menuext%=M_keyboard%
                 PROCkeyboardmenu(1)
                 PROCdrawmenu
 
-              WHEN 9 : REM help screen
+              WHEN 10 : REM help screen
                 PROCdrawmenu
                 PROCshowhelp
                 PROCmenurestore
@@ -5669,8 +5678,26 @@
       IF f% THEN
         FOR u%=0 TO 999
           char%=BGET#f%
+          IF char% OR &80>&9F THEN char%=char% OR &80
           VDU 31,u% MOD 40,u% DIV 40,char%
         NEXT
+        CLOSE#f%
+      ENDIF
+      ENDPROC
+
+      REM ##########################################################
+      REM load tti file
+      DEF PROCloadttifile(F$)
+      LOCAL f%,u%,char%,line$
+      f%=OPENIN(F$)
+
+      IF f% THEN
+        WHILE NOT EOF#(f%)
+          INPUT#f%,line$
+          PRINT TAB(0,1) line$
+          A$=GET$
+        ENDWHILE
+
         CLOSE#f%
       ENDIF
       ENDPROC
@@ -7667,8 +7694,9 @@
             menuadd%-=24
             PROCmenutext(6,"SPRITES      ",SX%+20,menuadd%,10,(C%=14)*-4,-48)
             PROCmenutext(7,"EDIT.TF      ",SX%+20,menuadd%,10,(C%=15)*-4,-48)
-            PROCmenutext(8,"KYBRD FONTS  ",SX%+20,menuadd%,10,(C%=13)*-4,-48)
-            PROCmenutext(9,"HELP         ",SX%+20,menuadd%,10,(C%=16)*-4,-48)
+            PROCmenutext(8,"ZXNET        ",SX%+20,menuadd%,10,(C%=15)*-4,-48)
+            PROCmenutext(9,"KYBRD FONTS  ",SX%+20,menuadd%,10,(C%=13)*-4,-48)
+            PROCmenutext(10,"HELP         ",SX%+20,menuadd%,10,(C%=16)*-4,-48)
           ENDIF
 
       ENDCASE
@@ -7933,10 +7961,20 @@
 
       DEF FNget(P%) = GET(P% MOD 40, P% DIV 40) AND &7F
 
-      REM Export the current frame to edit.tf:
+      REM Export the current frame to edit.tf or zxnet:
       REM Modified to allow all 25 rows to be encoded for EDIT.TF - added loop and shift variables
-      DEF PROCexport_edittf
-      LOCAL I%,L%,S%,N%,X%,Y%,t%%,h$,s$
+      DEF PROCexport_edittf(D%)
+      LOCAL I%,L%,S%,N%,X%,Y%,t%%,h$,s$,url$
+
+      CASE D% OF
+        WHEN 0
+          url$="https://edit.tf#"
+
+        WHEN 1
+          url$="https://zxnet.co.uk/teletext/editor/#"
+
+      ENDCASE
+
       s$ = "0:"
       h$ = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
       X%=POS:Y%=VPOS:VDU30
@@ -7959,7 +7997,7 @@
         NEXT
       NEXT
       VDU31,X%,Y%
-      PROCopenurl("https://edit.tf#" + s$)
+      PROCopenurl(url$ + s$)
       REM F% = OPENOUT(@tmp$ + "EDITTF.txt")
       REM PRINT#F%,s$
       REM CLOSE#F%
@@ -8213,7 +8251,7 @@
       DATA 480,960,460,636
       DATA 512,960,460,920
       DATA 544,960,460,740
-      DATA 576,960,460,568
+      DATA 576,960,460,616
 
       REM patternData
       DATA 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
