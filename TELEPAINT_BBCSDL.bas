@@ -41,7 +41,7 @@
 
       INSTALL @lib$+"sortlib"
 
-      version$="v0.23"
+      version$="v0.24"
 
       DEBUG%=0 : REM for displaying mouse and other debug details while editing source
 
@@ -365,20 +365,20 @@
       REM  fonts.w% - font width
       fontcur%=0
       fontmax%=99
-      fontcount%=13
       fonthgt%=0
+      fontcount%=0
+      fontfound%=0
 
-      DIM fontname$(fontcount%)
+      DIM fontname$(fontmax%)
       DIM fonts{(fontmax%) d%(399),a%,w%}
 
       fontname$(0)="TEXT"
-      REM PROCloadfontnames
-      FOR I%=1 TO fontcount%
-        RESTORE (EVAL("FONT"+STR$(I%)))
-        READ fontname$(I%)
-      NEXT
+      PROCloadfontnames
 
-      PROCloadfont(fontname$(1))
+      IF fontcount%>0 THEN
+        PROCloadfont(fontname$(1))
+        fontfound%=1
+      ENDIF
 
       REM undo buffer
       undo_max%=99
@@ -527,7 +527,6 @@
       REM SIXEL LOCATION RELEATIVE TO MOUSE
       PX%=MX% DIV 16
       PY%=(999-MY%)/13.3333333
-
 
       IF menuext%=M_canvas% OR menuext%=M_sprites% THEN
         IF showcodes%=1 THEN
@@ -2032,16 +2031,25 @@
 
           IF TX%=8 AND fontcur%<fontcount% THEN fontcur%+=1
 
-          REM EXPORT FONT FILE TO DATA STATEMENTS
-          REM IF TX%>29 AND TX%<39 THEN PROCexportfont
+          REMIF TX%=8 AND fontcur%<fontmax% THEN
+          REM fontcur%+=1
+          REM IF fontname$(fontcur%)="" THEN fontcur%-=1
+          REM ENDIF
 
-          IF fontcur%<>of% AND fontcur%>0 THEN PROCloadfont(fontname$(fontcur%))
+          REM IMPORT FONT FILE TO DATA STATEMENTS
+          IF TX%>29 AND TX%<39 THEN
+            PROCloadfile(5)
+            menuext%=M_keyboard%
+            PROCkeyboardmenu(1)
+          ENDIF
+
+          IF fontcur%<>of% AND fontcur%>0 AND fontfound%=1 THEN PROCloadfont(fontname$(fontcur%))
 
         WHEN 12,13,14,15,16,17,18,19 : REM alphabet selector
           IF TY%=18 AND TX%>33 AND TX%<37 THEN
             caps%=(caps%+1) AND 1
           ELSE
-            IF TY%=18 AND TX%>29 AND TX%<33 THEN
+            IF TY%=18 AND TX%>28 AND TX%<33 THEN
               text$+=CHR$(32)
             ELSE
               C%=GET(TX%,TY%)
@@ -2799,6 +2807,9 @@
               WHEN 15 : REM inc font
                 F%=fontcur%
                 IF fontcur%<fontcount% THEN fontcur%+=1
+                REM fontcur%+=1
+                REM IF fontname$(fontcur%)="" THEN fontcur%-=1
+                REM ENDIF
 
               WHEN 16 : REM keyboard font screen
                 done%=1
@@ -2964,7 +2975,7 @@
 
             ENDCASE
 
-            IF fontcur%<>F% AND fontcur%>0 THEN PROCloadfont(fontname$(fontcur%))
+            IF fontcur%<>F% AND fontcur%>0 AND fontfound%=1 THEN PROCloadfont(fontname$(fontcur%))
 
 
 
@@ -5724,6 +5735,7 @@
             IF t&(I%)=2 THEN
               fontname$(C%)=LEFT$(n$(I%),LEN(n$(I%))-4)
               C%+=1
+              fontcount%+=1
             ENDIF
           NEXT
         ENDIF
@@ -5815,6 +5827,11 @@
         WHEN 4 : REM import bmp to font
           filetype$=".bmp"
           title$="FONT IMPORT"
+          opt1%=1
+
+        WHEN 5 : REM import M7F to font
+          filetype$=".m7f"
+          title$="FONT LOAD"
           opt1%=1
 
       ENDCASE
@@ -6215,6 +6232,15 @@
               OSCLI "MDISPLAY "+STR$~import_buffer%
               menuext%=95
             ENDIF
+          ENDIF
+
+        WHEN 5 : REM LOAD FONT FROM FILE
+          IF F%<>-1 THEN
+            PROCloadfont(curdir$+n$(SEL%))
+            fontcur%=1
+            fontcount%=1
+            fontfound%=0
+            fontname$(fontcur%)=LEFT$(n$(SEL%),LEN(n$(SEL%))-4)
           ENDIF
       ENDCASE
 
@@ -6956,7 +6982,6 @@
 
       REM ##########################################################
       REM load font file into font array
-      REM modifed to read from DATA statements
       DEF PROCloadfont(name$)
 
       REM clear existing font data
@@ -6964,50 +6989,11 @@
         fonts{(I%)}.a%=0
       NEXT
 
-      IF fontcur%<>0 THEN
-        RESTORE (EVAL("FONT"+STR$(fontcur%)))
-
-        READ A$ : REM FONTNAME
-        READ A$ : REM FONT HEIGHT
-
-        fonthgt%=VAL(A$)
-
-        REPEAT
-          READ A$ : REM GET FONT TO ASC NUMBER
-          IF A$<>"END" THEN
-            a%=VAL(A$)
-            fonts{(a%)}.a%=1
-
-            READ A$ : REM GET FONT WIDTH
-            fonts{(a%)}.w%=VAL(A$)
-
-            bytes%=(fonthgt%*fonts{(a%)}.w%) DIV 8 - ((fonthgt%*fonts{(a%)}.w% MOD 8)<>0)
-
-            C%=0
-            FOR I%=1 TO bytes%
-              READ A$ : REM READ HEX VALUES AND EXTRACT BITS
-              T%=EVAL("&"+A$)
-              REM LOOP THROUGH BITS TO GET DOT VALUES
-              FOR X%=7 TO 0 STEP -1
-                bit%=(T% AND 2^X%) / (2^X%)
-                fonts{(a%)}.d%(C%)=bit%
-                C%+=1
-              NEXT
-            NEXT
-          ENDIF
-        UNTIL A$="END"
-
-        REM add default space char if not exists in font file
-        IF fonts{(0)}.a%=0 THEN
-          fonts{(0)}.a%=1
-          fonts{(0)}.w%=2
-        ENDIF
-      ENDIF
-      ENDPROC
-
-      DEF PROColdloadfontfromfile
       REM read font file
-      f%=OPENIN(@dir$+"M7_FONTS\"+name$+".M7F")
+      IF INSTR(name$,".M7F")=0 AND INSTR(name$,".m7f")=0 THEN
+        name$=@dir$+"M7_FONTS\"+name$+".M7F"
+      ENDIF
+      f%=OPENIN(name$)
       IF f% THEN
         INPUT#f%,i$
         IF i$="TELEPAINT_FONT" THEN
@@ -7035,62 +7021,14 @@
           fonts{(0)}.a%=1
           fonts{(0)}.w%=2
         ENDIF
+      ELSE
+        CLS
+        PRINT"Unable to load file:"
+        PRINT name$
+        PRINT
+        PRINT "Press any key"
+        a%=GET
       ENDIF
-
-      ENDPROC
-
-      REM ##########################################################
-      REM export currently loaded font to file with data statements
-      DEF PROCexportfont
-
-      LOCAL f%,u%,S$
-
-      f%=OPENOUT(fontname$(fontcur%)+".DATA")
-      PRINT#f%,"DATA "+fontname$(fontcur%)+","+STR$(fonthgt%)
-      BPUT#f%,10
-
-      S$="DATA "
-
-      FOR I%=1 TO fontmax%
-        IF fonts{(I%)}.a%<>0 THEN
-          S$=S$+STR$(I%)+","+STR$(fonts{(I%)}.w%)
-          T%=0
-          bit%=7
-          FOR Y%=0 TO fonthgt%-1
-            FOR X%=0 TO fonts{(I%)}.w%-1
-              c%=fonts{(I%)}.d%(X%+Y%*fonts{(I%)}.w%)()
-              T%=T% OR c%*(2^bit%)
-              bit%-=1
-              IF bit%=-1 THEN
-                S$=S$+","+STR$~(T%)
-                bit%=7
-                T%=0
-              ENDIF
-            NEXT
-          NEXT
-          IF bit%<>7 THEN
-            S$=S$+","+STR$~(T%)
-          ENDIF
-
-          IF LEN(S$)>110 OR I%=fontmax% THEN
-            PRINT#f%,S$
-            BPUT#f%,10
-            S$="DATA "
-          ELSE
-            S$=S$+","
-          ENDIF
-        ENDIF
-
-
-      NEXT
-
-      S$=S$+"END"
-      PRINT#f%,S$
-      BPUT#f%,10
-
-      CLOSE#f%
-
-
       ENDPROC
 
       REM ##########################################################
@@ -7881,7 +7819,7 @@
 
         PRINTTAB(29,18)tc$;"SPC"
 
-        REM PRINTTAB(28,5)tb$;CHR$(157);tc$;"EXPORT  ";CHR$(156)
+        PRINTTAB(28,5)tb$;CHR$(157);tc$;" LOAD   ";CHR$(156)
 
         PRINTTAB(1,22)tb$;CHR$(157);ty$;"IMPORT  ";CHR$(156);"   ";tm$;CHR$(157);ty$;"HELP  ";CHR$(156);"  ";tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156)
 
@@ -8383,181 +8321,6 @@
       DATA 0,0,0,0,4,8,11,14,17,16,14,11,8,4,0,0,0,0
       DATA 0,2,4,6,8,10,12,14,17,16,14,12,10,8,6,4,2,0
       DATA 0,0,0,0,0,0,0,0,0,5,9,13,17,13,9,5,0,0
-
-      (FONT1)
-      DATA CENTRAL,6
-      DATA 33,5,4,BD,29,78,34,6,3,E4,9E,53,C0,35,5,7,A1,8,78,36,6,3,E4,92,4B,E0,37,5,7,A1,E8,78,38,5,4,21,E8,78,39,5,7,A5,68,78
-      DATA 40,5,4,A5,E9,48,41,2,2A,A0,42,5,7,8,42,78,43,5,4,AD,CB,48,44,5,7,A1,8,40,45,6,2,2A,BE,DA,20,46,5,4,AD,ED,48
-      DATA 47,5,7,A5,29,78,48,5,4,3D,29,78,49,5,27,AD,29,78,50,6,2,6B,38,93,C0,51,5,7,85,E8,78,52,4,4,44,4E,53,5,7,A5,29,48
-      DATA 54,6,0,87,36,8A,20,55,6,2,2D,BE,AA,20,56,6,2,2D,9C,DA,20,57,5,7,85,E9,48,58,5,7,B0,C3,78,END
-
-      (FONT2)
-      DATA CENTRAL2,8
-      DATA 7,2,0,A,12,2,A0,0,14,2,20,0,16,5,7,A5,29,4A,5E,17,4,E,44,44,C4,18,5,7,A5,F,A,5E,19,5,7,A4,26,A,5E,20,8,0,4,FE,64,34,1C,C,4
-      DATA 21,5,7,A4,2F,42,1E,22,5,7,A5,2F,42,10,23,5,0,84,21,A,5E,24,5,7,A5,26,4A,5E,25,5,0,84,2F,4A,5E,31,6,0,80,8,38,28,BE
-      DATA 33,6,2,28,BE,8B,67,8,34,6,3,E8,A2,FA,49,3C,35,6,3,E8,A0,82,8,BE,36,6,3,C9,A2,8A,29,BC,37,5,7,A1,F,42,1E,38,5,4,21,F,42,1E
-      DATA 39,6,3,E8,A2,9A,8,BE,40,6,2,28,A2,FA,28,A2,41,2,2A,AA,42,3,C9,24,92,43,7,1,1A,65,8E,16,26,46,44,5,7,A1,8,42,10
-      DATA 45,8,0,82,82,92,BA,EE,C6,82,46,7,1,A,34,EB,5C,B1,42,47,6,3,E8,A2,8A,28,BE,48,6,2,8,20,FA,28,BE,49,6,13,EA,A2,8A,28,BE
-      DATA 50,7,1,1A,65,8E,12,24,78,51,5,7,A4,2F,42,5E,52,6,0,82,8,20,82,3E,53,6,3,E8,A2,8A,28,A2,54,6,0,87,36,8A,28,A2
-      DATA 55,8,0,82,C6,EE,BA,92,82,82,56,10,0,30,66,30,D8,1C,D,86,33,6,57,8,0,10,10,10,38,6C,C6,82,58,7,1,FB,3,3,3,3,7E,END
-
-      (FONT3)
-      DATA CHALLENGE,9
-      DATA 33,9,0,77,99,8F,C7,E3,31,F8,78,18,0,34,8,0,FC,7E,6E,7C,7E,6E,7C,F8,35,8,0,3E,7E,E2,C0,C0,E2,7E,3E,36,8,0,FC,7E,66,66,66,6E,7C,F8
-      DATA 37,8,0,FE,7E,62,78,78,62,7E,FE,38,8,0,F0,60,60,78,78,62,7E,FE,39,8,0,3E,7E,E6,CE,C0,E2,7E,3E,40,9,0,77,99,8C,C7,E3,F1,98,CC,F7,0
-      DATA 41,5,7,98,C6,31,8C,F0,42,7,1,C3,C5,C1,83,26,7E,FC,43,9,0,33,9B,8F,87,83,E1,B8,CC,F7,0,44,7,1,F9,F3,26,C,18,30,F0
-      DATA 45,10,0,3D,E6,31,8C,6B,1F,C7,F1,DC,E3,80,46,10,0,3C,C6,31,9C,6F,1F,C7,B1,CC,E7,80,47,8,0,78,FC,EE,C6,C6,EE,7E,3C
-      DATA 48,8,0,F0,60,78,7C,6E,66,6E,FC,49,8,8,7C,FE,D6,C6,C6,E6,7E,3C,50,9,0,79,99,CD,C7,C3,F1,98,FC,FC,0,51,7,1,F3,F4,E3,8E,39,7E,7C
-      DATA 52,7,0,F0,C1,83,6,2D,7E,FC,53,8,0,3C,7E,66,66,66,66,66,EE,54,9,0,8,E,F,86,E3,31,98,CC,F7,0,55,12,0,1,10,3B,87,FC,6E,C6,4C,60,C6,C,F1,E0
-      DATA 56,11,0,1C,39,CE,1B,80,E0,38,E,C3,9C,E1,C0,57,11,0,3,C0,30,F,3,F0,E7,18,63,C,F3,C0,58,8,0,FE,FE,E2,70,38,9C,FE,FE
-      DATA 65,7,0,EB,F6,6E,CF,8F,0,0,66,8,0,5C,7E,66,6E,7C,78,60,E0,67,7,0,FB,F6,E,F,8F,0,0,68,8,0,7A,FE,CE,E6,7E,3E,6,E
-      DATA 69,7,0,FB,F6,F,CD,8F,0,0,70,5,3,18,C6,7B,CC,30,71,7,F9,F8,37,EE,CF,8F,0,0,72,9,0,7B,99,8C,C7,63,F1,B8,C0,E0,0
-      DATA 73,5,7,98,C6,33,80,60,74,5,C7,1C,63,19,C0,30,75,8,0,F6,66,6C,78,7C,6E,60,E0,76,5,7,98,C6,31,8C,E0,77,13,0,3,33,99,98,EE,C7,FE,37,73,99,80,0,0,0
-      DATA 78,9,0,7B,99,8C,C7,63,F3,B0,0,0,0,79,8,0,78,FC,CE,E6,7E,3C,0,0,80,8,F0,60,7C,66,76,7E,EC,0,0,81,8,8,7C,FE,D6,C6,7E,3C,0,0
-      DATA 82,7,1,E1,83,6,4F,B7,0,0,83,6,3,CF,86,FB,87,80,0,84,6,0,E7,98,63,EF,98,20,85,8,0,3A,7E,6E,66,66,E6,0,0,86,8,0,10,38,7C,6E,66,E6,0,0
-      DATA 87,13,0,3,33,9D,D8,FF,C6,EE,33,33,99,80,0,0,0,88,9,0,73,9B,83,83,83,B3,9C,0,0,0,89,9,E0,38,E,3,83,E3,BB,BC,0,0,0
-      DATA 90,8,0,FE,FE,72,38,9C,FE,0,0,END
-
-      (FONT4)
-      DATA EXTENDED,8
-      DATA 1,2,22,AA,4,6,0,8F,8A,FA,8F,88,7,2,0,A,12,2,A0,0,13,3,0,C,0,14,2,20,0,16,6,3,E8,A2,8A,28,BE,17,4,E,44,44,C4
-      DATA 18,6,3,E8,20,F8,28,BE,19,6,3,E8,82,30,28,BE,20,6,0,4F,A4,92,48,20,21,6,3,E8,A2,B,E8,3E,22,6,3,E8,A2,8B,E8,3E
-      DATA 23,6,1,4,18,30,68,BE,24,6,3,E8,A2,72,28,BE,25,6,3,E8,82,FA,28,BE,26,2,20,80,27,2,A2,0,33,6,2,28,A2,FA,28,BE
-      DATA 34,7,1,F9,12,27,C9,12,7C,35,6,3,E8,A0,82,8,BE,36,7,1,F9,12,24,48,91,7E,37,6,3,E8,20,F2,8,3E,38,6,2,8,20,F2,8,3E
-      DATA 39,6,3,E8,A6,82,8,BE,40,6,2,28,A2,FA,28,A2,41,4,E,44,44,4E,42,6,3,C9,4,10,41,1E,43,6,2,28,A6,F2,68,A2,44,6,3,E8,20,82,8,20
-      DATA 45,8,0,82,82,92,BA,EE,C6,82,46,6,2,28,A6,BB,AC,A2,47,6,3,E8,A2,8A,28,BE,48,6,2,8,20,FA,28,BE,49,6,13,EA,A2,8A,28,BE
-      DATA 50,6,2,28,A2,F2,28,BE,51,6,3,E8,82,FA,8,BE,52,6,0,82,8,20,82,3E,53,6,3,E8,A2,8A,28,A2,54,6,0,87,36,8A,28,A2
-      DATA 55,8,0,82,C6,EE,BA,92,82,82,56,6,2,28,94,21,48,A2,57,6,0,82,8,FA,28,A2,58,6,3,E8,10,20,40,BE,64,6,3,E4,90,E1,5,1C
-      DATA 65,6,3,E8,BE,B,E0,0,66,6,3,E8,A2,8B,E8,20,67,6,3,E8,20,83,E0,0,68,6,3,E8,A2,8B,E0,82,69,6,3,E8,3E,8B,E0,0,70,6,1,4,10,43,E4,1C
-      DATA 71,6,F8,2F,A2,8B,E0,0,72,6,2,28,A2,8B,E8,20,73,4,E,44,4C,4,74,6,F2,41,4,11,E0,4,75,6,2,28,A6,F2,68,A0,76,4,E,44,44,4C
-      DATA 77,8,0,92,92,92,92,FE,0,0,78,6,2,28,A2,8B,E0,0,79,6,3,E8,A2,8B,E0,0,80,6,82,F,A2,8B,E0,0,81,6,13,E8,A2,8B,E0,0
-      DATA 82,6,3,84,10,4B,E0,0,83,6,3,E0,BE,83,E0,0,84,6,1,E4,10,43,C4,0,85,6,3,E8,A2,8A,20,0,86,6,0,87,36,8A,20,0,87,8,0,FE,92,92,92,92,0,0
-      DATA 88,8,0,C6,6C,38,6C,C6,0,0,89,6,F8,2F,A2,8A,20,0,90,6,3,E4,8,13,E0,0,END
-
-      (FONT5)
-      DATA LIVING,11
-      DATA 65,8,0,0,6E,DC,CC,CC,6C,34,0,0,0,66,8,0,0,38,6C,66,66,76,6C,60,60,E0,67,7,0,1,E6,2C,18,19,1E,0,0,0,68,8,0,0,6E,DC,CC,CC,6C,3C,C,C,1C
-      DATA 69,7,0,1,E6,2C,1F,99,1C,0,0,0,70,6,1,8B,C,30,C3,3F,30,C1,80,71,8,78,EC,CC,58,30,68,6C,3A,0,0,0,72,8,0,0,6C,66,66,76,6E,66,60,E0,0
-      DATA 73,6,0,3,1A,61,86,38,1,86,0,74,5,3,2C,63,18,CE,1,8C,75,8,0,0,66,6D,78,6C,66,76,6C,60,E0,76,6,0,3,1A,61,86,18,61,8E,0
-      DATA 77,14,0,0,0,6,63,19,9A,66,61,DD,86,EE,39,98,0,0,0,0,0,0,78,9,0,0,19,CC,C6,63,B1,B9,CC,0,0,0,0,79,7,0,1,C6,CC,D9,9B,1C,0,0,0
-      DATA 80,8,0,F0,60,78,6C,66,76,EC,0,0,0,81,8,0,1E,C,6C,DC,CC,6C,34,0,0,0,82,8,0,0,F0,60,60,72,6E,E6,0,0,0,83,7,0,1,C4,C3,8E,19,1C,0,0,0
-      DATA 84,6,0,3,1A,61,86,3C,60,80,0,85,8,0,0,67,76,6E,66,66,E6,0,0,0,86,8,0,0,10,38,6C,66,66,E6,0,0,0,87,12,0,0,0,37,86,EC,66,66,66,66,6E,66,0,0,0,0,0
-      DATA 88,11,0,0,3,8E,3B,A3,E0,3E,2E,E3,8E,0,0,0,0,0,89,8,0,70,D8,C,3E,76,66,E6,0,0,0,90,8,0,0,FE,72,38,1C,4E,7E,0,0,0,END
-
-      (FONT6)
-      DATA LIVING2,8
-      DATA 65,5,7,A5,E1,70,0,66,6,1,C4,92,69,64,30,67,5,7,A1,8,70,0,68,5,3,A5,2B,68,46,69,5,7,A1,E9,38,0,70,4,4,44,4E,46
-      DATA 71,5,E0,BD,29,38,0,72,6,1,24,92,69,64,30,73,4,E,44,4C,4,74,3,C9,25,82,75,6,1,24,96,71,64,30,76,4,E,44,44,4C
-      DATA 77,8,0,56,54,54,54,FC,0,0,78,6,1,24,92,6B,60,0,79,5,7,25,29,38,0,80,6,E1,7,92,6B,60,0,81,6,38,4F,24,B3,40,0
-      DATA 82,6,3,84,10,6B,60,0,83,5,7,5,E8,38,0,84,5,3,90,84,71,0,85,6,1,A5,92,4B,20,0,86,6,0,87,36,8A,20,0,87,8,0,7E,54,54,54,D4,0,0
-      DATA 88,8,0,C6,6C,38,6C,C6,0,0,89,6,F8,27,92,4B,60,0,90,7,1,F9,91,89,9F,80,0,END
-
-      (FONT7)
-      DATA NEWBOLD,8
-      DATA 1,3,1B,D,B6,4,11,FF,DF,FB,3,30,C3,F1,A5,BF,F3,FC,6,8,0,76,FC,DA,70,D8,F8,70,7,2,0,A,12,2,A0,0,14,2,20,0,17,5,7,BC,C6,73,8C
-      DATA 18,6,3,EF,B0,F8,6F,BE,19,6,3,EF,86,70,6F,BE,20,7,0,33,F7,ED,9B,30,60,21,6,3,EF,8E,FB,F,BE,22,6,3,EF,B6,FB,EC,30
-      DATA 23,6,1,86,18,30,6F,BE,24,6,3,EF,B6,73,6F,BE,25,6,0,61,BE,FB,6F,BE,26,2,20,80,27,2,A0,80,31,6,1,80,18,78,6F,BE
-      DATA 33,6,3,6F,BE,DB,6F,BE,34,7,1,FB,F3,67,8D,BF,7E,35,6,3,EF,B0,C3,F,BE,36,7,1,FB,F3,66,CD,BF,7E,37,6,3,EF,B0,FB,F,BE
-      DATA 38,6,3,C,3C,F3,F,BE,39,6,3,EF,B6,DB,F,BE,40,6,3,6D,BE,FB,6D,B6,41,5,7,BC,C6,33,DE,42,6,3,CF,2C,30,C7,9E,43,7,1,9B,77,CF,1F,37,66
-      DATA 44,5,7,BD,8C,63,18,45,8,0,D6,D6,D6,D6,FE,FE,EE,46,7,1,9B,36,EF,DF,BB,66,47,6,3,EF,B6,DB,6F,BE,48,6,3,C,3E,FB,6F,BE
-      DATA 49,6,33,EF,B6,DB,6F,BE,50,6,3,6D,BE,F3,6F,BE,51,6,3,EF,86,FB,F,BE,52,5,3,18,C6,33,DE,53,6,3,EF,B6,DB,6D,B6
-      DATA 54,6,0,87,3E,FB,6D,B6,55,8,0,FE,FE,D6,D6,D6,D6,D6,56,6,3,6D,BE,73,ED,B6,57,6,1,C7,1C,FB,6D,B6,58,7,1,FB,F3,3,3,3F,7E
-      DATA 65,6,3,ED,BE,1B,E0,0,66,6,3,EF,B6,FB,EC,30,67,6,3,EF,B0,FB,E0,0,68,6,3,EF,B6,FB,E1,86,69,6,3,EC,3E,DB,E0,0
-      DATA 70,5,3,19,EF,31,CE,71,6,F8,6F,B6,FB,E0,0,72,6,3,6D,B6,FB,EC,30,73,3,1B,6D,86,74,4,EE,66,66,6,75,7,1,9B,77,CF,1B,30,60
-      DATA 76,3,1B,6D,B6,77,8,0,D6,D6,D6,FE,FE,0,0,78,6,3,6D,B6,FB,E0,0,79,6,3,EF,B6,FB,E0,0,80,6,C3,EF,B6,FB,E0,0,81,6,33,EF,B6,FB,E0,0
-      DATA 82,4,C,CC,EE,0,83,5,7,8D,EC,78,0,84,5,3,9C,CF,79,8C,85,6,3,EF,B6,DB,60,0,86,6,0,87,3E,DB,60,0,87,8,0,FE,FE,D6,D6,D6,0,0
-      DATA 88,6,3,6F,9C,FB,60,0,89,6,FB,E1,BE,DB,60,0,90,6,3,EE,1C,3B,E0,0,END
-
-      (FONT8)
-      DATA NORMAL,8
-      DATA 1,2,22,AA,3,6,1,45,3E,53,E5,14,4,4,4,E2,E8,E4,5,5,0,5,24,12,50,6,6,1,A9,2A,42,8A,10,7,2,0,A,8,4,2,48,88,42
-      DATA 9,4,8,42,22,48,10,6,0,8A,9C,F9,CA,88,11,4,0,4,E4,0,13,3,0,C,0,15,6,2,4,8,10,20,0,16,4,E,AA,AA,AE,17,4,E,44,44,C4
-      DATA 18,4,E,88,E2,AE,19,4,E,A2,42,AE,20,5,1,3D,4A,52,10,21,4,E,A2,E8,8E,22,4,E,AA,E8,AE,23,4,2,22,22,AE,24,4,E,AA,4A,AE
-      DATA 25,4,E,A2,EA,AE,26,2,20,80,27,2,A2,0,29,4,0,E,E,0,31,4,4,4,62,AE,32,6,1,E8,2C,AA,27,0,33,4,A,AA,EA,AE,34,4,E,AA,CA,AE
-      DATA 35,4,E,88,88,AE,36,5,7,94,A5,29,5E,37,4,E,88,E8,8E,38,4,8,88,C8,8E,39,4,E,AA,A8,8E,40,4,A,AA,EA,AA,41,2,2A,AA
-      DATA 42,5,7,28,42,10,9E,43,4,A,AA,CA,AA,44,4,E,88,88,88,45,6,2,AA,AA,AA,AA,BE,46,5,4,A5,2B,7B,52,47,4,E,AA,AA,AE
-      DATA 48,4,8,88,EA,AE,49,4,4E,AA,AA,AE,50,4,A,AA,CA,AE,51,4,E,A2,E8,AE,52,4,4,44,44,4E,53,4,E,AA,AA,AA,54,4,4,EA,AA,AA
-      DATA 55,6,3,EA,AA,AA,AA,AA,56,4,A,AA,4A,AA,57,4,4,44,EA,AA,58,4,E,88,42,2E,59,6,0,2,18,F9,82,0,60,5,1,88,2B,42,10
-      DATA 61,6,0,2,C,F8,C2,0,62,6,0,82,8,23,E7,8,64,5,7,94,8E,21,C,65,4,E,AE,2E,0,66,4,E,AA,AE,88,67,4,E,88,8E,0,68,4,E,AA,AE,22
-      DATA 69,4,E,8E,AE,0,70,4,4,44,4E,46,71,4,E2,EA,AE,0,72,4,A,AA,AE,88,73,2,2A,A2,74,3,C9,24,82,75,4,A,AA,CA,A8,76,2,2A,AA
-      DATA 77,6,2,AA,AA,AB,E0,0,78,4,A,AA,AE,0,79,4,E,AA,AE,0,80,4,8E,AA,AE,0,81,4,4E,AA,AE,0,82,3,12,49,80,83,4,E,2E,8E,0
-      DATA 84,4,6,44,4E,44,85,4,E,AA,AA,0,86,4,4,EA,AA,0,87,6,3,EA,AA,AA,A0,0,88,4,A,A4,AA,0,89,4,E2,EA,AA,0,90,4,E,84,2E,0
-      DATA 91,6,0,43,8C,A2,88,20,92,4,A,AA,AA,A0,93,7,0,10,76,C5,12,10,60,94,4,0,40,E0,40,END
-
-      (FONT9)
-      DATA SCRIPT,10
-      DATA 1,2,22,AA,A0,7,2,0,0,A0,12,2,A0,0,0,14,2,20,0,0,16,5,3,25,29,4A,4C,0,0,17,4,E,44,44,C4,0,18,5,7,A0,82,A,4C,0,0
-      DATA 19,5,7,A0,82,A,4C,0,0,20,5,3,24,26,A,4C,0,0,21,7,0,10,27,E4,85,6,4,0,0,22,5,3,24,21,72,1E,0,0,23,5,3,25,2E,41,6,0,0
-      DATA 24,5,2,10,84,10,5E,0,0,25,5,3,25,26,4A,4C,0,0,26,2,8,20,0,27,2,A0,80,0,31,6,0,80,8,30,28,A2,70,0,64,6,3,E4,90,F1,4,12,30,0
-      DATA 65,7,0,DA,64,44,87,22,38,0,0,66,7,1,B1,92,24,48,99,2C,41,80,67,6,1,C8,A0,82,8,9C,0,0,68,7,0,DA,64,48,91,26,34,8,30
-      DATA 69,6,1,C8,A0,F2,28,9C,0,0,70,5,7,10,84,23,C8,41,80,71,6,72,20,9E,8A,28,9C,0,0,72,8,0,EE,44,44,44,44,64,58,40,C0
-      DATA 73,4,E,44,44,4C,4,74,5,64,84,21,8,46,0,80,75,8,0,E6,4C,58,70,58,4C,46,40,C0,76,4,E,44,44,44,4C,77,10,0,12,64,91,24,49,12,46,D3,6C,0,0,0
-      DATA 78,8,0,46,44,44,44,44,64,DC,0,0,79,6,1,C8,A2,8A,28,9C,0,0,80,7,E0,81,63,24,48,99,6C,0,0,81,6,11,CA,A2,8A,28,9C,0,0
-      DATA 82,6,3,84,10,41,6,B6,0,0,83,6,1,C8,82,72,8,9C,0,0,84,6,0,C4,90,41,4,3C,41,0,85,8,0,36,4C,44,44,44,44,CC,0,0
-      DATA 86,8,0,10,38,6C,44,44,44,EE,0,0,87,10,0,1B,65,B1,24,49,12,44,93,24,0,0,0,88,8,0,EE,44,28,10,28,44,EE,0,0,89,7,38,88,11,A4,C8,91,66,0,0
-      DATA 90,6,3,E8,90,20,48,BE,0,0,END
-
-      (FONT10)
-      DATA SERIF,8
-      DATA 1,2,22,AA,4,6,0,8F,8A,FA,8F,88,5,8,0,66,26,30,10,18,C8,CC,6,7,1,DA,65,8E,88,28,70,10,6,0,2,2A,72,A2,0,11,6,0,2,8,F8,82,0
-      DATA 12,2,A0,0,13,4,0,0,E0,0,14,2,20,0,16,5,7,A5,29,4A,5E,17,4,E,44,44,C4,18,5,7,A1,F,A,5E,19,5,7,A4,26,A,5E,20,6,0,4F,A4,92,48,20
-      DATA 21,5,7,A4,21,7A,1E,22,5,7,A5,29,7A,10,23,5,0,84,21,A,5E,24,5,7,A5,26,4A,5E,25,5,0,84,2F,4A,5E,26,2,20,80,27,2,A0,80
-      DATA 31,5,2,0,87,A,5E,33,8,0,EE,44,7C,44,6C,38,10,34,6,3,E4,92,79,45,3C,35,5,7,A1,8,42,5E,36,6,3,E4,92,49,24,BE
-      DATA 37,7,1,F9,12,87,A,11,7E,38,7,1,C1,2,87,A,11,7E,39,6,3,E8,A2,9A,8,BE,40,8,0,EE,44,44,7C,44,44,EE,41,4,E,44,44,4E
-      DATA 42,5,7,28,42,12,9E,43,8,0,E6,4C,58,70,58,4C,E6,44,6,3,E4,90,41,4,38,45,8,0,EE,44,44,54,7C,6C,C6,46,8,0,E4,44,4C,5C,74,64,CE
-      DATA 47,6,3,E8,A2,8A,28,BE,48,6,3,84,1E,49,24,BE,49,6,13,EA,A2,8A,28,BE,50,7,1,CD,32,C7,9,12,7C,51,5,7,A4,2F,42,5E
-      DATA 52,6,1,C2,8,20,8A,BE,53,8,0,7C,44,44,44,44,44,EE,54,8,0,10,38,6C,44,44,44,EE,55,8,0,44,6C,7C,54,44,44,EE,56,8,0,EE,44,6C,38,6C,44,EE
-      DATA 57,8,0,38,10,10,38,6C,44,EE,58,6,3,E8,B0,60,C9,BE,64,6,3,E4,90,E1,5,1C,65,6,3,E9,3C,13,C0,0,66,6,3,E4,92,49,E4,30
-      DATA 67,5,7,A1,9,78,0,68,6,3,E9,24,93,C1,C,69,5,7,A1,E9,78,0,70,4,E,44,4E,46,71,5,F0,BD,29,78,0,72,7,1,D9,22,44,8F,10,60
-      DATA 73,4,E,44,4C,4,74,4,EA,22,26,2,75,7,1,D9,22,C7,B,10,60,76,4,E,44,44,4C,77,8,0,56,54,54,54,FC,0,0,78,7,1,D9,22,44,9F,0,0
-      DATA 79,5,7,A5,29,78,0,80,6,E1,7,92,4B,E0,0,81,5,27,B5,29,78,0,82,6,3,84,10,6B,60,0,83,5,7,85,E8,78,0,84,5,3,94,84,79,8
-      DATA 85,7,0,F9,22,44,9B,0,0,86,8,0,10,38,6C,44,EE,0,0,87,8,0,7C,54,54,44,EE,0,0,88,7,1,99,A1,85,99,80,0,89,7,78,11,E2,44,9D,80,0
-      DATA 90,7,1,F9,91,89,9F,80,0,END
-
-      (FONT11)
-      DATA TALL,11
-      DATA 1,2,28,AA,A8,5,5,0,21,24,20,84,90,80,6,8,0,FA,FC,88,94,A0,40,A0,A0,E0,E0,10,6,0,0,0,22,A7,2A,20,0,0,11,4,0,0,4E,40,0,0
-      DATA 12,2,A0,0,0,13,3,0,1,80,0,0,14,2,20,0,0,16,4,0,EE,AA,AA,AE,E0,17,4,E,E4,44,4C,C4,0,18,4,E,E8,8E,2A,EE,0,19,4,E,E2,24,22,EE,0
-      DATA 20,5,1,9,EF,52,90,84,0,21,4,E,EA,2E,88,EE,0,22,4,E,EA,AE,E8,88,0,23,4,2,22,22,22,EE,0,24,4,E,EA,A4,AA,EE,0
-      DATA 25,4,0,22,2E,EA,AE,E0,26,2,20,80,0,27,2,A0,80,0,31,4,8,80,8E,E2,AE,E0,33,4,A,AA,AE,EA,AE,E0,34,5,7,BD,29,7B,D4,A7,38
-      DATA 35,4,E,E8,88,88,8E,E0,36,5,7,BC,A5,29,4A,57,BC,37,4,E,E8,8E,E8,8E,E0,38,4,8,88,8E,E8,8E,E0,39,4,E,EA,AA,A8,8E,E0
-      DATA 40,4,A,AA,AE,EA,AA,A0,41,4,E,E4,44,44,4E,E0,42,5,7,39,42,10,84,23,9C,43,4,A,AA,AE,CE,AA,A0,44,4,E,E8,88,88,88,80
-      DATA 45,6,2,AA,AA,AA,AA,AA,AB,ED,80,46,5,4,A5,29,4A,56,F6,A4,47,4,E,EA,AA,AA,AE,E0,48,4,8,88,8E,EA,AE,E0,49,4,4E,EA,AA,AA,AE,E0
-      DATA 50,5,4,A5,29,7B,D4,A7,38,51,4,E,EA,2E,E8,AE,E0,52,4,4,44,44,44,4E,E0,53,4,E,EA,AA,AA,AA,A0,54,4,4,EE,AA,AA,AA,A0
-      DATA 55,6,3,6F,AA,AA,AA,AA,AA,AA,80,56,4,A,AA,EE,4E,EA,A0,57,4,4,44,4E,EA,AA,A0,58,4,E,E8,84,42,2E,E0,60,5,3,90,41,19,8,46,10
-      DATA 64,5,7,BC,84,71,8,63,0,65,4,E,EA,EE,2E,E0,0,66,4,E,EA,AA,AE,E8,80,67,4,E,E8,88,8E,E0,0,68,4,E,EA,AA,AE,E2,20
-      DATA 69,4,E,E8,EE,AE,E0,0,70,4,4,44,44,EE,46,60,71,4,EE,2E,EA,AE,E0,0,72,4,A,AA,AA,AE,E8,80,73,4,E,E4,44,4C,C0,40
-      DATA 74,4,EE,A2,22,26,60,20,75,4,A,AA,EC,EA,A8,80,76,4,E,E4,44,44,4C,C0,77,6,2,AA,AA,AA,AA,BE,F8,0,0,78,4,A,AA,AA,AE,E0,0
-      DATA 79,4,E,EA,AA,AE,E0,0,80,4,88,EE,AA,AE,E0,0,81,4,4E,EA,AA,AE,E0,0,82,3,12,49,26,C0,0,83,4,E,E2,EE,8E,E0,0,84,4,6,64,44,4E,E4,40
-      DATA 85,4,E,EA,AA,AA,A0,0,86,4,4,EE,AA,AA,A0,0,87,6,3,EF,AA,AA,AA,AA,A8,0,0,88,4,A,AE,E4,EA,A0,0,89,4,EE,2E,EA,AA,A0,0
-      DATA 90,4,E,E8,44,2E,E0,0,91,5,1,3D,46,11,8,46,10,93,5,1,3D,46,13,4,41,30,END
-
-      (FONT12)
-      DATA TALL2,10
-      DATA 1,2,28,AA,A0,5,5,0,21,24,20,84,90,80,6,8,0,F2,F4,98,94,A0,40,A0,E0,E0,10,6,0,0,0,22,A7,2A,20,0,11,4,0,0,4E,40,0
-      DATA 12,2,A0,0,0,13,3,0,1,80,0,14,2,20,0,0,16,4,E,EA,AA,AA,EE,17,4,E,E4,44,4C,C4,18,4,E,E8,8E,2A,EE,19,4,E,E2,24,22,EE
-      DATA 20,5,1,9,EF,52,90,84,0,21,4,E,EA,2E,88,EE,22,4,E,EA,AE,E8,88,23,4,2,22,22,22,EE,24,4,E,EA,A4,AA,EE,25,4,2,22,EE,AA,EE
-      DATA 26,2,20,80,0,27,2,A0,80,0,31,4,8,8,EE,2A,EE,33,4,A,AA,EE,AA,EE,34,5,7,BD,2F,7A,94,E7,0,35,4,E,E8,88,88,EE,36,5,7,BC,A5,29,4A,F7,80
-      DATA 37,4,E,E8,8E,88,EE,38,4,8,88,8E,88,EE,39,4,E,EA,AA,88,EE,40,4,A,AA,EE,AA,AA,41,4,E,E4,44,44,EE,42,5,7,39,42,10,84,73,80
-      DATA 43,4,A,AA,EC,EA,AA,44,4,E,E8,88,88,88,45,6,2,AA,AA,AA,AA,AA,FB,60,46,5,4,A5,29,4A,DE,D4,80,47,4,E,EA,AA,AA,EE
-      DATA 48,4,8,88,EE,AA,EE,49,4,4E,EA,AA,AA,EE,50,5,4,A5,2F,7A,94,E7,0,51,4,E,EA,2E,8A,EE,52,4,4,44,44,44,EE,53,4,E,EA,AA,AA,AA
-      DATA 54,4,4,EE,AA,AA,AA,55,6,3,6F,AA,AA,AA,AA,AA,A0,56,4,A,AE,E4,EE,AA,57,4,4,44,EE,AA,AA,58,4,E,E8,84,42,EE,60,5,72,8,23,21,8,C2,0
-      DATA 64,5,7,BC,84,71,8,63,0,65,4,E,EA,E2,EE,0,66,4,E,EA,AA,EE,88,67,4,E,E8,88,EE,0,68,4,E,EA,AA,EE,22,69,4,E,E8,EA,EE,0
-      DATA 70,4,4,44,4E,E4,66,71,4,EE,2E,EA,EE,0,72,4,A,AA,AA,EE,88,73,4,E,E4,44,CC,4,74,4,EE,A2,22,66,2,75,4,A,AE,CE,AA,88
-      DATA 76,4,E,E4,44,44,CC,77,6,2,AA,AA,AA,AF,BE,0,0,78,4,A,AA,AA,EE,0,79,4,E,EA,AA,EE,0,80,4,88,EE,AA,EE,0,81,4,4E,EA,AA,EE,0
-      DATA 82,3,12,49,36,0,83,4,E,E2,E8,EE,0,84,4,6,64,44,EE,44,85,4,E,EA,AA,AA,0,86,4,4,EE,AA,AA,0,87,6,3,EF,AA,AA,AA,AA,0,0
-      DATA 88,4,A,EE,4E,EA,0,89,4,EE,2E,EA,AA,0,90,4,E,E8,42,EE,0,91,5,27,A8,C2,21,8,C2,0,93,5,27,A8,C2,60,88,26,0,END
-
-      (FONT13)
-      DATA TOON,11
-      DATA 33,10,0,38,EE,BB,8E,F7,BF,E7,F0,F8,1C,2,0,0,34,7,1,F3,F6,EF,DF,37,7E,FD,F0,0,35,7,0,79,F7,E,1F,BF,7E,7C,78,0
-      DATA 36,8,0,F8,FC,CE,CE,FE,FE,FE,FC,F8,0,37,7,1,FB,F7,E,9D,B9,70,FD,F8,0,38,7,1,C3,87,4E,DC,B8,7E,FD,F8,0,39,8,0,3E,7E,FE,E6,EE,E0,FE,7C,38,0
-      DATA 40,8,0,E6,E6,FE,FE,FE,E6,E6,E6,E6,0,41,4,E,EE,EE,EE,EE,0,42,7,1,E1,E1,C3,87,E,7E,FD,F8,0,43,8,0,CE,CE,DE,FC,F8,FC,DE,CE,C6,0
-      DATA 44,6,3,EF,BE,E3,8E,38,E3,80,0,45,12,0,E,E,E0,EE,4E,EE,EF,FE,FF,E7,FC,3B,81,10,0,0,46,9,1,71,B9,DD,EF,F7,FB,FD,EE,E7,63,A0,0
-      DATA 47,9,0,1E,1F,9E,6F,37,FB,FD,FE,7E,1E,0,0,48,8,0,E0,E0,FC,FE,E6,E6,FE,FE,FC,0,49,10,0,F,67,F3,C8,F3,3F,CF,F3,FC,7E,F,0,0
-      DATA 50,9,0,73,BB,9F,8F,E7,33,99,FC,FE,7E,0,0,51,7,1,E3,E7,E3,CF,3C,7E,7C,78,0,52,6,1,C7,1C,71,C7,1C,FB,E0,0,53,8,0,7C,FE,FE,E6,E6,E6,E6,E6,E6,0
-      DATA 54,10,0,2,1,C0,F8,7F,3F,EF,7B,8E,E3,B8,E0,0,55,12,0,1,10,3B,87,FC,FF,EF,FE,EE,EE,4E,60,C2,8,0,0,56,10,0,38,EF,79,FC,3E,7,3,E1,FC,F7,B8,E0,0
-      DATA 57,12,0,F,80,7C,3,E0,1F,3,F8,7F,CF,BE,71,C2,8,0,0,58,9,0,7F,BF,DF,E7,81,E0,78,FE,7F,3F,80,0,END
 
       REM for future reference
 
