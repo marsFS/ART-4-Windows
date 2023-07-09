@@ -3164,12 +3164,19 @@
                 REM PROCdrawgrid
                 PROCexport_toURL(1)
 
-              WHEN 9 : REM keyboard and options screen
+              WHEN 9 : REM save link to file
+                frame%-=1
+                PROCloadnextframe(1,0)
+                PROCmenurestore
+                REM PROCdrawgrid
+                PROCexport_toURL(2)
+
+              WHEN 10 : REM keyboard and options screen
                 menuext%=M_keyboard%
                 PROCkeyboardmenu(1)
                 PROCdrawmenu
 
-              WHEN 10 : REM help screen
+              WHEN 11 : REM help screen
                 PROCdrawmenu
                 PROCshowhelp
                 PROCmenurestore
@@ -7733,8 +7740,9 @@
             PROCmenutext(6,"SPRITES      ",SX%+20,menuadd%,10,(C%=14)*-4,-48)
             PROCmenutext(7,"EDIT.TF      ",SX%+20,menuadd%,10,(C%=15)*-4,-48)
             PROCmenutext(8,"ZXNET        ",SX%+20,menuadd%,10,(C%=15)*-4,-48)
-            PROCmenutext(9,"KYBRD FONTS  ",SX%+20,menuadd%,10,(C%=13)*-4,-48)
-            PROCmenutext(10,"HELP         ",SX%+20,menuadd%,10,(C%=16)*-4,-48)
+            PROCmenutext(9,"SAVE LINK    ",SX%+20,menuadd%,10,(C%=15)*-4,-48)
+            PROCmenutext(10,"KYBRD FONTS  ",SX%+20,menuadd%,10,(C%=13)*-4,-48)
+            PROCmenutext(11,"HELP         ",SX%+20,menuadd%,10,(C%=16)*-4,-48)
           ENDIF
 
       ENDCASE
@@ -8009,7 +8017,7 @@
       LOCAL I%,L%,S%,N%,X%,Y%,t%%,h$,s$,url$
 
       CASE D% OF
-        WHEN 0
+        WHEN 0,2
           url$="https://edit.tf#"
 
         WHEN 1
@@ -8039,10 +8047,23 @@
         NEXT
       NEXT
       VDU31,X%,Y%
-      PROCopenurl(url$ + s$)
-      REM F% = OPENOUT(@tmp$ + "EDITTF.txt")
-      REM PRINT#F%,s$
-      REM CLOSE#F%
+
+      CASE D% OF
+        WHEN 0,1
+
+          PROCopenurl(url$ + s$)
+        WHEN 2
+          name$=@dir$ + "EDITTF.txt"
+          F%=OPENUP(name$)
+          IF F%=0 THEN
+            F%=OPENOUT(name$)
+          ELSE
+            PTR#F%=EXT#F%
+          ENDIF
+
+          PRINT#F%,url$ + s$
+          CLOSE#F%
+      ENDCASE
 
       ENDPROC
 
@@ -8289,11 +8310,11 @@
 
       REM drop down sub menu locations, X,TOP - W,H  (Y=TOP-W)
       REM Paint, Dither, Copy, Fill, Special
-      DATA 448,960,460,920
+      DATA 448,960,460,908
       DATA 480,960,460,636
-      DATA 512,960,460,920
+      DATA 512,960,460,908
       DATA 544,960,460,740
-      DATA 576,960,460,616
+      DATA 576,960,460,664
 
       REM patternData
       DATA 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
