@@ -2914,7 +2914,7 @@
 
             ENDCASE
 
-            IF C%>=0 AND C%<10 THEN
+            IF C%>=0 AND C%<12 THEN
               PROCsubupdate(C%)
 
               REM tool selected
