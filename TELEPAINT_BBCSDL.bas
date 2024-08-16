@@ -16,6 +16,15 @@
 
       REM *** TRANSITION EFFECTS, SCROLL FRAME IN / OUT - LEFT, RIGHT, UP, DOWN  , FRAME DISOLVE... OTHERS?
 
+      REM Things still to work on:
+      REM * Moving frames and better sprite movement options
+      REM * Move sprites at pixel level
+      REM * Integrating fonts as special sprites
+      REM * Text labels and bubbles
+      REM * Integrating colour and special control codes better
+      REM * Better frame management tools
+      REM * ..... ???
+
       REM *** END TODO LIST ***
 
       REM *** Added internal mode changes between Mode 6 and Mode 7 to eliminate screen repos
@@ -41,7 +50,7 @@
 
       INSTALL @lib$+"sortlib"
 
-      version$="v0.25"
+      version$="v0.26"
 
       DEBUG%=0 : REM for displaying mouse and other debug details
 
@@ -228,8 +237,9 @@
       spriteselect%=-1
       objsprscroll%=0
       objfrmscroll%=0
+      menumode%=M_canvas%  : REM tracks if in canvas or movie modes for returning from multiple sub menus
       menuext%=M_canvas%   : REM current extended menu
-      menufrom%=M_canvas%  : REM menu to return tO
+      menufrom%=M_canvas%  : REM menu to return to
       menuYadd%=0          : REM general var for control layout
       menuXadd%=0          : REM general var for control layout
       session%=0
@@ -341,7 +351,6 @@
       launch_action%=0
 
       REM sprite variables
-      sprite_limit%=100
       sprite_max%=100
       sprite_old%=0
       sprite_cur%=0
@@ -363,7 +372,6 @@
 
       REM current menu or screen showing
       menuext%=M_canvas%
-      sprite_old%=0
 
       REM frame buffer 24x40 chars
       DIM frame_buffer&(frame_max%-1,959)
@@ -479,7 +487,7 @@
         PROCframesave(frame%)
       NEXT frame%
       frame%=1
-      PROCdrawmenu
+      PROCmenudraw
 
       IF launch_action%=-2 THEN PROCshowhelp
 
@@ -531,7 +539,7 @@
                     PROCmoviemode
 
                   OTHERWISE : REM main drawin canvas
-                    PROCmaincanvas
+                    PROCcanvasmode
 
                 ENDCASE
               ENDIF
@@ -675,7 +683,7 @@
         PRINTTAB(0,21)SPC(20)
         PRINTTAB(0,22)SPC(20)
         PRINTTAB(0,23)SPC(20)
-        PRINTTAB(0,20)"FC:";STR$(fontcount%);
+        PRINTTAB(0,20)"ME:";STR$(menuext%);"  ";"MF:";STR$(menufrom%);"  ";
         PRINTTAB(0,21)"MX:";STR$(MX%);" MY:";STR$(MY%);
         PRINTTAB(0,22)"TX:";STR$(TX%);" TY:";STR$(TY%);
         PRINTTAB(0,23)"PX:";STR$(PX%);" PY:";STR$(PY%);
@@ -1334,60 +1342,8 @@
       ENDPROC
 
       REM ##########################################################
-      REM load screen
-      DEF PROCloadscreen
-
-      PRINTTAB(3,2)CHR$(141);gr$;CHR$(157);ty$;"= = T E L E P A I N T = =  ";CHR$(156)
-      PRINTTAB(3,3)CHR$(141);gy$;CHR$(157);tr$;"= = T E L E P A I N T = =  ";CHR$(156)
-
-      PRINTTAB(8,6)gm$;CHR$(157);ty$;"  IMPORT IMAGE    ";CHR$(156)
-      PRINTTAB(8,9)gm$;CHR$(157);ty$;"  DISPLAY HELP    ";CHR$(156)
-      PRINTTAB(7,12)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
-      PRINTTAB(7,13)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
-
-      PRINTTAB(0,18)ty$;"MAX FRAMES (2-";STR$(frame_limit%);")";tw$;"< -";tc$;"  8";tw$;"+ >"
-
-      PRINTTAB(0,24)tb$;"Telepaint ";version$;
-
-      REPEAT
-        IF frame_max%<>launch_action% THEN
-          PRINTTAB(24,18)RIGHT$("  "+STR$(frame_max%),3)
-          launch_action%=frame_max%
-        ENDIF
-
-        PROCREADMOUSE
-        IF MB%=4 THEN
-          CASE TY% OF
-
-            WHEN 6 : REM import image dialog
-              IF TX%>8 AND TX%<29 THEN launch_action%=-3
-
-            WHEN 9 : REM display help screen
-              IF TX%>8 AND TX%<29 THEN launch_action%=-2
-
-            WHEN 12,13 : REM launch telepaint
-              IF TX%>8 AND TX%<29 THEN launch_action%=-1
-
-            WHEN 18 : REM change max frames var
-              IF TX%=20 THEN frame_max%=2
-              IF TX%=22 AND frame_max%>2 THEN frame_max%-=2
-              IF TX%=28 AND frame_max%<frame_limit% THEN frame_max%+=2
-              IF TX%=30 frame_max%=frame_limit%
-              WAIT 10
-
-          ENDCASE
-        ELSE
-          WAIT 10
-          REM PRINTTAB(30,24);STR$(TX%);",";STR$(TY%);"  ";
-        ENDIF
-      UNTIL launch_action%<0
-      PROCWAITMOUSE(0)
-
-      ENDPROC
-
-      REM ##########################################################
-      REM main canvas
-      DEF PROCmaincanvas
+      REM main canvas click handler
+      DEF PROCcanvasmode
       LOCAL X%,Y%,A%
       IF menuext%>0 THEN PROCmenurestore
 
@@ -1522,7 +1478,7 @@
           WHEN T_line& : REM line tool
             IF animateshape% THEN
               PROCundosaveall
-              PROCdrawmenu
+              PROCmenudraw
             ELSE
               PROCundosave
             ENDIF
@@ -1560,7 +1516,7 @@
           WHEN T_box&,T_gradl&,T_gradr&,T_gradt&,T_gradb&,T_gradtl&,T_gradtr&,T_gradbr&,T_gradbl& : REM rectangle / grad tools
             IF animateshape% AND toolsel%=T_box& THEN
               PROCundosaveall
-              PROCdrawmenu
+              PROCmenudraw
             ELSE
               PROCundosave
             ENDIF
@@ -1770,7 +1726,7 @@
       ENDPROC
 
       REM ##########################################################
-      REM MOVIE MODE
+      REM MOVIE MODE click handler
       DEF PROCmoviemode
       LOCAL L%,X%,Y%,shift%
 
@@ -1827,77 +1783,64 @@
       DEF PROCmenuhandler
       PROCWAITMOUSE(0)
 
-      REM check if sub menu is currently displayed but another menu item is clicked
-      IF menuext%=M_paint% AND TX%<>15 THEN PROCmenurestore
-      IF menuext%=M_dither% AND TX%<>16 THEN PROCmenurestore
-      IF menuext%=M_copypaste% AND TX%<>17 THEN PROCmenurestore
-      IF menuext%=M_fill% AND TX%<>18 THEN PROCmenurestore
-      IF menuext%=M_special% AND TX%<>19 THEN PROCmenurestore
-      IF menuext%=M_keyboard% AND TX%<>19 THEN PROCmenurestore
-      IF menuext%=M_sprProperty% AND (TX%<27 OR TX%>29) THEN PROCmenurestore
-      IF (menuext%=M_sprSelect% AND menufrom%=M_moviemode%) AND (TX%<31 OR TX%>33) THEN PROCmenurestore
-      IF (menuext%=M_sprSelect% AND menufrom%=M_canvas%) AND TX%<>30 THEN PROCmenurestore
-      IF menuext%=M_frmProperty% AND (TX%<1 OR TX%>6) THEN PROCmenurestore
-      IF menuext%=M_movieMenu% AND (TX%<23 OR TX%>25) THEN PROCmenurestore
-
-      REM PRINTTAB(0,1);STR$(menuext%);"  ";
-      REM A=GET
-
+      REM first pass to reset sub menu or determine calling screen
       CASE menuext% OF
-        WHEN M_sprSelect% : REM object insert sub menu
+        WHEN M_moviemode%,M_canvas%
+          menufrom%=menuext%
+        WHEN M_sprites%
+          IF TX%<>39 menufrom%=menuext%
+        WHEN M_paint%
+          IF TX%<>15 PROCmenurestore
+        WHEN M_dither%
+          IF TX%<>16 PROCmenurestore
+        WHEN M_copypaste%
+          IF TX%<>17 PROCmenurestore
+        WHEN M_fill%
+          IF TX%<>18 PROCmenurestore
+        WHEN M_special%
+          IF TX%<>19 PROCmenurestore
+        WHEN M_sprProperty%
+          IF TX%<27 OR TX%>29 PROCmenurestore
+        WHEN M_sprSelect%
+          IF menufrom%=M_moviemode% AND (TX%<31 OR TX%>33) PROCmenurestore
+          IF (menufrom%=M_canvas% OR menufrom%=M_sprites%) AND TX%<>30 PROCmenurestore
+        WHEN M_frmProperty%
+          IF TX%<1 OR TX%>6 PROCmenurestore
+        WHEN M_movieMenu%
+          IF TX%<23 OR TX%>25 PROCmenurestore
+      ENDCASE
+
+      REM second pass to determine new sub menu
+      CASE menuext% OF
+        WHEN M_paint%,M_dither%,M_copypaste%,M_fill%,M_special%,M_sprSelect%,M_sprProperty%,M_frmProperty%,M_movieMenu% : REM close sub menu if already open
           PROCmenurestore
 
-        WHEN M_moviemode%,M_sprProperty%,M_frmProperty%,M_movieMenu% : REM handle movie mode sub menus
+        WHEN M_moviemode%
           CASE TX% OF
             WHEN 1,2,3,4,5,6 : REM frame object sub menu
-              IF menuext%<>M_frmProperty% THEN
-                menufrom%=menuext%
-                menuext%=M_frmProperty%
-                sub_cur%=7
-
-                PROCsubinit
-              ELSE
-                PROCmenurestore
-              ENDIF
+              menuext%=M_frmProperty%
+              PROCsubinit(7)
 
             WHEN 23,24,25 : REM movie sub menu
-              IF menuext%<>M_movieMenu% THEN
-                menufrom%=menuext%
-                menuext%=M_movieMenu%
-                sub_cur%=8
-
-                PROCsubinit
-              ELSE
-                PROCmenurestore
-              ENDIF
+              menuext%=M_movieMenu%
+              PROCsubinit(8)
 
             WHEN 27,28,29 : REM edit object sub menu
-              IF menuext%<>M_sprProperty% THEN
-                IF spriteselect%>-1 obj_lstcur%=spriteselect%
-                menufrom%=menuext%
-                menuext%=M_sprProperty%
-                sub_cur%=6
-
-                PROCsubinit
-              ELSE
-                PROCmenurestore
-              ENDIF
+              IF spriteselect%>-1 obj_lstcur%=spriteselect%
+              menuext%=M_sprProperty%
+              PROCsubinit(6)
 
             WHEN 31,32,33 : REM insert object sub menu
-              menufrom%=menuext%
               menuext%=M_sprSelect%
-              sub_cur%=5
-
-              PROCsubinit
+              PROCsubinit(5)
 
             WHEN 35,36,37 : REM sprites edit screen
-              menufrom%=menuext%
               menuext%=M_sprites%
               PROCspritescreen(1)
-              PROCdrawmenu
 
             WHEN 39 : REM exit movie mode
               menuext%=M_canvas%
+              menufrom%=M_canvas%
               PROCmenurestore
 
             OTHERWISE
@@ -1924,65 +1867,29 @@
               ENDIF
 
             WHEN 15 : REM paint sub menu
-              IF menuext%<>M_paint% THEN
-                IF menuext%=M_canvas% THEN PROCframesave(frame%)
-                menufrom%=menuext%
-                menuext%=M_paint%
-                sub_cur%=0
-
-                PROCsubinit
-              ELSE
-                PROCmenurestore
-              ENDIF
+              IF menuext%=M_canvas% THEN PROCframesave(frame%)
+              menuext%=M_paint%
+              PROCsubinit(0)
 
             WHEN 16 : REM dither & scale merged
-              IF menuext%<>M_dither% THEN
-                IF menuext%=M_canvas% THEN PROCframesave(frame%)
-                menufrom%=menuext%
-                menuext%=M_dither%
-                sub_cur%=1
-
-                PROCsubinit
-              ELSE
-                PROCmenurestore
-              ENDIF
-
+              IF menuext%=M_canvas% THEN PROCframesave(frame%)
+              menuext%=M_dither%
+              PROCsubinit(1)
 
             WHEN 17 : REM copy sub menu
-              IF menuext%<>M_copypaste% THEN
-                IF menuext%=M_canvas% THEN PROCframesave(frame%)
-                menufrom%=menuext%
-                menuext%=M_copypaste%
-                sub_cur%=2
-
-                PROCsubinit
-              ELSE
-                PROCmenurestore
-              ENDIF
+              IF menuext%=M_canvas% THEN PROCframesave(frame%)
+              menuext%=M_copypaste%
+              PROCsubinit(2)
 
             WHEN 18 : REM fill menu
-              IF menuext%<>M_fill% THEN
-                IF menuext%=M_canvas% THEN PROCframesave(frame%)
-                menufrom%=menuext%
-                menuext%=M_fill%
-                sub_cur%=3
-
-                PROCsubinit
-              ELSE
-                PROCmenurestore
-              ENDIF
+              IF menuext%=M_canvas% THEN PROCframesave(frame%)
+              menuext%=M_fill%
+              PROCsubinit(3)
 
             WHEN 19 : REM shape / special menu
-              IF menuext%<>M_special% THEN
-                IF menuext%=M_canvas% THEN PROCframesave(frame%)
-                menufrom%=menuext%
-                menuext%=M_special%
-                sub_cur%=4
-
-                PROCsubinit
-              ELSE
-                PROCmenurestore
-              ENDIF
+              IF menuext%=M_canvas% THEN PROCframesave(frame%)
+              menuext%=M_special%
+              PROCsubinit(4)
 
             WHEN 21 : erase%=(erase%+1) AND 1 : REM toggle erase tool
 
@@ -2006,11 +1913,8 @@
 
             WHEN 30 : REM insert object
               IF menuext%=M_canvas% THEN PROCframesave(frame%)
-              menufrom%=menuext%
               menuext%=M_sprSelect%
-              sub_cur%=5
-
-              PROCsubinit
+              PROCsubinit(5)
 
             WHEN 31 : PROCmenucheck : PROCloadfile(0) : REM load file dialog - 0 load bin file PROCmenurestore:
             WHEN 32 : PROCmenucheck : PROCsavefile : REM save frames to file PROCmenurestore:
@@ -2018,10 +1922,16 @@
             WHEN 34 : animation%=(animation%+1) AND 1 : REM toggle frame animation advance tool
 
               REM                  WHEN 36 : REM frame%
-            WHEN 36,37 : PROCmenucheck : PROCloadnextframe(-1,1) : REM save current frame and display previous frame in sequence PROCmenurestore:
-            WHEN 38 : PROCmenucheck : PROCloadnextframe(1,1) : REM save current frame and display next frame in sequence  PROCmenurestore:
-            WHEN 39 : PROCmenucheck : PROCplay : REM save current frame and play all frames in a loop  PROCmenurestore:
-
+            WHEN 36,37 : REM save current frame and display previous frame in sequence PROCmenurestore
+              IF menuext%=M_canvas% PROCmenucheck : PROCloadnextframe(-1,1)
+            WHEN 38 : REM save current frame and display next frame in sequence  PROCmenurestore:
+              IF menuext%=M_canvas% PROCmenucheck : PROCloadnextframe(1,1)
+            WHEN 39 :  REM save current frame and play all frames in a loop  PROCmenurestore:
+              IF menuext%=M_canvas% PROCmenucheck : PROCplay
+              IF menuext%=M_sprites% OR menuext%=M_keyboard% THEN
+                menufrom%=menumode%
+                PROCmenurestore
+              ENDIF
 
           ENDCASE
 
@@ -2029,7 +1939,7 @@
       REM hide shape menu if another menu item was clicked
       CASE menuext% OF
         WHEN M_keyboard% : REM keyboard and options
-          IF TX%<>19 THEN PROCmenurestore
+          REM IF TX%<>19 THEN PROCmenurestore
 
         WHEN M_paint% : REM paint sub menu
 
@@ -2050,7 +1960,7 @@
         WHEN M_movieMenu% : REM movie mode sub menu
 
         OTHERWISE
-          PROCdrawmenu
+          PROCmenudraw
       ENDCASE
 
 
@@ -2131,11 +2041,8 @@
 
               WHEN 134 : REM insert
                 REM open object insert menu
-                menufrom%=menuext%
                 menuext%=M_sprSelect%
-                sub_cur%=5
-
-                PROCsubinit
+                PROCsubinit(5)
 
               WHEN 135 : REM del
                 REM insert last selected object directly to world map
@@ -2291,7 +2198,6 @@
             IF sprite_cur%<0 THEN sprite_cur%=sprite_max%-1
             PROCspritescreen(0)
             sprite_old%=sprite_cur%
-            PROCdrawmenu
             PROCWAITNOKEY(-26,0)
             FONTX%=PX%
           ENDIF
@@ -2302,7 +2208,6 @@
             IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
             PROCspritescreen(0)
             sprite_old%=sprite_cur%
-            PROCdrawmenu
             PROCWAITNOKEY(-122,0)
             FONTX%=PX%
           ENDIF
@@ -2327,7 +2232,7 @@
           REM toggle erase
           IF INKEY(-35) THEN
             erase%=(erase%+1) AND 1
-            PROCdrawmenu
+            PROCmenudraw
             PROCWAITNOKEY(-35,0)
           ENDIF
 
@@ -2396,7 +2301,7 @@
                   frmlist{(movieframetotal%)}.x%=mmWX%
                   frmlist{(movieframetotal%)}.y%=mmWY%
                 ENDIF
-                PROCdrawmenu
+                PROCmenudraw
                 PROCWAITNOKEY(-74,0)
 
               WHEN 27 : REM escape
@@ -2427,10 +2332,8 @@
                   IF spriteselect%>-1 obj_lstcur%=spriteselect%
                   sprite_cur%=objlist{(obj_lstcur%)}.obj%
                   PROCWAITNOKEY(-35,0)
-                  menufrom%=menuext%
                   menuext%=M_sprites%
                   PROCspritescreen(1)
-                  PROCdrawmenu
 
                 ENDIF
 
@@ -2446,11 +2349,8 @@
               WHEN 80,112 : REM P show selected sprite properties
                 REM PRINTTAB(0,21);STR$(spriteselect%);"  ";
                 IF spriteselect%>-1 obj_lstcur%=spriteselect%
-                menufrom%=menuext%
                 menuext%=M_sprProperty%
-                sub_cur%=6
-
-                PROCsubinit
+                PROCsubinit(6)
                 PROCWAITNOKEY(-56,0)
 
               WHEN 128 : REM left + ctrl
@@ -2495,11 +2395,8 @@
 
               WHEN 134 : REM insert
                 REM open object insert menu
-                menufrom%=menuext%
                 menuext%=M_sprSelect%
-                sub_cur%=5
-
-                PROCsubinit
+                PROCsubinit(5)
 
               WHEN 135 : REM del
                 REM insert last selected object directly to world map
@@ -2613,7 +2510,7 @@
               REM PROCchangemode(7,1)
               CLS
               menuext%=M_canvas%
-              PROCdrawmenu
+              PROCmenudraw
               PROCshowhelp
               menuext%=M_keyboard%
               PROCkeyboardmenu(1)
@@ -2935,7 +2832,8 @@
               PROCsavesprite(sprite_cur%)
             ENDIF
           WHEN T_foreg&: REM foreground colour
-            IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<try% THEN
+            REM            IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<try% THEN
+            IF TX%=10 AND TY%>2 AND TY%<try% THEN
               PROCundosave
 
               IF colmode%=1 THEN
@@ -2950,7 +2848,8 @@
                 REPEAT
                   PROCREADMOUSE
                   IF TX%<>OLD_TX% OR TY%<>OLD_TY% THEN
-                    IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<try% THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                    REM IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<try% THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
+                    IF TX%=10 AND TY%>2 AND TY%<try% THEN VDU 31,TX%,TY%,(curcol%+144-textfore%*16)
                     OLD_TX%=TX%
                     OLD_TY%=TY%
                   ENDIF
@@ -2970,10 +2869,7 @@
               WHEN 1,2,3,4,5 : REM load sprite
                 PROCloadfile(3)
                 menuext%=M_sprites%
-                PROCdrawmenu
                 PROCspritescreen(1)
-                PROCdrawsprite
-
 
               WHEN 33,34,35 : REM cls
                 PROCundosave
@@ -3047,11 +2943,7 @@
 
                 REM              PROCloadfile(2)
                 PROCimportsprite
-
-                PROCdrawmenu
                 PROCspritescreen(1)
-                PROCdrawsprite
-
 
               WHEN 33,34,35,36,37 : REM SCROLL RIGHT
                 PROCundosave
@@ -3095,6 +2987,7 @@
             CASE TX% OF
               WHEN 1,2,3,4,5 : REM movie mode screen
                 menuext%=M_moviemode%
+                menufrom%=M_moviemode%
                 PROCmenurestore
 
               WHEN 33,34,35,36,37 : REM SCROLL UP
@@ -3249,7 +3142,7 @@
 
             ENDCASE
 
-          WHEN 19 : REM prev / next sprite
+          WHEN 20 : REM prev / next sprite
             CASE TX% OF
               WHEN 11,12,13,14
                 sprite_cur%-=1
@@ -3259,7 +3152,7 @@
                 IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
 
             ENDCASE
-            PROCdrawmenu
+            PROCmenudraw
 
           WHEN 18
             CASE TX% OF
@@ -3277,14 +3170,12 @@
 
               WHEN 15,16,17,18,19,20,21,22,23,24,25 : REM ???
 
-
             ENDCASE
-
 
           WHEN 24 : REM close button
             CASE TX% OF
               WHEN 29,30,31,32,33,34,35,36,37 : REM close sprites screen
-                IF menufrom%=M_moviemode% THEN menuext%=M_moviemode%
+                menufrom%=menumode%
                 PROCmenurestore
 
             ENDCASE
@@ -3294,10 +3185,8 @@
 
       REM keyboard change
       IF sprite_cur%<>sprite_old% THEN
-        REM PROCsavesprite(sprite_old%)
         PROCspritescreen(0)
         sprite_old%=sprite_cur%
-        PROCdrawmenu
       ENDIF
 
       ENDPROC
@@ -3313,8 +3202,9 @@
 
       REM ##########################################################
       REM initialise shape and special sub menu
-      DEF PROCsubinit
+      DEF PROCsubinit(S%)
 
+      sub_cur%=S%
       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
       PROCchangemode(6,0)
 
@@ -3330,7 +3220,7 @@
 
       PROCresetcontrols
       PROCsubupdate(-1)
-      PROCsubupdate(0)
+      REM PROCsubupdate(0)
 
       ENDPROC
 
@@ -3348,6 +3238,7 @@
 
       CASE sub_cur% OF
         WHEN 0 : REM paint
+          PROCgtext("P",SX%+32,996,10,0)
           PROCmenutext(0,"PAINT        ",SX%+20,menuYadd%,14,(toolsel%=T_paint&)*-4,-48)
           PROCmenutext(1,"LINE         ",SX%+20,menuYadd%,14,(toolsel%=T_line&)*-4,-48)
           PROCmenutext(2,"BOX          ",SX%+20,menuYadd%,14,(toolsel%=T_box&)*-4,-48)
@@ -3407,6 +3298,7 @@
           ENDIF
 
         WHEN 1 : REM dither
+          PROCgtext("B",SX%+32,996,10,0)
           PROCmenutext(0,"DITHER 1     ",SX%+20,menuYadd%,14,(toolsel%=T_dither1&)*-4,-48)
           PROCmenutext(1,"DITHER 2     ",SX%+20,menuYadd%,14,(toolsel%=T_dither2&)*-4,-48)
           PROCmenutext(2,"DITHER 3     ",SX%+20,menuYadd%,14,(toolsel%=T_dither3&)*-4,-48)
@@ -3434,6 +3326,7 @@
 
 
         WHEN 2 : REM copy paste
+          PROCgtext("C",SX%+32,996,10,0)
           PROCmenutext(0,"COPY/SELECT  ",SX%+20,menuYadd%,14,(toolsel%=T_copy&)*-4,-48)
           PROCmenutext(1,"PASTE        ",SX%+20,menuYadd%,14,(toolsel%=T_paste&)*-4,-48)
 
@@ -3472,7 +3365,7 @@
           ENDIF
 
         WHEN 3 : REM fill
-
+          PROCgtext("F",SX%+32,996,10,0)
           PROCmenutext(0,"FILL SOLID   ",SX%+20,menuYadd%,14,(toolsel%=T_fill&)*-4,-48)
           PROCmenutext(1,"GRAD LEFT    ",SX%+20,menuYadd%,14,(toolsel%=T_gradl&)*-4,-48)
           PROCmenutext(2,"GRAD RIGHT   ",SX%+20,menuYadd%,14,(toolsel%=T_gradr&)*-4,-48)
@@ -3584,6 +3477,7 @@
           ENDIF
 
         WHEN 4 : REM special
+          PROCgtext("S",SX%+32,996,10,0)
           PROCmenutext(0,"FLSH (136)   ",SX%+20,menuYadd%,14,(toolsel%=T_flash&)*-4,-48)
           PROCmenutext(1,"DBLH (141)   ",SX%+20,menuYadd%,14,(toolsel%=T_double&)*-4,-48)
           PROCmenutext(2,"SEPR (154)   ",SX%+20,menuYadd%,14,(toolsel%=T_separate&)*-4,-48)
@@ -3738,6 +3632,7 @@
               PROCgtext("WY:",SX%+20,menuYadd%-48,14,0)
               PROCgtext(LEFT$(T$,2)+":",SX%+20,menuYadd%-96,14,0)
               PROCgtext("FS:",SX%+20,menuYadd%-144,14,0)
+              PROCaddcontrange(4,SX%+130,menuYadd%-176,SX%+320,menuYadd%-138)
               PROCgtext("PA:",SX%+20,menuYadd%-192,14,0)
 
               IF objlist{(obj_lstcur%)}.f%>-1 THEN
@@ -3747,24 +3642,24 @@
                   F$="DEDUPE"
                   COL%=11
                 ENDIF
-                PROCmenutext(4,F$,SX%+20,menuYadd%-288,COL%,4,0)
-                PROCmenutext(13,"INIT",SX%+332,menuYadd%-288,1,3,0)
+                PROCmenutext(5,F$,SX%+20,menuYadd%-288,COL%,4,0)
+                PROCmenutext(14,"INIT",SX%+332,menuYadd%-288,1,3,0)
                 PROCgtext("REP:",SX%+20,menuYadd%-336,14,0)
-                PROCmenutext(5,"-",SX%+274,menuYadd%-336,14,4,0)
-                PROCmenutext(6,"+",SX%+338,menuYadd%-336,14,4,0)
+                PROCmenutext(6,"-",SX%+274,menuYadd%-336,14,4,0)
+                PROCmenutext(7,"+",SX%+338,menuYadd%-336,14,4,0)
 
                 PROCgtext("HOP:",SX%+20,menuYadd%-384,14,0)
-                PROCmenutext(7,"-",SX%+274,menuYadd%-384,14,4,0)
-                PROCmenutext(8,"+",SX%+338,menuYadd%-384,14,4,0)
+                PROCmenutext(8,"-",SX%+274,menuYadd%-384,14,4,0)
+                PROCmenutext(9,"+",SX%+338,menuYadd%-384,14,4,0)
 
                 PROCgtext("RELATIVE",SX%+20,menuYadd%-432,11,0)
                 PROCgtext("H:",SX%+20,menuYadd%-480,14,0)
-                PROCmenutext(9,"-",SX%+208,menuYadd%-480,14,4,0)
-                PROCmenutext(10,"+",SX%+272,menuYadd%-480,14,4,0)
+                PROCmenutext(10,"-",SX%+208,menuYadd%-480,14,4,0)
+                PROCmenutext(11,"+",SX%+272,menuYadd%-480,14,4,0)
 
                 PROCgtext("V:",SX%+20,menuYadd%-528,14,0)
-                PROCmenutext(11,"-",SX%+208,menuYadd%-528,14,4,0)
-                PROCmenutext(12,"+",SX%+272,menuYadd%-528,14,4,0)
+                PROCmenutext(12,"-",SX%+208,menuYadd%-528,14,4,0)
+                PROCmenutext(13,"+",SX%+272,menuYadd%-528,14,4,0)
 
               ELSE
                 REM PROCmenutext(4,"      ",SX%+20,menuYadd%-288,7,8,0)
@@ -3817,7 +3712,7 @@
       REM ##########################################################
       REM shape and special sub menu
       DEF PROCsubhandler
-      LOCAL done%,L%,C%,SP%,NS%,OS%,SY%,F%
+      LOCAL done%,L%,C%,SP%,NS%,OS%,SX%,SY%,F%,F$
 
       PROCWAITMOUSE(0)
       C%=-1
@@ -4023,7 +3918,11 @@
                     objlist{(obj_lstcount%)}.type%=2
                     objlist{(obj_lstcount%)}.x%=mmWX%
                     objlist{(obj_lstcount%)}.y%=mmWY%-1
-                    objlist{(obj_lstcount%)}.f%=-1
+                    IF movieframe%>-1 THEN
+                      objlist{(obj_lstcount%)}.f%=movieframe%
+                    ELSE
+                      objlist{(obj_lstcount%)}.f%=-1
+                    ENDIF
                     objlist{(obj_lstcount%)}.parent%=-1
 
                     done%=1
@@ -4092,7 +3991,44 @@
                 IF obj_lstcur%>0 obj_lstcur%-=1
                 done%=1
 
-              WHEN 4 : REM duplicate button
+              WHEN 4 : REM change frame index
+                SY%=932
+                SX%=controlrange{(C%)}.x1%
+                F%=0
+                F$="ALL"
+                IF objlist{(obj_lstcur%)}.f%>-1 F$=STR$(objlist{(obj_lstcur%)}.f%+1)
+                PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-192,15,0)
+                OS%=LEN(F$)*32
+                REPEAT
+                  K%=INKEY(0)
+                  IF K%=-1 THEN
+                    WAIT 10
+                    F%=1-F%
+                    IF F%=1 OS%=LEN(F$)*32
+                    GCOL 0,F%*15
+                    LINE SX%+160-OS%,SY%-228,SX%+192-OS%,SY%-228
+                  ELSE
+                    REM check for numbers 0 to 9 and update string value ALL=0 all other values are numeric
+                    IF K%>47 AND K%<58 THEN
+                      IF F$="ALL" THEN
+                        IF K%<>48 F$=CHR$(K%)
+                      ELSE
+                        IF LEN(F$)<4 F$=F$+CHR$(K%)
+                      ENDIF
+                    ENDIF
+                    REM check if delete or backspace is pressed
+                    IF K%=135 OR K%=8 THEN
+                      IF VAL(F$)>0 F$=LEFT$(F$,LEN(F$)-1)
+                      IF VAL(F$)=0 F$="ALL"
+                    ENDIF
+                    PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-192,15,0)
+                  ENDIF
+                UNTIL K%=13 OR K%=27
+                IF K%=13 objlist{(obj_lstcur%)}.f%=VAL(F$)-1
+                GCOL 0,0
+                LINE SX%+160-OS%,SY%-228,SX%+192-OS%,SY%-228
+
+              WHEN 5 : REM duplicate button
                 REM remove duplicates for this object
                 IF objlist{(obj_lstcur%)}.u%=1 THEN
                   objlist{(obj_lstcur%)}.u%=0
@@ -4112,9 +4048,9 @@
                         spriteselect%=-1
                         objlist{(obj_lstcount%)}.parent%=SP%
                         objlist{(obj_lstcount%)}.obj%=objlist{(SP%)}.obj%
-                        objlist{(obj_lstcount%)}.type%=1
-                        objlist{(obj_lstcount%)}.x%=objlist{(SP%)}.x%
-                        objlist{(obj_lstcount%)}.y%=objlist{(SP%)}.y%
+                        objlist{(obj_lstcount%)}.type%=objlist{(SP%)}.type%
+                        objlist{(obj_lstcount%)}.x%=objlist{(SP%)}.x%+objlist{(SP%)}.h%*L%
+                        objlist{(obj_lstcount%)}.y%=objlist{(SP%)}.y%+objlist{(SP%)}.v%*L%
                         objlist{(obj_lstcount%)}.f%=objlist{(SP%)}.f%+objlist{(SP%)}.hop%*L%
                       ELSE
                         REM couldn't add sprite
@@ -4124,35 +4060,36 @@
                     REM VDU 7 ???
                   ENDIF
                 ENDIF
-              WHEN 5 : REM rep dec
+              WHEN 6 : REM rep dec
                 IF objlist{(obj_lstcur%)}.rep%>0 THEN objlist{(obj_lstcur%)}.rep%-=1
 
-              WHEN 6 : REM rep inc
+              WHEN 7 : REM rep inc
                 IF objlist{(obj_lstcur%)}.rep%<100 THEN objlist{(obj_lstcur%)}.rep%+=1
 
-              WHEN 7 : REM hop dec
+              WHEN 8 : REM hop dec
                 IF objlist{(obj_lstcur%)}.hop%>1 THEN objlist{(obj_lstcur%)}.hop%-=1
 
-              WHEN 8 : REM hop inc
+              WHEN 9 : REM hop inc
                 IF objlist{(obj_lstcur%)}.hop%<100 THEN objlist{(obj_lstcur%)}.hop%+=1
 
-              WHEN 9 : REM h dec
-                IF objlist{(obj_lstcur%)}.h%>0 THEN objlist{(obj_lstcur%)}.h%-=1
+              WHEN 10 : REM h dec
+                IF objlist{(obj_lstcur%)}.h%>-100 THEN objlist{(obj_lstcur%)}.h%-=1
 
-              WHEN 10 : REM h inc
+              WHEN 11 : REM h inc
                 IF objlist{(obj_lstcur%)}.h%<100 THEN objlist{(obj_lstcur%)}.h%+=1
 
-              WHEN 11 : REM v dev
-                IF objlist{(obj_lstcur%)}.v%>0 THEN objlist{(obj_lstcur%)}.v%-=1
+              WHEN 12 : REM v dev
+                IF objlist{(obj_lstcur%)}.v%>-100 THEN objlist{(obj_lstcur%)}.v%-=1
 
-              WHEN 12 : REM v inc
+              WHEN 13 : REM v inc
                 IF objlist{(obj_lstcur%)}.v%<100 THEN objlist{(obj_lstcur%)}.v%+=1
 
-              WHEN 13 : REM reset values
+              WHEN 14 : REM reset values
                 objlist{(obj_lstcur%)}.rep%=0
                 objlist{(obj_lstcur%)}.hop%=1
                 objlist{(obj_lstcur%)}.h%=0
                 objlist{(obj_lstcur%)}.v%=0
+
 
             ENDCASE
             IF (C%>-1 AND C%<2) OR C%>3 THEN PROCsubupdate(-1)
@@ -4199,14 +4136,13 @@
               OTHERWISE
 
                 CASE menufrom% OF
-                  WHEN 1
+                  WHEN M_keyboard%
                     menuext%=M_keyboard%
                     PROCkeyboardmenu(1)
 
-                  WHEN 2
+                  WHEN M_sprites%
                     menuext%=M_sprites%
                     PROCspritescreen(1)
-                    PROCdrawmenu
 
                   WHEN M_moviemode%
                     menuext%=M_moviemode%
@@ -4229,7 +4165,6 @@
               WHEN 2
                 menuext%=M_sprites%
                 PROCspritescreen(1)
-                PROCdrawmenu
 
               WHEN M_moviemode%
                 menuext%=M_moviemode%
@@ -4325,7 +4260,6 @@
                   WHEN 2
                     menuext%=M_sprites%
                     PROCspritescreen(1)
-                    PROCdrawmenu
 
                   WHEN M_moviemode%
                     menuext%=M_moviemode%
@@ -4352,7 +4286,6 @@
                   WHEN 2
                     menuext%=M_sprites%
                     PROCspritescreen(1)
-                    PROCdrawmenu
 
                   WHEN M_moviemode%
                     menuext%=M_moviemode%
@@ -4369,11 +4302,12 @@
             CASE C% OF
               WHEN 6 : REM sprites screen
                 menuext%=M_sprites%
+                menufrom%=M_sprites%
                 PROCspritescreen(1)
-                PROCdrawmenu
 
               WHEN 7 : REM movie mode
                 menuext%=M_moviemode%
+                menufrom%=M_moviemode%
                 PROCmenurestore
 
               WHEN 8: REM edit.tf export
@@ -4402,7 +4336,7 @@
                 PROCkeyboardmenu(1)
 
               WHEN 12: REM help screen
-                PROCdrawmenu
+                PROCmenudraw
                 PROCshowhelp
                 PROCmenurestore
 
@@ -4415,7 +4349,6 @@
                   WHEN 2
                     menuext%=M_sprites%
                     PROCspritescreen(1)
-                    PROCdrawmenu
 
                   WHEN M_moviemode%
                     menuext%=M_moviemode%
@@ -4431,10 +4364,11 @@
           WHEN 5 : REM object select sub menu
             CASE C% OF
               WHEN 2 : REM select sprite to drag or frame to insert
-                IF menufrom%=M_moviemode% THEN
+                IF menumode%=M_moviemode% THEN
                   menuext%=M_moviemode%
                 ELSE
                   menuext%=M_canvas%
+                  menufrom%=M_canvas%
                 ENDIF
                 PROCmenurestore
                 IF spritemoving%>-1 PROCspritemoveinit
@@ -4442,7 +4376,13 @@
               WHEN 3 : REM scroll bar
 
               OTHERWISE
-                menuext%=M_moviemode%
+                IF menufrom%=M_moviemode% THEN
+                  menuext%=M_moviemode%
+                  menufrom%=M_moviemode%
+                ELSE
+                  menuext%=M_canvas%
+                  menufrom%=M_canvas%
+                ENDIF
                 PROCmenurestore
 
             ENDCASE
@@ -4577,7 +4517,7 @@
       DEF PROCobjtoworldmap
       LOCAL L%,X%,Y%,WX%,WY%
 
-      PROCGR_BUF(1,curcol%,bakcol%,1)
+      PROCGR_BUF(1,7,0,1)
 
       REM draw any sprite and frame scenes in current movie mode view
       IF obj_lstcount%>-1 THEN
@@ -4606,6 +4546,7 @@
                   IF X%>mmWX%-41 AND X%<mmWX%+40 AND Y%<mmWY%+25 AND Y%>mmWY%-25 THEN
                     PROCbuffertoframe(objlist{(L%)}.obj%,X%-mmWX%,mmWY%-Y%)
                   ENDIF
+                WHEN 3 : REM text / font
 
               ENDCASE
             ENDIF
@@ -4614,7 +4555,7 @@
       ENDIF
 
       PROCframerestore(1)
-      PROCdrawmenu
+      PROCmenudraw
 
       IF spriteselect%>-1 THEN
         X%=objlist{(spriteselect%)}.x%
@@ -5596,7 +5537,7 @@
       IF frame%<1 THEN frame%=frame_max%
       PROCframerestore(frame%)
 
-      PROCdrawmenu
+      PROCmenudraw
 
       IF spritemoving%>-1 THEN
         PROCspritedraw(TX%,TY%,3,13)
@@ -5644,12 +5585,18 @@
       REM ##########################################################
       REM copy sprite buffer to movie frame
       DEF PROCspritetomovbuf(s%,sx%,sy%)
-      LOCAL S%,U%,X%,Y%
+      LOCAL S%,U%,X%,Y%,LC%
+      LC%=0
       FOR U%=0 TO 319
         X%=sx%+U% MOD 20
         Y%=sy%+U% DIV 20
+        S%=sprite_buffer&(s%,U%)
+        IF S%>144 AND S%<151 THEN
+          LC%=S%
+          IF Y%>0 AND X%<1 movie_buffer&((Y%-1)*40)=S%
+        ENDIF
         IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
-          S%=sprite_buffer&(s%,U%)
+
           IF spr_trns%=1 THEN
             IF S%<>32 AND S%<>160 THEN movie_buffer&(X%+(Y%-1)*40)=S%
           ELSE
@@ -5738,7 +5685,7 @@
           spr_redo_count&(sprite_cur%)=0
 
       ENDCASE
-      PROCdrawmenu
+      PROCmenudraw
 
       ENDPROC
 
@@ -5992,7 +5939,7 @@
       toolsel%=T_paste&
       toolcursor%=17
 
-      PROCdrawmenu
+      PROCmenudraw
 
       ENDPROC
 
@@ -6341,44 +6288,6 @@
           NEXT
         NEXT
 
-      ENDIF
-
-      ENDPROC
-
-
-      REM ##########################################################
-      REM menu buffer restore frame
-      DEF PROCmenurestore
-
-      PROCchangemode(7,1)
-      sub_cur%=-1
-      IF menuext%=M_sprSelect% AND menufrom%=M_canvas% menuext%=M_canvas%
-      CASE menuext% OF
-        WHEN M_sprSelect%,M_sprProperty%,M_frmProperty%,M_moviemode%,M_movieMenu% : REM movie mode, sprite select
-          menuext%=M_moviemode%
-          PROCobjtoworldmap
-
-        OTHERWISE : REM return to canvas mode
-          menuext%=M_canvas%
-          PROCframerestore(frame%)
-          PROCdrawmenu
-
-      ENDCASE
-      ENDPROC
-
-      REM ##########################################################
-      REM menu ext check
-      DEF PROCmenucheck
-
-      IF menuext%<>M_canvas% THEN
-        IF menuext%>=M_paint% AND menuext%<=M_sprProperty% THEN
-          PROCchangemode(7,1)
-          sub_cur%=-1
-        ENDIF
-
-        IF menuext%<>M_moviemode% THEN menuext%=M_canvas%
-        PROCframerestore(frame%)
-        PROCdrawmenu
       ENDIF
 
       ENDPROC
@@ -8531,11 +8440,11 @@
         VDU 31,30,19,166
 
         REM        PRINTTAB(18,19)tb$;CHR$(157);tc$;">  ";CHR$(156);
-        PRINTTAB(10,19)tb$;CHR$(157);tc$;"< ";CHR$(156);tb$;CHR$(157);tc$;"> ";CHR$(156);
+        PRINTTAB(10,20)tb$;CHR$(157);tc$;"< ";CHR$(156);tb$;CHR$(157);tc$;"> ";CHR$(156);
 
         PRINTTAB(27,24)CHR$(156);tr$;CHR$(157);ty$;"CLOSE  ";CHR$(156);
 
-        PRINTTAB(10,21)tc$;"W:";tw$;"-";ty$;"  ";tw$;"+";tc$;" H";tw$;"-";ty$;"  ";tw$;"+";
+        PRINTTAB(10,22)tc$;"W:";tw$;"-";ty$;"  ";tw$;"+";tc$;" H";tw$;"-";ty$;"  ";tw$;"+";
 
         PRINTTAB(0,2)ty$;"LOAD";
         PRINTTAB(0,4)ty$;"SAVE";
@@ -8560,16 +8469,17 @@
       ENDIF
 
       REM REFRESH DYNAMIC AREAS
-      PRINTTAB(22,19)ty$;CHR$(157);tr$;RIGHT$(" "+STR$(sprite_cur%+1),2)+" ";CHR$(156);CHR$(151)
+      PRINTTAB(22,20)ty$;CHR$(157);tr$;RIGHT$("00"+STR$(sprite_cur%+1),3)+" ";CHR$(156);CHR$(151)
       p$="CHR"
       IF spr_scroll%=0 THEN p$="PIX"
       PRINTTAB(36,2)tg$;p$;
       PRINTTAB(0,18)CHR$(129+spr_trns%);"TRANS";
 
-      PRINTTAB(16,21)RIGHT$("0"+STR$(sprsize{(sprite_cur%)}.w%),2);
-      PRINTTAB(26,21)RIGHT$("0"+STR$(sprsize{(sprite_cur%)}.h%),2);
+      PRINTTAB(16,22)RIGHT$("0"+STR$(sprsize{(sprite_cur%)}.w%),2);
+      PRINTTAB(26,22)RIGHT$("0"+STR$(sprsize{(sprite_cur%)}.h%),2);
 
       PROCdrawsprite
+      PROCmenudraw
 
       REM testing idea to add sprite select overlay on sprite screen
       DIM pt{x%,y%,w%,h%}
@@ -8722,7 +8632,7 @@
         PROCdrawfont(2,15,text$)
       ENDIF
 
-      IF R% PROCdrawmenu
+      IF R% PROCmenudraw
       ENDPROC
 
       REM ##########################################################
@@ -8871,8 +8781,8 @@
 
       REM ##########################################################
       REM show palette and menus
-      DEF PROCdrawmenu
-      LOCAL A$,D$,E$,F$,R$,U$,P$,c%,r%,u%
+      DEF PROCmenudraw
+      LOCAL A$,E$,F$,R$,U$,P$,r%,u%
 
       IF menuext%=M_moviemode% THEN
         REM A$=RIGHT$("00"+STR$(obj_lstcur%),3)
@@ -8883,35 +8793,161 @@
         PRINTTAB(23,0)"MNU OBJ INS SPR";tr$;"X"
       ELSE
         REM create palette with current colour as G(70) or T(84)
-        c%=184-textfore%*13
+        r%=184-textfore%*13
         FOR count%=1 TO 7
-          PRINTTAB(count%*2-2,0) CHR$(128+count%);CHR$(255+(count%=curcol%)*c%);
+          PRINTTAB(count%*2-2,0) CHR$(128+count%);CHR$(255+(count%=curcol%)*r%);
         NEXT count%
+        F$=RIGHT$("0"+STR$(frame%),2)
+        P$=tr$+"   X"
+        r%=128
+        u%=129
 
         CASE menuext% OF
           WHEN M_canvas% : REM main canvas
             r%=130+(redo_count&(frame%-1)=0)
             u%=130+(undo_count&(frame%-1)=0)
+            P$=tw$+F$+">P"
 
           WHEN M_sprites% : REM sprite screen
             r%=130+(spr_redo_count&(sprite_cur%)=0)
             u%=130+(spr_undo_count&(sprite_cur%)=0)
 
-          OTHERWISE
-            r%=128
-            u%=129
         ENDCASE
 
         REM format main menu
         A$=CHR$(135-animation%*5)
-        D$=STR$(dither%+1)
         E$=CHR$(135-erase%*5)
         R$=CHR$(r%)
         U$=CHR$(u%)
-        F$=RIGHT$("0"+STR$(frame%),2)
-        P$=CHR$(67-(copypaste%>0)*13)
-        PRINTTAB(14,0)tw$;"P";D$;P$;"FS";E$;"E";U$;"U";R$;"R";tw$;"CBFILS";A$;"A";tw$;F$;">P"
+        IF menuext%=M_sprites% OR menuext%=M_keyboard% P$=tr$+"   X"
+        PRINTTAB(14,0)tw$;"PBCFS";E$;"E";U$;"U";R$;"R";tw$;"CBFILS";A$;"A";P$
       ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
+      REM menu buffer restore frame
+      DEF PROCmenurestore
+
+      PROCchangemode(7,1)
+      sub_cur%=-1
+
+      CASE menuext% OF
+        WHEN M_sprSelect%,M_sprites%
+          CASE menufrom% OF
+            WHEN M_canvas%
+              menuext%=M_canvas%
+              menumode%=M_canvas%
+              PROCframerestore(frame%)
+              PROCmenudraw
+
+            WHEN M_moviemode%
+              menuext%=M_moviemode%
+              menumode%=M_moviemode%
+              PROCobjtoworldmap
+
+            WHEN M_sprites%
+              menuext%=M_sprites%
+              PROCspritescreen(1)
+
+          ENDCASE
+
+        WHEN M_sprProperty%,M_frmProperty%,M_moviemode%,M_movieMenu% : REM movie mode, sprite select
+          menuext%=M_moviemode%
+          menufrom%=M_moviemode%
+          menumode%=M_moviemode%
+          PROCobjtoworldmap
+
+        OTHERWISE : REM return to canvas mode
+          CASE menufrom% OF
+            WHEN M_canvas%
+              menuext%=M_canvas%
+              menumode%=M_canvas%
+              PROCframerestore(frame%)
+              PROCmenudraw
+
+            WHEN M_moviemode%
+              menuext%=M_moviemode%
+              menumode%=M_moviemode%
+              PROCobjtoworldmap
+
+            WHEN M_sprites%
+              menuext%=M_sprites%
+              PROCspritescreen(1)
+
+          ENDCASE
+
+      ENDCASE
+
+      ENDPROC
+
+      REM ##########################################################
+      REM menu ext check
+      DEF PROCmenucheck
+
+      IF menuext%<>M_canvas% THEN
+        IF menuext%>=M_paint% AND menuext%<=M_sprProperty% THEN
+          PROCchangemode(7,1)
+          sub_cur%=-1
+        ENDIF
+
+        IF menuext%<>M_moviemode% THEN menuext%=M_canvas%
+        PROCframerestore(frame%)
+        PROCmenudraw
+      ENDIF
+
+      ENDPROC
+
+
+      REM ##########################################################
+      REM load screen
+      DEF PROCloadscreen
+
+      PRINTTAB(3,2)CHR$(141);gr$;CHR$(157);ty$;"= = T E L E P A I N T = =  ";CHR$(156)
+      PRINTTAB(3,3)CHR$(141);gy$;CHR$(157);tr$;"= = T E L E P A I N T = =  ";CHR$(156)
+
+      PRINTTAB(8,6)gm$;CHR$(157);ty$;"  IMPORT IMAGE    ";CHR$(156)
+      PRINTTAB(8,9)gm$;CHR$(157);ty$;"  DISPLAY HELP    ";CHR$(156)
+      PRINTTAB(7,12)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
+      PRINTTAB(7,13)CHR$(141);gb$;CHR$(157);ty$;"LAUNCH TELEPAINT  ";CHR$(156)
+
+      PRINTTAB(0,18)ty$;"MAX FRAMES (2-";STR$(frame_limit%);")";tw$;"< -";tc$;"  8";tw$;"+ >"
+
+      PRINTTAB(0,24)tb$;"Telepaint ";version$;
+
+      REPEAT
+        IF frame_max%<>launch_action% THEN
+          PRINTTAB(24,18)RIGHT$("  "+STR$(frame_max%),3)
+          launch_action%=frame_max%
+        ENDIF
+
+        PROCREADMOUSE
+        IF MB%=4 THEN
+          CASE TY% OF
+
+            WHEN 6 : REM import image dialog
+              IF TX%>8 AND TX%<29 THEN launch_action%=-3
+
+            WHEN 9 : REM display help screen
+              IF TX%>8 AND TX%<29 THEN launch_action%=-2
+
+            WHEN 12,13 : REM launch telepaint
+              IF TX%>8 AND TX%<29 THEN launch_action%=-1
+
+            WHEN 18 : REM change max frames var
+              IF TX%=20 THEN frame_max%=2
+              IF TX%=22 AND frame_max%>2 THEN frame_max%-=2
+              IF TX%=28 AND frame_max%<frame_limit% THEN frame_max%+=2
+              IF TX%=30 frame_max%=frame_limit%
+              WAIT 10
+
+          ENDCASE
+        ELSE
+          WAIT 10
+          REM PRINTTAB(30,24);STR$(TX%);",";STR$(TY%);"  ";
+        ENDIF
+      UNTIL launch_action%<0
+      PROCWAITMOUSE(0)
 
       ENDPROC
 
