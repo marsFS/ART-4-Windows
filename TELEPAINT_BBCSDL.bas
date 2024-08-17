@@ -393,8 +393,8 @@
       REM hop% = frame repeat skip amount... e.g. rep% for 5 frames and hop% over every 2nd frame
       REM parent% = reference object for displaying relative world map position  -1 for absolute
       REM u% = toggle undo repeat action, will remove any objs with matching parent=obj number
-      DIM objlist{(999) obj%,type%,f%,rep%,hop%,parent%,x%,y%,h%,v%,m%,d%,u%}
-      DIM frmlist{(9999) x%,y%}
+      DIM objlist{(9999) obj%,type%,f%,rep%,hop%,parent%,x%,y%,h%,v%,m%,d%,u%}
+      DIM frmlist{(9999) x%,y%,b%,f%}
 
       REM animation and menu controls - can be redfinable depending on current screen
       controls%=48
@@ -475,11 +475,8 @@
         sprsize{(S%)}.h%=16
       NEXT
 
-      FOR S%=0 TO 999
-        objlist{(S%)}.obj%=-1
-        objlist{(S%)}.parent%=-1
-        objlist{(S%)}.hop%=1
-      NEXT
+      PROCresetmovie
+
 
       REM init frames
       PROCGR(curcol%,bakcol%,1)
@@ -509,6 +506,7 @@
           CASE MB% OF
 
             WHEN 0 : REM no mouse botton
+              REM add nudge increments to move close to screen edge
               IF OLD_TX%<>TX% OR OLD_TY%<>TY% THEN
                 IF spritemoving%>-1 PROCspritemove
               ENDIF
@@ -547,8 +545,6 @@
 
           TEXTX%=TX%
           FONTX%=PX%
-
-          PROCshowdebug(7)
 
         ELSE : REM no mouse move or clicks detected
 
@@ -613,6 +609,8 @@
 
         ENDCASE
       ENDIF
+
+      PROCshowdebug(7)
 
       ENDPROC
 
@@ -683,12 +681,10 @@
         PRINTTAB(0,21)SPC(20)
         PRINTTAB(0,22)SPC(20)
         PRINTTAB(0,23)SPC(20)
-        PRINTTAB(0,20)"ME:";STR$(menuext%);"  ";"MF:";STR$(menufrom%);"  ";
-        PRINTTAB(0,21)"MX:";STR$(MX%);" MY:";STR$(MY%);
-        PRINTTAB(0,22)"TX:";STR$(TX%);" TY:";STR$(TY%);
-        PRINTTAB(0,23)"PX:";STR$(PX%);" PY:";STR$(PY%);
-        REM PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" PX:";STR$(PX%);" PY:";STR$(PY%);" ME:";STR$(menuext%);" SC:";STR$(sprite_cur%);
-        REM PRINTTAB(0,1)"TX:";STR$(TX%);" TY:";STR$(TY%);" ME:";STR$(menuext%);" TS:";STR$(toolsel%);"  "
+        PRINTTAB(0,20)"ME:";STR$(menuext%);"  ";"MF:";STR$(menufrom%);gw$;
+        PRINTTAB(0,21)"MX:";STR$(MX%);" MY:";STR$(MY%);gw$;
+        PRINTTAB(0,22)"TX:";STR$(TX%);" TY:";STR$(TY%);gw$;
+        PRINTTAB(0,23)"PX:";STR$(PX%);" PY:";STR$(PY%);gw$;
 
       ENDIF
       ENDPROC
@@ -2300,6 +2296,8 @@
                   movieframe%=movieframetotal%
                   frmlist{(movieframetotal%)}.x%=mmWX%
                   frmlist{(movieframetotal%)}.y%=mmWY%
+                  frmlist{(movieframetotal%)}.b%=0
+                  frmlist{(movieframetotal%)}.f%=1
                 ENDIF
                 PROCmenudraw
                 PROCWAITNOKEY(-74,0)
@@ -4108,6 +4106,7 @@
 
               WHEN 4 : REM reset all
 
+                done%=1
 
             ENDCASE
         ENDCASE
@@ -4120,7 +4119,7 @@
       REM PROCWAITMOUSE(4)
       REM PROCWAITMOUSE(0)
 
-      IF done%=1 THEN
+      IF done%>0 THEN
         PROCWAITMOUSE(0)
 
         PROCchangemode(7,1)
@@ -4417,6 +4416,32 @@
                 menuext%=M_moviemode%
                 PROCmenurestore
 
+              WHEN 4 : REM reset movie
+                done%=0
+                menuext%=M_moviemode%
+                PROCmenudraw
+
+                FOR SY%=6 TO 11
+                  PROCprint40(SY%,"")
+                NEXT
+                PRINTTAB(2,8)"MOVIE DATA WILL BE RESET!"
+                PRINTTAB(2,9)"RESET MOVIE DATA? ";tg$;"YES  ";tr$;"NO"
+                REPEAT
+                  PROCREADMOUSE
+
+                  IF MB%=4 THEN
+                    PROCWAITMOUSE(0)
+                    IF TY%=9 AND TX%>20 AND TX%<24 THEN done%=1
+                    IF TY%=9 AND TX%>26 AND TX%<29 THEN done%=2
+                  ELSE
+                    WAIT 2
+                  ENDIF
+                UNTIL done%<>0
+
+                IF done%=1 THEN PROCresetmovie
+
+    1           PROCmenurestore
+
             ENDCASE
         ENDCASE
       ENDIF
@@ -4516,8 +4541,11 @@
       REM copy sprite buffer to frame
       DEF PROCobjtoworldmap
       LOCAL L%,X%,Y%,WX%,WY%
-
-      PROCGR_BUF(1,7,0,1)
+      IF movieframe%=-1 THEN
+        PROCGR_BUF(1,7,0,1)
+      ELSE
+        PROCGR_BUF(1,frmlist{(movieframe%)}.f%,frmlist{(movieframe%)}.b%,1)
+      ENDIF
 
       REM draw any sprite and frame scenes in current movie mode view
       IF obj_lstcount%>-1 THEN
@@ -4556,6 +4584,21 @@
 
       PROCframerestore(1)
       PROCmenudraw
+
+      IF movieframe%>-1 THEN
+        X%=frmlist{(movieframe%)}.x%
+        Y%=frmlist{(movieframe%)}.y%
+
+        X%=X%-mmWX%
+        Y%=mmWY%-Y%
+
+        REM SYS "SDL_SetRenderDrawColor", @memhdc%, 255, 255, 32, 0
+        REM SYS "SDL_RenderDrawLine", @memhdc%, X%*16,Y%*20, X%*16+639,Y%*20
+        REM SYS "SDL_RenderDrawLine", @memhdc%, X%*16+639,Y%*20,X%*16+639,Y%*20+499
+        REM SYS "SDL_RenderDrawLine", @memhdc%, X%*16+639,Y%*20+499, X%*16,Y%*20+499
+        REM SYS "SDL_RenderDrawLine", @memhdc%, X%*16,Y%*20+499,X%*16,Y%*20
+
+      ENDIF
 
       IF spriteselect%>-1 THEN
         X%=objlist{(spriteselect%)}.x%
@@ -4951,7 +4994,7 @@
                 nw%=0
 
                 IF K%=1 THEN
-                  REM save curren font and step to next one
+                  REM save current font and step to next one
                   f%=OPENUP(@dir$+"M7_FONTS/"+name$+".M7F")
                   PTR#f%=EXT#f%
                   IF h%=0 THEN
@@ -6363,9 +6406,11 @@
           FOR l%=0 TO movieframetotal%
             INPUT#f%,line$
             c% = FN_split(line$, ",", a$())
-            IF c%=2 THEN
+            IF c%=4 THEN
               frmlist{(l%)}.x%=VAL(a$(0))
               frmlist{(l%)}.y%=VAL(a$(1))
+              frmlist{(l%)}.b%=VAL(a$(0))
+              frmlist{(l%)}.f%=VAL(a$(1))
             ENDIF
           NEXT
           INPUT#f%,line$
@@ -6454,8 +6499,8 @@
       fontcount%=0
 
       ON ERROR LOCAL IF FALSE THEN
-        OSCLI "CD """+@dir$+"M7_FONTS"""
-        N% = FN_dirscan2(n$(), t&(), "dir *.*", ".m7f",1)
+        REM OSCLI "CD """+@dir$+"M7_FONTS"""
+        N% = FN_dirscan2(n$(), t&(), "DIR M7_FONTS/*.M7F", "",1)
         IF N%>2 THEN
           C%=1
           FOR I%=3 TO N%
@@ -7276,7 +7321,7 @@
           PRINT#f%,"*FRAME DATA*"
           PRINT#f%,STR$(movieframetotal%)
           FOR I%=0 TO movieframetotal%
-            PRINT#f%,STR$(frmlist{(I%)}.x%)+","+STR$(frmlist{(I%)}.y%)
+            PRINT#f%,STR$(frmlist{(I%)}.x%)+","+STR$(frmlist{(I%)}.y%)+","+STR$(frmlist{(I%)}.b%)+","+STR$(frmlist{(I%)}.f%)
           NEXT
 
           PRINT#f%,"*OBJECT DATA*"
@@ -7968,7 +8013,7 @@
 
       REM read font file
       IF INSTR(name$,".M7F")=0 AND INSTR(name$,".m7f")=0 THEN
-        name$=@dir$+"M7_FONTS\"+name$+".M7F"
+        name$=@dir$+"M7_FONTS/"+name$+".M7F"
       ENDIF
       f%=OPENIN(name$)
       IF f% THEN
@@ -8295,6 +8340,45 @@
       DEF PROChelphline(cx%,cy%,cw%,col%)
       GCOL 0,col%
       LINE cx%*32+16,(24-cy%)*40+24,(cx%+cw%)*32+16,(24-cy%)*40+24
+      ENDPROC
+
+      REM ##########################################################
+      REM resets all movie objects
+      DEF PROCresetmovie
+      LOCAL S%
+      FOR S%=0 TO 9999
+        objlist{(S%)}.obj%=-1
+        objlist{(S%)}.type%=0
+        objlist{(S%)}.f%=-1
+        objlist{(S%)}.rep%=0
+        objlist{(S%)}.hop%=1
+        objlist{(S%)}.parent%=-1
+        objlist{(S%)}.x%=0
+        objlist{(S%)}.y%=0
+        objlist{(S%)}.h%=0
+        objlist{(S%)}.v%=0
+        objlist{(S%)}.m%=0
+        objlist{(S%)}.d%=0
+        objlist{(S%)}.u%=0
+
+        frmlist{(S%).x%=0
+        frmlist{(S%).y%=0
+        frmlist{(S%).b%=0
+        frmlist{(S%).f%=7
+
+      NEXT
+
+      REM reset world map and object list vars
+      mmWX%=0
+      mmWY%=0
+
+      obj_lstcount%=-1
+      obj_lstcur%=0
+
+      movieframe%=-1       : REM displays current movie frame
+      movieframetotal%=-1  : REM total frames saved
+
+
       ENDPROC
 
       REM ##########################################################
