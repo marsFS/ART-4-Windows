@@ -145,6 +145,7 @@
       fyMin%=3
       fyMax%=74
       fillmax%=255
+      bCnt%=0
       DIM fill{(fillmax%) x%,y%}
 
       REM old pixel, mouse, text coords, code display
@@ -183,10 +184,10 @@
 
       FOR I%=0 TO sub_count%
         READ subm{(I%)}.x%
-        READ T%
+        READ MY%
         READ subm{(I%)}.w%
         READ subm{(I%)}.h%
-        subm{(I%)}.y%=T%-subm{(I%)}.h%
+        subm{(I%)}.y%=MY%-subm{(I%)}.h%
       NEXT
 
       REM drawing region for point command, changes for sprite menu
@@ -462,7 +463,7 @@
       REM copypaste buffer
       DIM copy_buffer&(959)
 
-      DIM import_buffer% 1000000
+      DIM import_buffer%% 1000000
 
       REM init sprites
       CLS
@@ -919,7 +920,7 @@
       REM ##########################################################
       REM LINE ROUTINE FOR BUFFER USE m% TO PERFORM 0=ERASE / 1=DRAW / 2=EOR
       DEF PROCbresenham_buf(x1%,y1%,x2%,y2%,m%,z%)
-      LOCAL dx%, dy%, sx%, sy%, e, rx%, ry%
+      LOCAL dx%, dy%, sx%, sy%, e, rx%, ry%, ty%
       dx% = ABS(x2% - x1%) : sx% = SGN(x2% - x1%)
       dy% = ABS(y2% - y1%) : sy% = SGN(y2% - y1%)
       IF dx% > dy% e = dx% / 2 ELSE e = dy% / 2
@@ -1281,7 +1282,7 @@
 
       IF sx%>xMin% AND sx%<xMax% AND sy%>yMin% AND sy%<yMax% THEN
 
-        LOCAL uf,df,c%,x%,y%,mc%
+        LOCAL uf,df,c%,x%,y%
         uf=0
         df=0
 
@@ -1340,7 +1341,7 @@
       REM ##########################################################
       REM main canvas click handler
       DEF PROCcanvasmode
-      LOCAL X%,Y%,A%
+      LOCAL X%,Y%,A%,D%,DA%,oldframe%,char%,startx%,starty%,A$
       IF menuext%>0 THEN PROCmenurestore
 
       IF spritemoving%>-1 THEN
@@ -1724,7 +1725,7 @@
       REM ##########################################################
       REM MOVIE MODE click handler
       DEF PROCmoviemode
-      LOCAL L%,X%,Y%,shift%
+      LOCAL shift%
 
       shift%=INKEY(-1)
       PROCWAITMOUSE(0)
@@ -3692,7 +3693,17 @@
           IF movieframe%=-1 F$="----"
           F$="F:"+F$
           PROCgtext(F$,32,996,10,0)
-
+          IF movieframe%>-1 THEN
+            PROCgtext("FORE",SX%+24,SY%+152,15,0)
+            PROCgtext("F",SX%+194+frmlist{(movieframe%)}.f%*48,SY%+152,frmlist{(movieframe%)}.f%+8,0)
+            PROCgtext("BACK",SX%+24,SY%+96,15,0)
+            PROCgtext("B",SX%+194+frmlist{(movieframe%)}.b%*48,SY%+96,frmlist{(movieframe%)}.b%+8,0)
+            FOR I%=0 TO 7
+              GCOL 0,I%-8*(I%<>0)
+              IF I%<>frmlist{(movieframe%)}.f% RECTANGLE FILL SX%+192+I%*48,SY%+120,32,40
+              IF I%<>frmlist{(movieframe%)}.b% RECTANGLE FILL SX%+192+I%*48,SY%+64,32,40
+            NEXT
+          ENDIF
         WHEN 8 : REM movie mode menu
           PROCgtext("MNU",SX%+32,996,10,0)
 
@@ -4939,14 +4950,14 @@
                 REM scan bitmap left to right until pixels found
                 REPEAT
                   ofs%=bmp_imgofs%+bmpx%*3+bmpy%*line_wid%
-                  col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                  col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                   IF col%>0 THEN
 
                     REM scan a block cx% * cy% to determine if full cell found
                     GY%=0
                     FOR X%=0 TO cx%*cy%-1
                       ofs%=bmp_imgofs%+(bmpx%+X% MOD cx%)*3+(bmpy%-X% DIV cx%)*line_wid%
-                      col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                      col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                       IF col%=0 THEN
                         bmpx%+=X% MOD cx%
                         bmpy%-=X% DIV cx%
@@ -4960,7 +4971,7 @@
                     IF GY%=cx%*cy% THEN
                       REPEAT
                         ofs%=bmp_imgofs%+(bmpx%+X% MOD cx%)*3+(bmpy%-X% DIV cx%)*line_wid%
-                        col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                        col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                         bmpy%-=cy%
                       UNTIL col%=0 OR bmpy%<cy%
                       IF bmpy%>cy% THEN GX%=1 ELSE GX%=2
@@ -5017,7 +5028,7 @@
                       col%=0
                       IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
                         ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
-                        col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                        col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                       ENDIF
                       IF col%>0 THEN
                         a$+="1"
@@ -5043,7 +5054,7 @@
                     col%=0
                     IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
                       ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
-                      col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                      col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                     ENDIF
                     GX%+=col%
                   NEXT
@@ -5209,7 +5220,7 @@
                     col%=0
                     IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
                       ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
-                      col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                      col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                     ENDIF
                     IF col%>0 THEN
                       GCOL 0,15
@@ -5280,7 +5291,7 @@
       REM ##########################################################
       REM CLEARSCREEN DIALOG
       DEF PROCclearscreen
-      LOCAL I%,L%,A$,B$,C$,cls%,fix%,done%,col_old%,bak_old%,h_old%,v_old%,hindex%,vindex%,skip%,skip_old%
+      LOCAL I%,L%,A$,B$,C$,cls%,fix%,done%,col_old%,bak_old%,h_old%,v_old%,hindex%,vindex%,skip%,skip_old%,framedupe_old%
 
       VDU 23,1,0;0;0;0; : REM Disable cursor
 
@@ -5492,10 +5503,10 @@
             NEXT frame%
             frame%=1
           ELSE
-            C%=frame_max% DIV framedupe%
-            FOR F%=1 TO framedupe%
-              FOR T%=1 TO C%-1
-                PROCcopyframe(F%,F%+framedupe%*T%,0,0,skip%)
+            fix%=frame_max% DIV framedupe%
+            FOR I%=1 TO framedupe%
+              FOR L%=1 TO fix%-1
+                PROCcopyframe(I%,I%+framedupe%*L%,0,0,skip%)
               NEXT
             NEXT
           ENDIF
@@ -5547,7 +5558,7 @@
       REM ##########################################################
       REM COPY A FRAME STARTING FROM OFFSET
       DEF PROCcopyframe(S%,D%,H%,V%,skip%)
-      LOCAL U%,X%,Y%,xofs%,yofs%
+      LOCAL X%,Y%,xofs%,yofs%
 
       FOR X%=skip% TO 39
         REMIF X%>skip% THEN
@@ -6120,7 +6131,7 @@
       REM ##########################################################
       REM move selected region to a new location
       DEF PROCmoveregion(h%,v%)
-      LOCAL X%,Y%,PX%,PY%,C%
+      LOCAL X%,Y%,PX%,PY%
 
       IF copymovef%=frame% THEN
         PROCundosave
@@ -6936,33 +6947,33 @@
             REM OSCLI "DISPLAY """+curdir$+n$(SEL%)+""" 0,0"
 
 
-            OSCLI "LOAD """+curdir$+n$(SEL%)+""" "+STR$~import_buffer%+" +"+STR$~1000000
+            OSCLI "LOAD """+curdir$+n$(SEL%)+""" "+STR$~import_buffer%%+" +"+STR$~1000000
 
-            REM PRINTTAB(0,0)"LOAD """;curdir$+n$(SEL%);""" ";STR$~import_buffer%;" +";STR$1000000
+            REM PRINTTAB(0,0)"LOAD """;curdir$+n$(SEL%);""" ";STR$~import_buffer%%;" +";STR$1000000
             REM bmp filetype (2 bytes)
-            REM PRINT"Type:";CHR$(import_buffer%?0);CHR$(import_buffer%?1)
-            T$=CHR$(import_buffer%?0)+CHR$(import_buffer%?1)
+            REM PRINT"Type:";CHR$(import_buffer%%?0);CHR$(import_buffer%%?1)
+            T$=CHR$(import_buffer%%?0)+CHR$(import_buffer%%?1)
             REM bmp filesize (4 bytes) ?2 ?3 ?4 ?5
             REM bmp reserved (2 bytes) ?6 ?7
             REM bmp reserved (2 bytes) ?8 ?9
             REM bmp pixel data offset (4 bytes)
-            REM PRINT"pOfs:";STR$(import_buffer%!10)
-            bmp_imgofs%=import_buffer%!10
+            REM PRINT"pOfs:";STR$(import_buffer%%!10)
+            bmp_imgofs%=import_buffer%%!10
 
             REM bmp header size (4 bytes)
-            REM PRINT"hSze:";STR$(import_buffer%!14)
+            REM PRINT"hSze:";STR$(import_buffer%%!14)
 
             REM bmp image width (4 bytes)
-            REM PRINT"iWid:";STR$(import_buffer%!18)
-            bmp_imgwid%=import_buffer%!18
+            REM PRINT"iWid:";STR$(import_buffer%%!18)
+            bmp_imgwid%=import_buffer%%!18
 
             REM bmp image height (4 bytes)
-            REM PRINT"iHgt:";STR$(import_buffer%!22)
-            bmp_imghgt%=import_buffer%!22
+            REM PRINT"iHgt:";STR$(import_buffer%%!22)
+            bmp_imghgt%=import_buffer%%!22
             REM bmp planes (2 bytes) ?26 ?27
             REM bmp but per pixel (2 bytes)
-            REM PRINT"bpp: ";STR$(import_buffer%?29);STR$(import_buffer%?28)
-            bmp_imgbpp%=import_buffer%?28+(import_buffer%?29*256)
+            REM PRINT"bpp: ";STR$(import_buffer%%?29);STR$(import_buffer%%?28)
+            bmp_imgbpp%=import_buffer%%?28+(import_buffer%%?29*256)
 
             REM bmp compression (4 bytes) ?30 ?31 ?32 ?33
             REM bmp image size (4 bytes) ?34 ?35 ?36 ?37
@@ -6976,7 +6987,7 @@
               PROCWAITMOUSE(0)
               menuext%=94
             ELSE
-              OSCLI "MDISPLAY "+STR$~import_buffer%
+              OSCLI "MDISPLAY "+STR$~import_buffer%%
               menuext%=95
             ENDIF
 
@@ -6997,20 +7008,20 @@
             PROCWAITMOUSE(0)
           ELSE
 
-            OSCLI "LOAD """+curdir$+n$(SEL%)+""" "+STR$~import_buffer%+" +"+STR$~1000000
+            OSCLI "LOAD """+curdir$+n$(SEL%)+""" "+STR$~import_buffer%%+" +"+STR$~1000000
 
-            T$=CHR$(import_buffer%?0)+CHR$(import_buffer%?1)
-            bmp_imgofs%=import_buffer%!10
-            bmp_imgwid%=import_buffer%!18
-            bmp_imghgt%=import_buffer%!22
-            bmp_imgbpp%=import_buffer%?28+(import_buffer%?29*256)
+            T$=CHR$(import_buffer%%?0)+CHR$(import_buffer%%?1)
+            bmp_imgofs%=import_buffer%%!10
+            bmp_imgwid%=import_buffer%%!18
+            bmp_imghgt%=import_buffer%%!22
+            bmp_imgbpp%=import_buffer%%?28+(import_buffer%%?29*256)
 
             IF T$<>"BM" OR bmp_imgofs%<>54 OR bmp_imgbpp%<>24 THEN
               PRINTTAB(0,0)"Image format not supported, must be BMP 24bpp"
               PROCWAITMOUSE(4)
               PROCWAITMOUSE(0)
             ELSE
-              OSCLI "MDISPLAY "+STR$~import_buffer%
+              OSCLI "MDISPLAY "+STR$~import_buffer%%
               menuext%=95
             ENDIF
           ENDIF
@@ -7719,13 +7730,13 @@
         IF fnum<>0 THEN
           CLOSE#fnum
 
-          OSCLI "LOAD """+curdir$+NAME$+""" "+STR$~import_buffer%+" +"+STR$1000000
+          OSCLI "LOAD """+curdir$+NAME$+""" "+STR$~import_buffer%%+" +"+STR$1000000
 
-          T$=CHR$(import_buffer%?0)+CHR$(import_buffer%?1)
-          bmp_imgofs%=import_buffer%!10
-          bmp_imgwid%=import_buffer%!18
-          bmp_imghgt%=import_buffer%!22
-          bmp_imgbpp%=import_buffer%?28+(import_buffer%?29*256)
+          T$=CHR$(import_buffer%%?0)+CHR$(import_buffer%%?1)
+          bmp_imgofs%=import_buffer%%!10
+          bmp_imgwid%=import_buffer%%!18
+          bmp_imghgt%=import_buffer%%!22
+          bmp_imgbpp%=import_buffer%%?28+(import_buffer%%?29*256)
 
           REM adjust for correct line byte width multiple of 4
           line_wid%=bmp_imgwid%*3
@@ -7747,7 +7758,7 @@
                 col%=0
                 IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
                   ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
-                  col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                  col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                 ENDIF
                 IF col%>0 THEN
                   PROCpoint_buf(X%+2, 74-Y%, 1,F%)
@@ -7877,7 +7888,7 @@
                   col%=0
                   IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
                     ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
-                    col%=import_buffer%?ofs%+import_buffer%?(ofs%+1)+import_buffer%?(ofs%+2)
+                    col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                   ENDIF
                   IF col%>0 THEN
                     GCOL 0,15
@@ -8385,6 +8396,8 @@
       REM change to mode 6 and overlay control codes on current screen
       DEF PROCcontrolcodes
 
+      LOCAL C%,col%,p%,x%,y%
+
       showcodes%=0
       PROCframesave(frame%)
       PROCchangemode(6,0)
@@ -8612,7 +8625,7 @@
       REM ##########################################################
       REM draw pixel * 4 version of sprite for animation put in frame
       DEF PROCdrawframetomenu(f%,x%,y%)
-      LOCAL X%,Y%,YC%,C%
+      LOCAL X%,Y%,C%
 
       GCOL 0,15
       FOR Y%=3 TO 74
@@ -8627,7 +8640,7 @@
       REM ##########################################################
       REM shape and special sub menu
       DEF PROCkeyboardmenu(R%)
-      LOCAL F%,X%,Y%,P%,I%,C%
+      LOCAL X%,Y%,I%,C%
       REM REDRAW EVERYTHING
       IF R%=1 THEN
 
@@ -8764,7 +8777,7 @@
       REM ##########################################################
       REM print text at graphics pos x,y, text col, bg col
       DEF PROCgtext(t$,x%,y%,tc%,bc%)
-      LOCAL X%,Y%,L%
+      LOCAL L%
 
       L%=LEN(t$)
       GCOL 0,bc%
@@ -8780,7 +8793,7 @@
       REM ##########################################################
       REM print menu text at graphics pos x,y, text col, bg col, save control range
       DEF PROCmenutext(n%,t$,x%,y%,tc%,bc%,ma%)
-      LOCAL X%,Y%,L%,sx%,sy%
+      LOCAL L%,sx%,sy%
 
       L%=LEN(t$)
       sx%=L%*32-2
@@ -8850,6 +8863,7 @@
       REM ##########################################################
       REM INITIALISE THE SCREEN
       DEF PROCGR(F%,B%,C%)
+      LOCAL Y%
 
       REM CLS
       IF C% THEN VDU 12
@@ -9379,6 +9393,7 @@
       REM ##########################################################
       REM USER CUSTOMIZABLE PROCEDURE1
       DEF PROCCUSTOMPROC1
+      LOCAL X%
 
       REM E.G. YOUR CODE
       FOR X%=2 TO 78
@@ -9390,6 +9405,7 @@
       REM ##########################################################
       REM USER CUSTOMIZABLE PROCEDURE1
       DEF PROCCUSTOMPROC2
+      LOCAL X%
 
       REM E.G. YOUR CODE
       FOR X%=2 TO 78
