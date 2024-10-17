@@ -50,7 +50,7 @@
 
       INSTALL @lib$+"sortlib"
 
-      version$="v0.27"
+      version$="v0.28"
 
       DEBUG%=0 : REM for displaying mouse and other debug details
 
@@ -1396,13 +1396,11 @@
       IF menuext%>0 THEN PROCmenurestore
 
       IF spritemoving%>-1 THEN
-        X%=PX%
-        Y%=PY%
         PROCWAITMOUSE(0)
-        PROCspritedraw(X%,Y%,3,13)
+        PROCspritedraw(PX%,PY%,3,13)
         PROCmenurestore
         PROCundosave
-        PROCspritetocanvas(spritemoving%,TX%-10,TY%-8)
+        PROCspritetocanvas(spritemoving%,PX%-sprsize{(spritemoving%)}.w%,PY%-(sprsize{(spritemoving%)}.h%*3 DIV 2))
         PROCframesave(frame%)
         spriteold%=spritemoving%
         IF animation%=0 THEN
@@ -2403,12 +2401,10 @@
 
               WHEN 80,112 : REM P show selected sprite properties
                 REM PRINTTAB(0,21);STR$(spriteselect%);"  ";
-                IF spritemoving%=-1 THEN
-                  IF spriteselect%>-1 obj_lstcur%=spriteselect%
-                  menuext%=M_sprProperty%
-                  PROCsubinit(6)
-                  PROCWAITNOKEY(-56,0)
-                ENDIF
+                IF spriteselect%>-1 obj_lstcur%=spriteselect%
+                menuext%=M_sprProperty%
+                PROCsubinit(6)
+                PROCWAITNOKEY(-56,0)
 
               WHEN 128 : REM left + ctrl
 
@@ -2452,11 +2448,9 @@
 
               WHEN 134 : REM insert
                 REM open object insert menu
-                IF spritemoving%=-1 THEN
-                  menuext%=M_sprSelect%
-                  PROCsubinit(5)
-                  PROCWAITNOKEY(-62,0)
-                ENDIF
+                menuext%=M_sprSelect%
+                PROCsubinit(5)
+                PROCWAITNOKEY(-62,0)
 
               WHEN 135 : REM del
                 REM insert last selected object directly to world map
@@ -5746,6 +5740,8 @@
 
       IF spritemoving%>-1 THEN
         PROCspritedraw(PX%,PY%,3,13)
+        OLD_PX%=PX%
+        OLD_PY%=PY%
         PROCmenurestore
         PROCspritemoveinit
       ENDIF
@@ -5836,44 +5832,30 @@
 
       REM ##########################################################
       REM copy sprite buffer to movie frame
-      DEF PROCspritetomovbuf_old(s%,sx%,sy%)
+      DEF PROCspritetocanvas(s%,sx%,sy%)
       LOCAL D%,S%,U%,X%,Y%,LC%
-      LC%=0
-      FOR U%=0 TO 319
-        IF U% MOD 20<sprsize{(s%)}.w% AND U% DIV 20<sprsize{(s%)}.h% THEN
-          X%=sx%+U% MOD 20
-          Y%=sy%+U% DIV 20
-          S%=sprite_buffer&(s%,U%)
-          IF S%>144 AND S%<151 THEN
-            LC%=S%
-            IF Y%>0 AND X%<1 movie_buffer&((Y%-1)*40)=S%
-          ENDIF
-          IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
-
-            IF spr_trns%=1 THEN
-              REM IF S%<>32 AND S%<>160 THEN movie_buffer&(X%+(Y%-1)*40)=S%
-              IF S%<>32 THEN
-                D%=0
-                IF S%>159 D%=movie_buffer&(X%+(Y%-1)*40)
-
-                movie_buffer&(X%+(Y%-1)*40)=S% OR D%
+      FOR Y%=0 TO 47
+        IF Y% DIV 3<sprsize{(s%)}.h% THEN
+          YC%=sy%+Y%
+          IF YC%>2 AND YC%<75 THEN
+            FOR X%=0 TO 39
+              IF X% DIV 2<sprsize{(s%)}.w% THEN
+                XC%=sx%+X%
+                IF XC%>=0 AND XC%<80 THEN
+                  C%=FNpoint_sprbuf(X%,Y%,s%)
+                  IF C% PROCpoint(XC%, YC%, 1)
+                ENDIF
               ENDIF
-            ELSE
-              movie_buffer&(X%+(Y%-1)*40)=S%
-            ENDIF
-
+            NEXT
           ENDIF
         ENDIF
-
       NEXT
 
       ENDPROC
 
-
-
       REM ##########################################################
       REM paste copypaste buffer to current frame
-      DEF PROCspritetocanvas(s%,sx%,sy%)
+      DEF PROCspritetocanvas_old(s%,sx%,sy%)
       LOCAL C%,D%,X%,Y%,U%
 
       FOR U%=0 TO 319
