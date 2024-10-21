@@ -228,7 +228,10 @@
       frame%=1             : REM displays current canvas frame
       movieframe%=-1       : REM displays current movie frame
       movieframetotal%=-1  : REM total frames saved
-      insertmode%=0        : REM movie mode insert mode 0=sprite, 1=frame, 1=text
+      insertmode%=0        : REM movie mode insert mode 0=sprite, 2=animation, 2=frame, 3=text
+      insertani%=0         : REM animation counter for inserting sprites
+      insertset%=0         : REM current animation set
+      insertphase%=0       : REM current animation click phase for selecting first and last animation frames
       spritemoving%=-1     : REM flag to check if selected sprite is moving in movie mode
       spritedupe%=-1       : REM flag to check if selected sprite is being duped in movie mode
       spriteold%=0
@@ -514,7 +517,11 @@
             WHEN 0 : REM no mouse botton
               REM add nudge increments to move close to screen edge
               IF OLD_PX%<>PX% OR OLD_PY%<>PY% THEN
-                IF spritemoving%>-1 PROCspritemove
+                IF spritemoving%>-1 THEN
+                  PROCspritemove
+                  PROCspriteposition
+
+                ENDIF
                 OLD_PX%=PX% : OLD_PY%=PY%
               ENDIF
 
@@ -688,7 +695,7 @@
         PRINTTAB(0,21)SPC(20)
         PRINTTAB(0,22)SPC(20)
         PRINTTAB(0,23)SPC(20)
-        PRINTTAB(0,20)"A:";STR$(GET(TX%,TY%));"  ";"MF:";STR$(menufrom%);gw$;
+        PRINTTAB(0,20)"A:";STR$(GET(TX%,TY%));"  ";"IP:";STR$(insertphase%);gw$;
         PRINTTAB(0,21)"MX:";STR$(MX%);" MY:";STR$(MY%);gw$;
         PRINTTAB(0,22)"TX:";STR$(TX%);" TY:";STR$(TY%);gw$;
         PRINTTAB(0,23)"PX:";STR$(PX%);" PY:";STR$(PY%);gw$;
@@ -1779,52 +1786,105 @@
       REM ##########################################################
       REM MOVIE MODE click handler
       DEF PROCmoviemode
-      LOCAL shift%
+      LOCAL shift%,skip%
 
       shift%=INKEY(-1)
       PROCWAITMOUSE(0)
 
-      IF spritemoving%>-1 THEN
-        PROCspritedraw(PX%,PY%,3,13)
+      IF insertmode%=1 AND movieframe%=-1 skip%=1
 
-        IF spriterelocate%=1 THEN
-          objlist{(obj_lstcur%)}.obj%=spritemoving%
-          objlist{(obj_lstcur%)}.x%=mmWX%+PX%-sprsize{(spritemoving%)}.w%
-          objlist{(obj_lstcur%)}.y%=mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2)
-          spriterelocate%=0
-        ELSE
+      IF skip%=0 THEN
+        IF spritemoving%>-1 THEN
 
-          REM add sprite to spritelist
-          obj_lstcount%+=1
-          obj_lstcur%=obj_lstcount%
-          IF spritedupe%=-1 THEN
-            spriteselect%=-1
-            spriteselecoldt%=-1
-          ELSE
-            IF objlist{(spritedupe%)}.f%>-1 shift%=0
+          PROCspritedraw(PX%,PY%,3,13)
+
+          IF spriterelocate%=1 THEN
+            REM move sprite
+            objlist{(obj_lstcur%)}.obj%=spritemoving%
+            objlist{(obj_lstcur%)}.x%=mmWX%+PX%-sprsize{(spritemoving%)}.w%
+            objlist{(obj_lstcur%)}.y%=mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2)
+            spriterelocate%=0
           ENDIF
 
-          objlist{(obj_lstcount%)}.obj%=spritemoving%
-          objlist{(obj_lstcount%)}.type%=1
-          objlist{(obj_lstcount%)}.x%=mmWX%+PX%-sprsize{(spritemoving%)}.w%
-          objlist{(obj_lstcount%)}.y%=mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2)
-          objlist{(obj_lstcount%)}.parent%=-1
-          IF shift%=0 AND movieframe%>-1 THEN
-            objlist{(obj_lstcount%)}.f%=movieframe%
-          ELSE
-            objlist{(obj_lstcount%)}.f%=-1
+          IF insertphase%=0 THEN
+            REM add sprite to spritelist
+            obj_lstcount%+=1
+            obj_lstcur%=obj_lstcount%
+            IF spritedupe%=-1 THEN
+              spriteselect%=-1
+              spriteselecoldt%=-1
+            ELSE
+              IF objlist{(spritedupe%)}.f%>-1 shift%=0
+            ENDIF
+
+            objlist{(obj_lstcount%)}.obj%=spritemoving%
+            objlist{(obj_lstcount%)}.type%=1
+            objlist{(obj_lstcount%)}.x%=mmWX%+PX%-sprsize{(spritemoving%)}.w%
+            objlist{(obj_lstcount%)}.y%=mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2)
+            objlist{(obj_lstcount%)}.parent%=-1
+            IF shift%=0 AND movieframe%>-1 THEN
+              objlist{(obj_lstcount%)}.f%=movieframe%
+            ELSE
+              objlist{(obj_lstcount%)}.f%=-1
+            ENDIF
+            spriteold%=spritemoving%
           ENDIF
-          spriteold%=spritemoving%
+
+          IF spritedupe%=-1 AND insertmode%<>1 spritemoving%=-1
+
+          IF insertmode%=1 THEN
+            insertphase%+=1
+            IF insertphase%=2 THEN
+              REM add remaining animation sprites to selected frames
+              REM calc difference between start frame and end frame and create a delta step variable for x and y to move animation
+              REM
+              insertphase%=0
+              FS%=objlist{(obj_lstcount%)}.f%
+              C%=movieframe%-FS%
+              IF C%>0 THEN
+                XS%=objlist{(obj_lstcount%)}.x%
+                YS%=objlist{(obj_lstcount%)}.y%
+                XF%=mmWX%+PX%-sprsize{(spritemoving%)}.w%
+                YF%=mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2)
+
+                deltax=(XF%-XS%) / C%
+                deltay=(YF%-YS%) / C%
+
+                XC=XS%+deltax
+                YC=YS%+deltay
+
+                insertani%=0
+                FOR F%=1 TO C%
+                  insertani%=(insertani%+1) MOD 12
+                  IF sprlist{(insertset%)}.s%(insertani%)=-1 insertani%=0
+                  spritemoving%=sprlist{(insertset%)}.s%(insertani%)
+
+                  REM SP%=obj_lstcur%
+                  obj_lstcount%+=1
+                  obj_lstcur%=obj_lstcount%
+                  spriteselect%=-1
+                  spriteselectold%=-1
+                  objlist{(obj_lstcount%)}.parent%=-1
+                  objlist{(obj_lstcount%)}.obj%=spritemoving%
+                  objlist{(obj_lstcount%)}.type%=1
+                  objlist{(obj_lstcount%)}.x%=INT(XC)
+                  objlist{(obj_lstcount%)}.y%=INT(YC)
+                  objlist{(obj_lstcount%)}.f%=FS%+F%
+
+                  XC+=deltax
+                  YC+=deltay
+
+                NEXT
+              ENDIF
+              spritemoving%=-1
+            ENDIF
+          ENDIF
+
         ENDIF
 
         PROCmenurestore
 
-        IF spritedupe%=-1 THEN
-          spritemoving%=-1
-        ELSE
-          PROCspritemoveinit
-        ENDIF
-      ELSE
+        IF spritemoving%>-1 PROCspritemoveinit
 
       ENDIF
 
@@ -3615,27 +3675,28 @@
             PROCgtext("I",SX%+160,996,10,0)
           ENDIF
 
-          menuXadd%=SX%+20
+          menuXadd%=SX%+16
           menuYadd%-=24
           PROCmenucontrol(0,"SPR",menuXadd%,menuYadd%,12,(insertmode%=0)*2+8,4)
-          PROCmenucontrol(1,"FRM",menuXadd%,menuYadd%,12,(insertmode%=1)*2+8,4)
-          PROCmenucontrol(2,"TXT",menuXadd%,menuYadd%,12,(insertmode%=2)*2+8,4)
+          PROCmenucontrol(1,"ANI",SX%+128,menuYadd%,12,(insertmode%=1)*2+8,4)
+          PROCmenucontrol(2,"FRM",SX%+240,menuYadd%,12,(insertmode%=2)*2+8,4)
+          PROCmenucontrol(3,"TXT",SX%+352,menuYadd%,12,(insertmode%=3)*2+8,4)
 
           REM sprites / frame layout
           IF C%=-1 THEN
             CASE insertmode% OF
-              WHEN 0 : REM spr insert
+              WHEN 0,1 : REM spr / ani insert
 
                 REM sprites layout
                 GCOL 0,0
                 RECTANGLE FILL SX%+16,menuYadd%-728,450,688
 
                 menuYadd%-=160
-                PROCaddcontrange(3,SX%+18,menuYadd%-552,SX%+400,menuYadd%+116)
+                PROCaddcontrange(4,SX%+18,menuYadd%-552,SX%+400,menuYadd%+116)
 
-                PROCaddcontrange(4,SX%+412,menuYadd%-552,SX%+464,menuYadd%+116)
+                PROCaddcontrange(5,SX%+412,menuYadd%-552,SX%+464,menuYadd%+116)
                 GCOL 0,7
-                RECTANGLE SX%+412,menuYadd%-552,52,668
+                RECTANGLE SX%+412,menuYadd%-552,52,666
                 LINE SX%+412,menuYadd%-488,SX%+464,menuYadd%-488
                 LINE SX%+412,menuYadd%+52,SX%+464,menuYadd%+52
                 PROCdrawarrow(0,SX%+428,menuYadd%-528,2)
@@ -3643,7 +3704,13 @@
 
                 FOR Y%=0 TO 5
                   FOR X%=0 TO 3
-                    S%=objsprscroll%*4+X%+Y%*4
+                    CASE insertmode% OF
+                      WHEN 0
+                        S%=objsprscroll%*4+X%+Y%*4
+                      WHEN 1
+                        S%=sprlist{(objsprscroll%*4+X%+Y%*4)}.s%(0)
+                    ENDCASE
+
                     DX%=SX%+X%*96+12
                     DY%=menuYadd%-Y%*112
                     PROCdrawsprbitmap(S%,DX%+12,DY%+16)
@@ -3652,14 +3719,15 @@
                     RECTANGLE DX%+8,DY%+8,90,106
                   NEXT
                 NEXT
-              WHEN 1 : REM frame insert
+
+              WHEN 2 : REM frame insert
 
                 REM frames layout
                 GCOL 0,0
                 RECTANGLE FILL SX%+16,menuYadd%-728,450,688
 
                 menuYadd%-=218
-                PROCaddcontrange(3,SX%+18,menuYadd%-508,SX%+394,menuYadd%+174)
+                PROCaddcontrange(4,SX%+18,menuYadd%-508,SX%+394,menuYadd%+174)
 
                 PROCaddcontrange(4,SX%+412,menuYadd%-508,SX%+464,menuYadd%+174)
                 GCOL 0,7
@@ -3681,14 +3749,14 @@
                   NEXT
                 NEXT
 
-              WHEN 2 : REM text insert
+              WHEN 3 : REM text insert
                 GCOL 0,0
                 RECTANGLE FILL SX%+16,menuYadd%-728,450,688
 
                 menuYadd%-=218
-                PROCaddcontrange(3,SX%+18,menuYadd%-508,SX%+394,menuYadd%+174)
+                PROCaddcontrange(4,SX%+18,menuYadd%-508,SX%+394,menuYadd%+174)
 
-                PROCaddcontrange(4,SX%+412,menuYadd%-508,SX%+464,menuYadd%+174)
+                PROCaddcontrange(5,SX%+412,menuYadd%-508,SX%+464,menuYadd%+174)
                 GCOL 0,7
                 RECTANGLE SX%+412,menuYadd%-508,52,682
                 LINE SX%+412,menuYadd%-444,SX%+464,menuYadd%-444
@@ -4023,20 +4091,30 @@
 
           WHEN 5 : REM sprite select
             CASE C% OF
-              WHEN 0,1,2 : REM sprite, frame, text selector
+              WHEN 0,1,2,3 : REM sprite, ani, frame, text selector
                 IF insertmode%<>C% THEN
                   insertmode%=C%
                   PROCsubupdate(-1)
                 ENDIF
 
-              WHEN 3 : REM insert sprite or frame into world map
+              WHEN 4 : REM insert sprite, animation, frame or text into world map
                 CASE insertmode% OF
                   WHEN 0 : REM spr insert
                     SP%=objsprscroll%*4+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*4
                     spritemoving%=SP%
                     done%=1
 
-                  WHEN 1 : REM frm insert
+                  WHEN 1 : REM spr set insert
+                    SP%=objsprscroll%*4+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*4
+                    IF sprlist{(SP%)}.s%(0)>-1 THEN
+                      insertset%=SP%
+                      insertani%=0
+                      insertphase%=0
+                      spritemoving%=sprlist{(SP%)}.s%(0)
+                      done%=1
+                    ENDIF
+
+                  WHEN 2 : REM frm insert
                     IF menufrom%=M_moviemode% THEN
                       REM insert frame to movie mode
                       SP%=objfrmscroll%*2+(MX%-controlrange{(C%)}.x1%) DIV 192+((controlrange{(C%)}.y2%-MY%) DIV 172)*2
@@ -4060,11 +4138,11 @@
                       REM insert to main canvas
                     ENDIF
 
-                  WHEN 2 : REM txt insert
+                  WHEN 3 : REM txt insert
 
                 ENDCASE
 
-              WHEN 4 : REM scroll bar
+              WHEN 5 : REM scroll bar
                 SP%=controlrange{(C%)}.y2%-MY%
                 SY%=controlrange{(C%)}.y2%-controlrange{(C%)}.y1%
                 L%=SY% / 2
@@ -4081,7 +4159,19 @@
                     IF objsprscroll%>19 THEN objsprscroll%=19
                     IF OS%<>objsprscroll% PROCsubupdate(-1)
 
-                  WHEN 1 : REM frm select
+                  WHEN 1 : REM ani select
+                    IF SP%<64 THEN NS%=-1
+                    IF SP%>62 AND SP%<L% THEN NS%=-6
+                    IF SP%>L%-2 AND SP%<SY%-64 THEN NS%=6
+                    IF SP%>SY%-62 THEN NS%=1
+
+                    OS%=objsprscroll%
+                    objsprscroll%+=NS%
+                    IF objsprscroll%<0 THEN objsprscroll%=0
+                    IF objsprscroll%>19 THEN objsprscroll%=19
+                    IF OS%<>objsprscroll% PROCsubupdate(-1)
+
+                  WHEN 2 : REM frm select
                     IF SP%<64 THEN NS%=-1
                     IF SP%>62 AND SP%<L% THEN NS%=-4
                     IF SP%>L%-2 AND SP%<SY%-64 THEN NS%=4
@@ -4093,7 +4183,7 @@
                     IF objfrmscroll%>(frame_max%-8) DIV 2 THEN objfrmscroll%=(frame_max%-8) DIV 2
                     IF OS%<>objfrmscroll% PROCsubupdate(-1)
 
-                  WHEN 2 : REM txt select
+                  WHEN 3 : REM txt select
                     IF SP%<64 THEN NS%=-1
                     IF SP%>62 AND SP%<L% THEN NS%=-17
                     IF SP%>L%-2 AND SP%<SY%-64 THEN NS%=17
@@ -4511,7 +4601,7 @@
 
           WHEN 5 : REM object select sub menu
             CASE C% OF
-              WHEN 3 : REM select sprite to drag or frame to insert
+              WHEN 4 : REM select sprite to drag or frame to insert
                 IF menumode%=M_moviemode% THEN
                   menuext%=M_moviemode%
                 ELSE
@@ -4652,6 +4742,7 @@
       REM ##########################################################
       REM display initial moving sprite
       DEF PROCspritemoveinit
+      LOCAL X%,Y%,YC%,C%
 
       REM save current mode 7 screen as underlay for moving sprites
       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
@@ -4659,6 +4750,52 @@
 
       REM restore previous display
       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
+
+      IF movieframe%>-1 THEN
+        X%=frmlist{(movieframe%)}.x%-mmWX%
+        Y%=frmlist{(movieframe%)}.y%-mmWY%
+
+        IF X%>-80 AND X%<80 AND Y%>-75 AND Y%<75 THEN
+          YC%=ABS(Y% MOD 75)
+
+          GCOL 0,14
+          RECTANGLE X%*16,SGN(Y%)*sixel{(YC%)}.sdly%*2,1278,998
+        ENDIF
+      ENDIF
+
+      REM calculate colour and animation frame to display when selecting destination frame
+      IF insertmode%=1 THEN
+        C%=2
+        IF movieframe%=-1 C%=1
+        IF insertphase%=1 THEN
+          IF movieframe%=objlist{(obj_lstcount%)}.f% C%=1
+
+          X%=ABS(objlist{(obj_lstcount%)}.f%-movieframe%)
+          insertani%=0
+          IF X%>0 THEN
+            FOR Y%=1 TO X%
+              insertani%=(insertani%+1) MOD 12
+              IF sprlist{(insertset%)}.s%(insertani%)=-1 insertani%=0
+            NEXT
+            spritemoving%=sprlist{(insertset%)}.s%(insertani%)
+          ENDIF
+        ENDIF
+
+        VDU 5
+        GCOL 0,C%
+        CASE insertphase% OF
+          WHEN 0
+            MOVE 120,80
+            PRINT "Select start frame of animation"
+          WHEN 1
+            MOVE 136,80
+            PRINT "Select last frame of animation"
+        ENDCASE
+        VDU 4
+
+
+      ENDIF
+
 
       REM overlay existing sprite if relocating
       IF spriterelocate%=1 THEN
@@ -4674,10 +4811,34 @@
       REM ##########################################################
       REM update moving sprite at new location
       DEF PROCspritemove
-
       REM erase old sprite and redraw in new mouse pos
       PROCspritedraw(OLD_PX%,OLD_PY%,3,13)
       PROCspritedraw(PX%,PY%,3,13)
+
+      ENDPROC
+
+      REM ##########################################################
+      REM update sprite plot position
+      DEF PROCspriteposition
+      VDU 5
+      GCOL 0,0
+
+      IF insertmode%=1 AND insertphase%=1 THEN
+        FS%=objlist{(obj_lstcount%)}.f%
+        C%=movieframe%-FS%
+        A$="SX:"+STR$(objlist{(obj_lstcount%)}.x%)+" SY:"+STR$(objlist{(obj_lstcount%)}.y%)
+        A$=A$+"  EX:"+STR$(mmWX%+PX%-sprsize{(spritemoving%)}.w%)+" EY:"+STR$(mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2))
+        RECTANGLE FILL 0,0,1278,40
+      ELSE
+        A$="PX:"+STR$(mmWX%+PX%-sprsize{(spritemoving%)}.w%)+" PY:"+STR$(mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2))
+        RECTANGLE FILL 340,0,600,40
+      ENDIF
+
+      A%=LEN(A$) DIV 2
+      GCOL 0,10
+      MOVE 638-A%*32-16,40
+      PRINTA$
+      VDU 4
 
       ENDPROC
 
@@ -4730,21 +4891,6 @@
 
       PROCframerestore(1)
       PROCmenudraw
-
-      IF movieframe%>-1 THEN
-        X%=frmlist{(movieframe%)}.x%
-        Y%=frmlist{(movieframe%)}.y%
-
-        X%=X%-mmWX%
-        Y%=mmWY%-Y%
-
-        REM SYS "SDL_SetRenderDrawColor", @memhdc%, 255, 255, 32, 0
-        REM SYS "SDL_RenderDrawLine", @memhdc%, X%*16,Y%*20, X%*16+639,Y%*20
-        REM SYS "SDL_RenderDrawLine", @memhdc%, X%*16+639,Y%*20,X%*16+639,Y%*20+499
-        REM SYS "SDL_RenderDrawLine", @memhdc%, X%*16+639,Y%*20+499, X%*16,Y%*20+499
-        REM SYS "SDL_RenderDrawLine", @memhdc%, X%*16,Y%*20+499,X%*16,Y%*20
-
-      ENDIF
 
       IF spriteselect%>-1 THEN
         IF spriteselectold%>-1 PROCupdateselection(spriteselectold%,0)
@@ -6660,8 +6806,8 @@
             IF c%=4 THEN
               frmlist{(l%)}.x%=VAL(a$(0))
               frmlist{(l%)}.y%=VAL(a$(1))
-              frmlist{(l%)}.b%=VAL(a$(0))
-              frmlist{(l%)}.f%=VAL(a$(1))
+              frmlist{(l%)}.b%=VAL(a$(2))
+              frmlist{(l%)}.f%=VAL(a$(3))
             ENDIF
           NEXT
           INPUT#f%,line$
@@ -9626,14 +9772,16 @@
       REM draw pixel version of sprite for animation creator
       DEF PROCdrawsprbitmap(s%,x%,y%)
       LOCAL X%,Y%,C%
-      GCOL 0,15
-      FOR Y%=0 TO 47
-        FOR X%=0 TO 39
-          C%=FNpoint_sprbuf(X%,47-Y%,s%)
-          REM IF C% THEN PLOT 69,x%+X%*4,y%+Y%*4
-          IF C% THEN LINE x%+X%*2,y%+Y%*2,x%+X%*2,y%+Y%*2
+      IF S%>-1 THEN
+        GCOL 0,15
+        FOR Y%=0 TO 47
+          FOR X%=0 TO 39
+            C%=FNpoint_sprbuf(X%,47-Y%,s%)
+            REM IF C% THEN PLOT 69,x%+X%*4,y%+Y%*4
+            IF C% THEN LINE x%+X%*2,y%+Y%*2,x%+X%*2,y%+Y%*2
+          NEXT
         NEXT
-      NEXT
+      ENDIF
       ENDPROC
 
       REM ##########################################################
