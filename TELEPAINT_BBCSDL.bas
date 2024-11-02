@@ -229,7 +229,7 @@
       erase%=0
       dither%=0
       frame%=1             : REM displays current canvas frame
-      movieframe%=-1       : REM displays current movie frame
+      movieframe%=-1       : REM displays current movie frame, -1 for background mode
       movieframetotal%=-1  : REM total frames saved
       movieframemax%=9999  : REM total frames saved
       movieframeadd%=0     : REM add control for new frames
@@ -904,7 +904,7 @@
       LOCAL X%
 
       CASE menuext% OF
-        WHEN M_canvas%,78
+        WHEN M_canvas%,M_moviemode%,78
           SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
           FOR X%=0 TO 39
             SYS "SDL_RenderDrawLine", @memhdc%, X%*16, 499, X%*16, 20
@@ -2380,7 +2380,7 @@
                 FONTX%+=fonts{(K%-32)}.w%
               ENDIF
             ENDIF
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
           ENDIF
 
         WHEN M_moviemode% : REM movie mode keyboard controls
@@ -2492,6 +2492,16 @@
                 ENDIF
                 PROCWAITNOKEY(-56,0)
 
+              WHEN 81,113 : REM Q & q - toggle control codes
+                PROCWAITNOKEY(-17,0)
+                PROCcontrolcodes
+                REPEAT
+                  PROCREADMOUSE
+                UNTIL MB%=4 OR INKEY(-17)
+                PROCWAITMOUSE(0)
+                PROCWAITNOKEY(-17,0)
+                PROCmenurestore
+
               WHEN 82,114 : REM R repeat current sprite to multiple frames
                 IF spritemoving%=-1 THEN
                   insertrepeat%=2
@@ -2547,10 +2557,12 @@
                   nf%=-1
                   IF ctrl% nf%=-10
                   IF shift% nf%=-50
-                  IF movieframe%+nf%>=0 THEN
+                  IF movieframe%+nf%>=-1 THEN
                     movieframe%+=nf%
-                    newWX%=frmlist{(movieframe%)}.x%
-                    newWY%=frmlist{(movieframe%)}.y%
+                    IF movieframe%>-1 THEN
+                      newWX%=frmlist{(movieframe%)}.x%
+                      newWY%=frmlist{(movieframe%)}.y%
+                    ENDIF
                     spriteselect%=-1
                     spriteselectold%=-1
                   ENDIF
@@ -2740,7 +2752,7 @@
                 ENDIF
               ENDIF
             UNTIL MB%=0
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
             IF animation% THEN
               sprite_cur%+=1
               IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
@@ -2787,7 +2799,7 @@
               OLD_PY%=PY%
             UNTIL MB%=0
 
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
             IF animation% THEN
               sprite_cur%+=1
               IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
@@ -2840,7 +2852,7 @@
               OLD_PX%=PX%
               OLD_PY%=PY%
             UNTIL MB%=0
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
             IF animation% THEN
               sprite_cur%+=1
               IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
@@ -2870,7 +2882,7 @@
 
             PROCdrawsprite
             PROCbresenham(startx%,starty%,PX%,PY%,1-erase%)
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
             IF animation% THEN
               sprite_cur%+=1
               IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
@@ -2899,7 +2911,7 @@
 
             PROCdrawsprite
             PROCrectangle(startx%,starty%,PX%,PY%,1-erase%,1)
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
             IF animation% THEN
               sprite_cur%+=1
               IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
@@ -2923,7 +2935,7 @@
 
             PROCdrawsprite
             PROCcircle(startx%,starty%,startx%-PX%,1-erase%,1)
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
             IF animation% THEN
               sprite_cur%+=1
               IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
@@ -2944,7 +2956,7 @@
                   ENDIF
                 ENDIF
               UNTIL MB%=0
-              PROCsavesprite(sprite_cur%)
+              PROCspritecommit(sprite_cur%)
               IF animation% THEN
                 sprite_cur%+=1
                 IF sprite_cur%>sprite_max%-1 THEN sprite_cur%=0
@@ -2965,7 +2977,7 @@
               OLD_TX%=TX%
               OLD_TY%=TY%
             UNTIL MB%=0
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
 
           WHEN T_text&: REM text print tool
             PROCWAITMOUSE(0)
@@ -2977,7 +2989,7 @@
                   PRINTTAB(TX%+textx%,TY%)MID$(text$,textx%+1,1);
                 ENDIF
               NEXT
-              PROCsavesprite(sprite_cur%)
+              PROCspritecommit(sprite_cur%)
             ENDIF
 
 
@@ -3018,7 +3030,7 @@
                   OLD_TY%=TY%
                 UNTIL MB%=0
               ENDIF
-              PROCsavesprite(sprite_cur%)
+              PROCspritecommit(sprite_cur%)
             ENDIF
           WHEN T_foreg&: REM foreground colour
             REM            IF TX%>9 AND TX%<30 AND TY%>2 AND TY%<19 THEN
@@ -3044,7 +3056,7 @@
                   ENDIF
                 UNTIL MB%=0
               ENDIF
-              PROCsavesprite(sprite_cur%)
+              PROCspritecommit(sprite_cur%)
             ENDIF
         ENDCASE
       ELSE
@@ -3121,7 +3133,7 @@
                       ENDCASE
                     NEXT
                   NEXT
-                  PROCsavesprite(sprite_cur%)
+                  PROCspritecommit(sprite_cur%)
                 ENDIF
 
             ENDCASE
@@ -3170,7 +3182,7 @@
                       ENDCASE
                     NEXT
                   NEXT
-                  PROCsavesprite(sprite_cur%)
+                  PROCspritecommit(sprite_cur%)
 
                 ENDIF
             ENDCASE
@@ -3222,7 +3234,7 @@
                       ENDCASE
                     NEXT
                   NEXT
-                  PROCsavesprite(sprite_cur%)
+                  PROCspritecommit(sprite_cur%)
 
                 ENDIF
             ENDCASE
@@ -3269,7 +3281,7 @@
                       ENDCASE
                     NEXT
                   NEXT
-                  PROCsavesprite(sprite_cur%)
+                  PROCspritecommit(sprite_cur%)
 
                 ENDIF
 
@@ -3295,7 +3307,7 @@
                 FOR S%=0 TO 1919
                   PROCpoint(S% MOD 40+20,S% DIV 40+9,spr_tmp&(S%))
                 NEXT
-                PROCsavesprite(sprite_cur%)
+                PROCspritecommit(sprite_cur%)
 
             ENDCASE
 
@@ -3322,7 +3334,7 @@
                 FOR S%=0 TO 1919
                   PROCpoint(S% MOD 40+20,S% DIV 40+9,spr_tmp&(S%))
                 NEXT
-                PROCsavesprite(sprite_cur%)
+                PROCspritecommit(sprite_cur%)
 
             ENDCASE
 
@@ -5084,6 +5096,40 @@
             ENDIF
           ENDIF
         NEXT
+        REM add colour codes
+        FOR L%=0 TO obj_lstcount%
+          IF objlist{(L%)}.obj%>-1 THEN
+            X%=objlist{(L%)}.x%
+            Y%=objlist{(L%)}.y%
+            SP%=objlist{(L%)}.obj%
+            IF objlist{(L%)}.f%=-1 OR objlist{(L%)}.f%=movieframe% THEN
+
+              CASE objlist{(L%)}.type% OF
+                WHEN 1 : REM sprite
+                  REM *** adjust repeated sprites world x,y relative to frame wx,wy
+                  IF objlist{(L%)}.parent%>-1 THEN
+                    WX%=frmlist{(movieframe%)}.x%-frmlist{(objlist{(objlist{(L%)}.parent%)}.f%)}.x%
+                    WY%=frmlist{(movieframe%)}.y%-frmlist{(objlist{(objlist{(L%)}.parent%)}.f%)}.y%
+                    REM PRINTTAB(0,20)STR$(X%);",";STR$(Y%);"   ";
+                    REM PRINTTAB(0,20)STR$(WX%);",";STR$(WY%);"   ";
+                    X%+=WX%
+                    Y%+=WY%
+                  ENDIF
+                  IF movieframe%>-1 B%=(frmlist{(movieframe%)}.b%<>0)*-2
+
+                  IF X%>mmWX%-sprsize{(SP%)}.w%*2 AND X%<mmWX%+80 AND Y%<mmWY%+sprsize{(SP%)}.h%*3 AND Y%>mmWY%-75 THEN
+                    PROCspritecoltomovbuf(SP%,X%-mmWX%,mmWY%-Y%,B%)
+                  ENDIF
+
+                WHEN 2 : REM frame
+
+                WHEN 3 : REM text / font
+
+              ENDCASE
+            ENDIF
+          ENDIF
+        NEXT
+
       ENDIF
 
       PROCframerestore(1)
@@ -6153,7 +6199,7 @@
       REM ##########################################################
       REM copy sprite buffer to movie frame
       DEF PROCspritetomovbuf(s%,sx%,sy%,b%)
-      LOCAL D%,S%,U%,X%,Y%,LC%
+      LOCAL X%,Y%,YC%,XC%,CX1%,CX2%,CY1%,CY2%
       FOR Y%=0 TO 47
         IF Y% DIV 3<sprsize{(s%)}.h% THEN
           YC%=sy%+Y%
@@ -6170,6 +6216,39 @@
           ENDIF
         ENDIF
       NEXT
+
+      ENDPROC
+
+      REM ##########################################################
+      REM copy sprite colours to movie frame
+      DEF PROCspritecoltomovbuf(s%,sx%,sy%,b%)
+      LOCAL SC%,FC%,Y%,CX1%,CX2%,CY1%,CY2%
+      SC%=sprite_buffer&(s%,0)
+      IF SC%>144 AND SC%<152 THEN
+        CX1%=sx% DIV 2
+        CX2%=CX1%+sprsize{(s%)}.w%+(sx% MOD 2)
+        CY1%=sy% DIV 3-1
+        CY2%=CY1%+sprsize{(s%)}.h%+(sy% MOD 3=0)
+        IF CX1%<b% CX1%=b%
+        IF CX2%<b% CX2%=b%
+        IF CX1%>39 CX1%=39
+        IF CX2%>40 CX2%=40
+        IF CY1%<0 CY1%=0
+        IF CY2%<0 CY2%=0
+        IF CY1%>23 CY1%=23
+        IF CY2%>23 CY2%=23
+        FC%=151
+        IF movieframe%>-1 FC%=frmlist{(movieframe%)}.f%+144
+
+        FOR Y%=CY1% TO CY2%
+          IF CX1%<39 movie_buffer&(CX1%+Y%*40)=SC%
+          REM IF CX2%<40 movie_buffer&(CX2%+Y%*40)=FC%
+
+          REM IF CX1%<39 movie_buffer&(CX1%+Y%*40)=67
+          REM IF CX2%<40 movie_buffer&(CX2%+Y%*40)=66
+
+        NEXT
+      ENDIF
 
       ENDPROC
 
@@ -6249,7 +6328,7 @@
 
       REM ##########################################################
       REM save sprite
-      DEF PROCsavesprite(S%)
+      DEF PROCspritecommit(S%)
       LOCAL U%
       REM 20x16 chars @320 bytes : 40x48 pixels @1920 bytes
 
@@ -6396,7 +6475,7 @@
             FOR U%=0 TO 319
               VDU 31,U% MOD 20+10,U% DIV 20+3,spr_undo_buffer&(sprite_cur%,spr_undo_index%(sprite_cur%),U%)
             NEXT
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
           ENDIF
 
       ENDCASE
@@ -6466,7 +6545,7 @@
             FOR U%=0 TO 319
               VDU 31,U% MOD 20+10,U% DIV 20+3,spr_redo_buffer&(sprite_cur%,spr_redo_index%(sprite_cur%),U%)
             NEXT
-            PROCsavesprite(sprite_cur%)
+            PROCspritecommit(sprite_cur%)
 
             spr_undo_index%(sprite_cur%)+=1
             IF spr_undo_index%(sprite_cur%)>undo_max% THEN spr_undo_index%(sprite_cur%)=0
@@ -6934,13 +7013,31 @@
 
       IF S%=1 THEN
         f%=OPENOUT(F$+".SPR")
+        REM sprite data
         FOR c%=0 TO sprite_max%-1
           FOR u%=0 TO 319
             BPUT#f%,sprite_buffer&(c%,u%)
           NEXT
         NEXT
+
+        REM sprite animation data
+        FOR c%=0 TO 99
+          FOR u%=0 TO 11
+            PRINT#f%,sprlist{(c%)}.s%(u%)
+          NEXT
+          PRINT#f%,sprlist{(c%)}.f%
+          PRINT#f%,sprlist{(c%)}.r%
+          PRINT#f%,sprlist{(c%)}.x%
+          PRINT#f%,sprlist{(c%)}.y%
+          PRINT#f%,sprlist{(c%)}.h%
+          PRINT#f%,sprlist{(c%)}.v%
+          PRINT#f%,sprlist{(c%)}.m%
+          PRINT#f%,sprlist{(c%)}.d%
+        NEXT
+
         CLOSE#f%
       ENDIF
+
       IF D%=1 THEN
         A$=""
         f%=OPENOUT(F$+".TXT")
@@ -6950,8 +7047,8 @@
           FOR Y%=0 TO 47
             A$=""
             FOR X%=0 TO 39
-              A$+=STR$(FNpoint_sprbuf(X%+2,Y%,c%))
-              IF X%<12 THEN A$+=","
+              A$+=STR$(FNpoint_sprbuf(X%,Y%,c%))
+              IF X%<39 THEN A$+=","
             NEXT
             PRINT#f%,"DATA "+A$
             BPUT#f%,10
@@ -6973,13 +7070,31 @@
       IF f% THEN
         c%=0
         REPEAT
-          FOR u%=0 TO 319
-            char%=BGET#f%
-            sprite_buffer&(c%,u%)=char%
-          NEXT
-          PROCupdatespritesize(c%,0)
-          c%+=1
-        UNTIL EOF#f% OR c%>=sprite_max%
+          IF c%<sprite_max% THEN
+            REM read sprite data, try to read old format if possible
+            FOR u%=0 TO 319
+              char%=BGET#f%
+              sprite_buffer&(c%,u%)=char%
+            NEXT
+            PROCupdatespritesize(c%,0)
+            c%+=1
+          ELSE
+            REM read animation data
+            FOR c%=0 TO 99
+              FOR u%=0 TO 11
+                INPUT#f%,sprlist{(c%)}.s%(u%)
+              NEXT
+              INPUT#f%,sprlist{(c%)}.f%
+              INPUT#f%,sprlist{(c%)}.r%
+              INPUT#f%,sprlist{(c%)}.x%
+              INPUT#f%,sprlist{(c%)}.y%
+              INPUT#f%,sprlist{(c%)}.h%
+              INPUT#f%,sprlist{(c%)}.v%
+              INPUT#f%,sprlist{(c%)}.m%
+              INPUT#f%,sprlist{(c%)}.d%
+            NEXT
+          ENDIF
+        UNTIL EOF#f%
         CLOSE#f%
       ENDIF
 
@@ -9933,9 +10048,16 @@
       REM ##########################################################
       REM draw pixel version of sprite for animation creator
       DEF PROCdrawsprbitmap(s%,x%,y%)
-      LOCAL X%,Y%,C%
-      IF S%>-1 THEN
-        GCOL 0,15
+      LOCAL X%,Y%,C%,SC%
+      IF s%>-1 THEN
+        SC%=sprite_buffer&(s%,0)
+        IF SC%>144 AND SC%<152 THEN
+          SC%=SC%-136
+        ELSE
+          SC%=15
+        ENDIF
+
+        GCOL 0,SC%
         FOR Y%=0 TO 47
           FOR X%=0 TO 39
             C%=FNpoint_sprbuf(X%,47-Y%,s%)
