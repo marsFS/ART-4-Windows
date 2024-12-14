@@ -1,5 +1,8 @@
-# ART-4-Windows
+# ART-4-Windows & TelePaint
 ART 4 Windows is a retro drawing utility, original written in BBC Basic for Windows and latest version is written in Pure Basic compiled to EXE
+TelePaint is BBC Mirco Mode 7 Teletext paint and animation program written in BBC Basic for SDL
+
+Both programs are works in progress with likely bugs, save projects often!
 
 Current Executable Versions:
 * ART4EVA_PB_010_x86.exe - Current Release - Windows x86 executable 
@@ -9,7 +12,7 @@ Current Executable Versions:
 * TELEPAINT_BBCSDL.zip - Windows compatible executable and library files for BBC Basic for SDL version of Telepaint
 
 Current Source Versions:
-* TELEPAINT_BBCSDL.bbc - BBC SDL Mode 7 Art program, animated frames, sprites, import / export
+* TELEPAINT_BBCSDL.bbc - BBC SDL BBC Micro Mode 7 Art program, animated frames, sprites, import / export images
 * ART4WIN_024.bbc - Current BBC Basic for Windows version of Art, no longer actively developed but used as a reference point for other bbc basic versions
 
 Current ART features (needs updating for each version):
@@ -26,8 +29,9 @@ Current TelePaint features:
 * Requires BBC Basic for SDL 2.0
 * Configured for BBC Micro Mode 7 (40x25 chars, 78x72 sixels)
 * Save and load files in BIN and/or BMP format
-* Configure up to 100 animation frames and 48 sprites
-* Import sprites and BMP files (specific format required)
+* Canvas Mode - Configure up to 100 animation frames and 48 sprites
+* Movie Mode - Upto 9999 frames, animated sprites
+* Import sprites and BMP files (specific format required 640x480 24bpp BMP)
 * Added Fonts, requires download of M7_FONTS folder
 * Added Transformation tools
 * Implemented gradients correctly
@@ -37,3 +41,4 @@ Current TelePaint features:
 * * CTRL + C  : Open Selection Tool
 * * SHIFT + Cursors   : Move selected region around in pixel increments
 * * CRTL + Left / Right  : Copy current frame to prev / next frame
+* * Moive mode added many hotkeys, access the help screen for details
