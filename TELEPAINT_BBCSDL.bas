@@ -18,7 +18,6 @@
 
       REM Things still to work on:
       REM * Moving frames and better sprite movement options
-      REM * Move sprites at pixel level
       REM * Integrating fonts as special sprites
       REM * Text labels and bubbles
       REM * Integrating colour and special control codes better
@@ -53,7 +52,7 @@
 
       INSTALL @lib$+"sortlib"
 
-      version$="v0.28"
+      version$="v0.29"
 
       DEBUG%=0 : REM for displaying mouse and other debug details
 
@@ -240,14 +239,18 @@
       insertani%=0         : REM animation counter for inserting sprites
       insertset%=0         : REM current animation set
       insertphase%=0       : REM current animation click phase for selecting first and last animation frames
-      spritemoving%=-1     : REM flag to check if selected sprite is moving in movie mode
+      inserttextcol%=6     : REM text insert colour -1
+      spritemoving%=-1     : REM flag to check if selected sprite is moving
       spritedupe%=-1       : REM flag to check if selected sprite is being duped in movie mode
       spriteold%=0
       spriterelocate%=0
       spriteselect%=-1
       spriteselectold%=-1
+      spritechange%=-1
       objsprscroll%=0
+      objaniscroll%=0
       objfrmscroll%=0
+      objtxtscroll%=0
       menumode%=M_canvas%  : REM tracks if in canvas or movie modes for returning from multiple sub menus
       menuext%=M_canvas%   : REM current extended menu
       menufrom%=M_canvas%  : REM menu to return to
@@ -387,8 +390,9 @@
       REM FOR I%=74 TO 71 STEP-1:RECTANGLE FILL (74-I%)*16,sixel{(I%)}.y%,14,sixel{(I%)}.h%:NEXT
 
       REM 20x16 chars @320 bytes : 40x48 pixels @1920 bytes
-      DIM sprite_buffer&(sprite_max%-1,319)
-      DIM sprsize{(sprite_max%-1) w%,h%}
+      REM sprlist Width, Height, Mode - 0 for pixel (single colour or code, 1 for char (multiple colours and codes)
+      DIM sprbuf&(sprite_max%-1,319)
+      DIM sprlist{(sprite_max%-1) w%,h%,m%}
       DIM spr_tmp&(2000)
 
       REM lists for movie mode
@@ -402,7 +406,7 @@
       REM u% = toggle undo repeat action, will remove any objs with matching parent=obj number
       DIM objlist{(9999) obj%,type%,f%,rep%,hop%,parent%,x%,y%,h%,v%,m%,d%,u%}
       DIM frmlist{(9999) x%,y%,b%,f%}
-      DIM sprlist{(99) s%(11),f%,r%,x%,y%,h%,v%,m%,d%}
+      DIM sprani{(99) s%(11),f%,r%,x%,y%,h%,v%,m%,d%}
       DIM txtlist$(999)
 
       REM animation and menu controls - can be redfinable depending on current screen
@@ -467,6 +471,7 @@
 
       REM movie mode buffer
       DIM movie_buffer&(959)
+      DIM movie_colbuf&(959)
 
       REM copypaste buffer
       DIM copy_buffer&(959)
@@ -477,18 +482,19 @@
       CLS
       FOR S%=0 TO sprite_max%-1
         FOR U%=0 TO 319
-          sprite_buffer&(S%,U%)=32
+          sprbuf&(S%,U%)=32
         NEXT
 
-        sprsize{(S%)}.w%=1
-        sprsize{(S%)}.h%=1
+        sprlist{(S%)}.w%=1
+        sprlist{(S%)}.h%=1
+        sprlist{(S%)}.m%=0
       NEXT
 
       FOR S%=0 TO 99
-        sprlist{(S%)}.f%=1
+        sprani{(S%)}.f%=1
         FOR ss%=0 TO 11
-          sprlist{(S%)}.s%(ss%)=-1
-          sprlist{(S%)}.d%=1
+          sprani{(S%)}.s%(ss%)=-1
+          sprani{(S%)}.d%=1
         NEXT
       NEXT
 
@@ -523,12 +529,9 @@
           CASE MB% OF
 
             WHEN 0 : REM no mouse botton
-              REM add nudge increments to move close to screen edge
               IF OLD_PX%<>PX% OR OLD_PY%<>PY% THEN
                 IF spritemoving%>-1 THEN
                   PROCspritemove
-                  PROCspriteposition
-
                 ENDIF
                 OLD_PX%=PX% : OLD_PY%=PY%
               ENDIF
@@ -704,8 +707,9 @@
         REM PRINTTAB(0,22)SPC(20)
         REM PRINTTAB(0,23)SPC(20)
         REM PRINTTAB(0,20)"A:";STR$(GET(TX%,TY%));"  ";"SM:";STR$(spritemoving%);gw$;
-        REM PRINTTAB(0,21)"MX:";STR$(MX%);" MY:";STR$(MY%);gw$;
-        REM PRINTTAB(0,22)"TX:";STR$(TX%);" TY:";STR$(TY%);gw$;
+        PRINTTAB(0,21)"MX:";STR$(MX%);" MY:";STR$(MY%);gw$;
+        PRINTTAB(0,22)":";STR$(insertphase%);" IR:";STR$(insertrepeat%);gw$;
+        REM PRINTTAB(0,21)"TX:";STR$(TX%);" TY:";STR$(TY%);gw$;
         REM PRINTTAB(0,23)"PX:";STR$(PX%);" PY:";STR$(PY%);gw$;
         REM PRINTTAB(0,23)"IP:";STR$(insertphase%);" IR:";STR$(insertrepeat%);gw$;
 
@@ -837,7 +841,7 @@
         REM Get character cell
         cx% = x% DIV 2
         cy% = y% DIV 3
-        chr%=sprite_buffer&(s%,cx%+cy%*20) AND &5F
+        chr%=sprbuf&(s%,cx%+cy%*20) AND &5F
         C%=(x% AND 1)+(y% MOD 3)*2
         C%=2^C% - (C%=5)*32
         CASE cmd% OF
@@ -846,7 +850,7 @@
           WHEN 2:chr% EOR=C%
         ENDCASE
 
-        sprite_buffer&(s%,cx%+cy%*20)=chr%+160
+        sprbuf&(s%,cx%+cy%*20)=chr%+160
       ENDIF
       ENDPROC
 
@@ -857,7 +861,7 @@
       REM Get character cell
       cx% = x% DIV 2
       cy% = (y% DIV 3)
-      chr%=sprite_buffer&(s%,cx%+cy%*20)
+      chr%=sprbuf&(s%,cx%+cy%*20)
       IF chr%>160 THEN
         chr%=chr% AND &5F
         C%=(x% AND 1)+(y% MOD 3)*2
@@ -1416,7 +1420,7 @@
         PROCspritedraw(PX%,PY%,3,13)
         PROCmenurestore
         PROCundosave
-        PROCspritetocanvas(spritemoving%,PX%-sprsize{(spritemoving%)}.w%,PY%-(sprsize{(spritemoving%)}.h%*3 DIV 2))
+        PROCspritetocanvas(spritemoving%,PX%-sprlist{(spritemoving%)}.w%,PY%-(sprlist{(spritemoving%)}.h%*3 DIV 2))
         PROCframesave(frame%)
         spriteold%=spritemoving%
         IF animation%=0 THEN
@@ -1795,12 +1799,20 @@
       REM ##########################################################
       REM MOVIE MODE click handler
       DEF PROCmoviemode
-      LOCAL shift%,skip%
+      LOCAL shift%,skip%,X%,Y%
 
       shift%=INKEY(-1)
       PROCWAITMOUSE(0)
 
       IF insertrepeat%>0 AND movieframe%=-1 skip%=1
+
+      X%=mmWX%+PX%-sprlist{(spritemoving%)}.w%
+      Y%=mmWY%-PY%+(sprlist{(spritemoving%)}.h%*3 DIV 2)
+
+      IF sprlist{(spritemoving%)}.m%=1 THEN
+        X%=(X% DIV 2)*2
+        Y%=(Y% DIV 3)*3
+      ENDIF
 
       IF skip%=0 THEN
         IF spritemoving%>-1 THEN
@@ -1810,8 +1822,9 @@
           IF spriterelocate%=1 THEN
             REM move sprite
             objlist{(obj_lstcur%)}.obj%=spritemoving%
-            objlist{(obj_lstcur%)}.x%=mmWX%+PX%-sprsize{(spritemoving%)}.w%
-            objlist{(obj_lstcur%)}.y%=mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2)
+            objlist{(obj_lstcur%)}.x%=X%
+            objlist{(obj_lstcur%)}.y%=Y%
+
             spriterelocate%=0
           ELSE
 
@@ -1822,15 +1835,15 @@
               REM add sprite to spritelist
               IF spritedupe%=-1 THEN
                 spriteselect%=-1
-                spriteselecold%=-1
+                spriteselectold%=-1
               ELSE
                 IF objlist{(spritedupe%)}.f%>-1 shift%=0
               ENDIF
 
               objlist{(obj_lstcount%)}.obj%=spritemoving%
               objlist{(obj_lstcount%)}.type%=1
-              objlist{(obj_lstcount%)}.x%=mmWX%+PX%-sprsize{(spritemoving%)}.w%
-              objlist{(obj_lstcount%)}.y%=mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2)
+              objlist{(obj_lstcount%)}.x%=X%
+              objlist{(obj_lstcount%)}.y%=Y%
               objlist{(obj_lstcount%)}.parent%=-1
               IF shift%=0 AND movieframe%>-1 THEN
                 objlist{(obj_lstcount%)}.f%=movieframe%
@@ -1855,8 +1868,8 @@
               IF C%>0 THEN
                 XS%=objlist{(obj_lstcur%)}.x%
                 YS%=objlist{(obj_lstcur%)}.y%
-                XF%=mmWX%+PX%-sprsize{(spritemoving%)}.w%
-                YF%=mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2)
+                XF%=X%
+                YF%=Y%
 
                 deltax=(XF%-XS%) / C%
                 deltay=(YF%-YS%) / C%
@@ -1868,8 +1881,8 @@
                 FOR F%=1 TO C%
                   IF insertrepeat%=1 THEN
                     insertani%=(insertani%+1) MOD 12
-                    IF sprlist{(insertset%)}.s%(insertani%)=-1 insertani%=0
-                    spritemoving%=sprlist{(insertset%)}.s%(insertani%)
+                    IF sprani{(insertset%)}.s%(insertani%)=-1 insertani%=0
+                    spritemoving%=sprani{(insertset%)}.s%(insertani%)
                   ENDIF
 
                   REM normalise end point
@@ -2368,11 +2381,11 @@
           ENDIF
 
           REM ADD VALID CHARS AND INCREASE TEXT POS
-          IF K%>31 AND K%<127  AND TY%>0 THEN
+          IF K%>31 AND K%<127 AND TY%>0 THEN
             PROCundosave
             IF fontcur%=0 THEN
-              VDU 31,TEXTX%,TY%,K%+128
-              IF TEXTX%<39 THEN TEXTX%+=1
+              REM VDU 31,TEXTX%,TY%,K%+128
+              REM IF TEXTX%<39 THEN TEXTX%+=1
             ELSE
               IF fonts{(K%-32)}.a%<>0 THEN
                 REM A$=CHR$(K%)
@@ -2411,8 +2424,8 @@
                       IF (objlist{(L%)}.f%=movieframe%) OR objlist{(L%)}.f%=-1 THEN
                         X%=objlist{(L%)}.x%
                         Y%=objlist{(L%)}.y%
-                        SX%=sprsize{(objlist{(L%)}.obj%)}.w%*2
-                        SY%=sprsize{(objlist{(L%)}.obj%)}.h%*3
+                        SX%=sprlist{(objlist{(L%)}.obj%)}.w%*2
+                        SY%=sprlist{(objlist{(L%)}.obj%)}.h%*3
 
                         IF X%>mmWX%-SX% AND X%<mmWX%+80 AND Y%<mmWY%+SY%-3 AND Y%>mmWY%-75 THEN
                           IF first%=-1 first%=L%
@@ -2465,13 +2478,54 @@
                   PROCWAITNOKEY(-51,0)
                 ENDIF
 
-              WHEN 69,101 : REM E current sprite in sprite editor
-                IF (spriteselect%>-1 OR obj_lstcount%>-1) AND spritemoving%=-1 THEN
-                  IF spriteselect%>-1 obj_lstcur%=spriteselect%
+              WHEN 69,101 : REM E current sprite in sprite editor, SHIFT E to clone a new copy and edit
+                IF spriteselect%>-1 AND spritemoving%=-1 THEN
+    1             obj_lstcur%=spriteselect%
                   sprite_cur%=objlist{(obj_lstcur%)}.obj%
+                  done%=0
+                  IF shift% THEN
+                    REM find available sprite and copy current sprite to the new sprite to edit
+                    FOR S%=0 TO sprite_max%-1
+                      F%=0
+                      FOR U%=0 TO 319
+                        IF sprbuf&(S%,U%)<>32 AND sprbuf&(S%,U%)<>160 F%+=1
+                        IF F%>0 EXIT FOR
+                      NEXT
+                      IF F%=0 EXIT FOR
+                    NEXT
+                    IF F%=0 THEN
+                      FOR U%=0 TO 319
+                        sprbuf&(S%,U%)=sprbuf&(sprite_cur%,U%)
+                      NEXT
+                      sprite_cur%=S%
+                      objlist{(obj_lstcur%)}.obj%=S%
+                      done%=1
+                    ELSE
+                      FOR SY%=6 TO 11
+                        PROCprint40(SY%,"")
+                      NEXT
+                      PRINTTAB(2,8)"NO AVAILABLE SPRITES FOUND!"
+                      PRINTTAB(2,9)"CANNOT CLONE THIS SPRITE ";tg$;"OK";
+                      REPEAT
+                        PROCREADMOUSE
+
+                        IF MB%=4 THEN
+                          PROCWAITMOUSE(0)
+                          IF TY%=9 AND TX%>28 AND TX%<31 THEN done%=2
+                        ELSE
+                          WAIT 2
+                        ENDIF
+                      UNTIL done%<>0
+                      PROCmenurestore
+                    ENDIF
+                  ELSE
+                    done%=1
+                  ENDIF
                   PROCWAITNOKEY(-35,0)
-                  menuext%=M_sprites%
-                  PROCspritescreen(1)
+                  IF done%=1 THEN
+                    menuext%=M_sprites%
+                    PROCspritescreen(1)
+                  ENDIF
                 ENDIF
 
               WHEN 77,109 : REM M move selected sprite
@@ -2523,7 +2577,6 @@
                   newWX%=frmlist{(movieframe%)}.x%
                   newWY%=frmlist{(movieframe%)}.y%
                   spriteselect%=-1
-                  spriteselectold%=-1
                 ENDIF
 
               WHEN  131 : REM end
@@ -2533,7 +2586,6 @@
                   newWX%=frmlist{(movieframe%)}.x%
                   newWY%=frmlist{(movieframe%)}.y%
                   spriteselect%=-1
-                  spriteselectold%=-1
                 ENDIF
 
               WHEN 132,158 : REM pgup
@@ -2547,7 +2599,6 @@
                     newWX%=frmlist{(movieframe%)}.x%
                     newWY%=frmlist{(movieframe%)}.y%
                     spriteselect%=-1
-                    spriteselectold%=-1
                   ENDIF
                 ENDIF
 
@@ -2564,7 +2615,6 @@
                       newWY%=frmlist{(movieframe%)}.y%
                     ENDIF
                     spriteselect%=-1
-                    spriteselectold%=-1
                   ENDIF
                 ENDIF
 
@@ -3076,7 +3126,7 @@
                 PROCundosave
 
                 FOR S%=0 TO 319
-                  sprite_buffer&(sprite_cur%,S%)=32
+                  sprbuf&(sprite_cur%,S%)=32
                 NEXT
                 PROCdrawsprite
                 PROCupdatespritesize(sprite_cur%,1)
@@ -3107,13 +3157,13 @@
                 IF spr_scroll%=1 THEN
                   REM char mode
                   FOR S%=0 TO 15
-                    spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20)
+                    spr_tmp&(S%)=sprbuf&(sprite_cur%,S%*20)
                   NEXT
                   FOR S%=0 TO 318
-                    sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%+1)
+                    sprbuf&(sprite_cur%,S%)=sprbuf&(sprite_cur%,S%+1)
                   NEXT
                   FOR S%=0 TO 15
-                    sprite_buffer&(sprite_cur%,S%*20+19)=spr_tmp&(S%)
+                    sprbuf&(sprite_cur%,S%*20+19)=spr_tmp&(S%)
                   NEXT
                   PROCdrawsprite
                   PROCupdatespritesize(sprite_cur%,1)
@@ -3154,13 +3204,13 @@
                 IF spr_scroll%=1 THEN
                   REM CHAR MODE
                   FOR S%=0 TO 15
-                    spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%*20+19)
+                    spr_tmp&(S%)=sprbuf&(sprite_cur%,S%*20+19)
                   NEXT
                   FOR S%=319 TO 1 STEP -1
-                    sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%-1)
+                    sprbuf&(sprite_cur%,S%)=sprbuf&(sprite_cur%,S%-1)
                   NEXT
                   FOR S%=0 TO 15
-                    sprite_buffer&(sprite_cur%,S%*20)=spr_tmp&(S%)
+                    sprbuf&(sprite_cur%,S%*20)=spr_tmp&(S%)
                   NEXT
                   PROCdrawsprite
                   PROCupdatespritesize(sprite_cur%,1)
@@ -3206,13 +3256,13 @@
                   REM CHAR MODE
 
                   FOR S%=0 TO 19
-                    spr_tmp&(S%)=sprite_buffer&(sprite_cur%,S%)
+                    spr_tmp&(S%)=sprbuf&(sprite_cur%,S%)
                   NEXT
                   FOR S%=20 TO 319
-                    sprite_buffer&(sprite_cur%,S%-20)=sprite_buffer&(sprite_cur%,S%)
+                    sprbuf&(sprite_cur%,S%-20)=sprbuf&(sprite_cur%,S%)
                   NEXT
                   FOR S%=0 TO 19
-                    sprite_buffer&(sprite_cur%,300+S%)=spr_tmp&(S%)
+                    sprbuf&(sprite_cur%,300+S%)=spr_tmp&(S%)
                   NEXT
                   PROCdrawsprite
                   PROCupdatespritesize(sprite_cur%,1)
@@ -3245,7 +3295,7 @@
                 dst%=sprite_cur%+1
                 IF dst%>sprite_max%-1 THEN dst%=0
                 FOR S%=0 TO 319
-                  sprite_buffer&(dst%,S%)=sprite_buffer&(sprite_cur%,S%)
+                  sprbuf&(dst%,S%)=sprbuf&(sprite_cur%,S%)
                 NEXT
 
               WHEN 33,34,35,36,37 : REM scroll down
@@ -3253,13 +3303,13 @@
 
                 IF spr_scroll%=1 THEN
                   FOR S%=0 TO 19
-                    spr_tmp&(S%)=sprite_buffer&(sprite_cur%,300+S%)
+                    spr_tmp&(S%)=sprbuf&(sprite_cur%,300+S%)
                   NEXT
                   FOR S%=319 TO 20 STEP -1
-                    sprite_buffer&(sprite_cur%,S%)=sprite_buffer&(sprite_cur%,S%-20)
+                    sprbuf&(sprite_cur%,S%)=sprbuf&(sprite_cur%,S%-20)
                   NEXT
                   FOR S%=0 TO 19
-                    sprite_buffer&(sprite_cur%,S%)=spr_tmp&(S%)
+                    sprbuf&(sprite_cur%,S%)=spr_tmp&(S%)
                   NEXT
                   PROCdrawsprite
                   PROCupdatespritesize(sprite_cur%,1)
@@ -3293,7 +3343,7 @@
                 dst%=sprite_cur%-1
                 IF dst%<0 THEN dst%=sprite_max%-1
                 FOR S%=0 TO 319
-                  sprite_buffer&(dst%,S%)=sprite_buffer&(sprite_cur%,S%)
+                  sprbuf&(dst%,S%)=sprbuf&(sprite_cur%,S%)
                 NEXT
 
               WHEN 33,34,35,36,37 : REM flip horizontal
@@ -3315,7 +3365,7 @@
             CASE TX% OF
               WHEN 1,2,3,4,5 : REM copy sprite to clipboad
                 FOR S%=0 TO 319
-                  copy_buffer&(S%)=sprite_buffer&(sprite_cur%,(S% MOD 16)*20+(S% DIV 16))
+                  copy_buffer&(S%)=sprbuf&(sprite_cur%,(S% MOD 16)*20+(S% DIV 16))
                 NEXT
                 copyx%=19
                 copyy%=15
@@ -3344,7 +3394,7 @@
                 PROCundosave
 
                 FOR S%=0 TO 319
-                  sprite_buffer&(sprite_cur%,(S% MOD 16)*20+(S% DIV 16))=copy_buffer&(S%)
+                  sprbuf&(sprite_cur%,(S% MOD 16)*20+(S% DIV 16))=copy_buffer&(S%)
                 NEXT
                 PROCdrawsprite
                 PROCupdatespritesize(sprite_cur%,1)
@@ -3383,7 +3433,16 @@
               WHEN 15,16,17,18,19,20,21,22,23,24,25 : REM ???
 
             ENDCASE
-
+          WHEN 22 : REM sprite mode
+            CASE TX% OF
+              WHEN 23,24,25,26,27,28,29,30,31
+                IF sprlist{(sprite_cur%)}.m%=0 THEN
+                  sprlist{(sprite_cur%)}.m%=1
+                ELSE
+                  sprlist{(sprite_cur%)}.m%=0
+                ENDIF
+                PROCspritescreen(0)
+            ENDCASE
           WHEN 24 : REM close button
             CASE TX% OF
               WHEN 2,3,4,5,6,7,8,9,10 : REM movie mode screen
@@ -3430,9 +3489,6 @@
       OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
       PROCchangemode(6,0)
 
-      REM       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
-
-
       GCOL 0,0
       RECTANGLE FILL subm{(sub_cur%)}.x%,subm{(sub_cur%)}.y%,subm{(sub_cur%)}.w%,subm{(sub_cur%)}.h%
 
@@ -3440,6 +3496,7 @@
       RECTANGLE subm{(sub_cur%)}.x%+8,subm{(sub_cur%)}.y%+8,subm{(sub_cur%)}.w%-16,subm{(sub_cur%)}.h%-16
       RECTANGLE subm{(sub_cur%)}.x%+10,subm{(sub_cur%)}.y%+10,subm{(sub_cur%)}.w%-20,subm{(sub_cur%)}.h%-20
 
+      spritechange%=-1
       PROCresetcontrols
       PROCsubupdate(-1)
       REM PROCsubupdate(0)
@@ -3448,184 +3505,146 @@
 
       REM ##########################################################
       REM shape and special sub menu updater
-      DEF PROCsubupdate(C%)
-      LOCAL SX%,SY%,SW%,SH%,I%,P%,L%,COL%,F$,T$
+      DEF PROCsubupdate(redraw%)
+      LOCAL SX%,SY%,SW%,SH%,MY%,I%,P%,L%,COL%,F$,T$
 
       SX%=subm{(sub_cur%)}.x%
       SY%=subm{(sub_cur%)}.y%
       SW%=subm{(sub_cur%)}.w%
       SH%=subm{(sub_cur%)}.h%
 
-      menuYadd%=932
+      menuYadd%=996
 
+      REM draw static menu items if redraw%=-1
       CASE sub_cur% OF
         WHEN 0 : REM paint
-          PROCgtext("P",SX%+32,996,10,0)
-          PROCmenutext(0,"PAINT        ",SX%+20,menuYadd%,14,(toolsel%=T_paint&)*-4,-48)
-          PROCmenutext(1,"LINE         ",SX%+20,menuYadd%,14,(toolsel%=T_line&)*-4,-48)
-          PROCmenutext(2,"BOX          ",SX%+20,menuYadd%,14,(toolsel%=T_box&)*-4,-48)
-          PROCmenutext(3,"CIRCLE       ",SX%+20,menuYadd%,14,(toolsel%=T_circle&)*-4,-48)
-          PROCmenutext(4,"SYMMETRY     ",SX%+20,menuYadd%,14,(toolsel%=T_symmetry&)*-4,-48)
-          PROCmenutext(5,"TEXT         ",SX%+20,menuYadd%,14,(toolsel%=T_text&)*-4,-48)
-
-          GCOL 0,8
-          RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-          menuYadd%-=24
-
-          PROCgtext(CHR$(78+11*animateshape%),SX%+404,menuYadd%,9+animateshape%,0)
-          PROCgtext(RIGHT$("0"+STR$(animategap%),2),SX%+244,menuYadd%-48,11,8)
-          PROCgtext(RIGHT$("0"+STR$(animatelen%),2),SX%+244,menuYadd%-96,11,8)
-          PROCgtext(CHR$(78-11*(shapetype%=0)),SX%+404,menuYadd%-216,9-(shapetype%=0),0)
-          PROCgtext(CHR$(78-11*(shapetype%=1)),SX%+404,menuYadd%-264,9-(shapetype%=1),0)
-          PROCgtext(CHR$(78-11*(shapetype%=2)),SX%+404,menuYadd%-312,9-(shapetype%=2),0)
-          PROCgtext(LEFT$(fontname$(fontcur%)+"         ",10),SX%+20,menuYadd%-432,13,0)
-
-          IF C%=-1 THEN
+          IF redraw%=-1 THEN
+            PROCgtext("P",SX%+32,menuYadd%,10,0,-64)
+            PROCmenutext(0,"PAINT        ",SX%+20,menuYadd%,14,(toolsel%=T_paint&)*-4,-48)
+            PROCmenutext(1,"LINE         ",SX%+20,menuYadd%,14,(toolsel%=T_line&)*-4,-48)
+            PROCmenutext(2,"BOX          ",SX%+20,menuYadd%,14,(toolsel%=T_box&)*-4,-48)
+            PROCmenutext(3,"CIRCLE       ",SX%+20,menuYadd%,14,(toolsel%=T_circle&)*-4,-48)
+            PROCmenutext(4,"SYMMETRY     ",SX%+20,menuYadd%,14,(toolsel%=T_symmetry&)*-4,-48)
+            PROCmenutext(5,"TEXT         ",SX%+20,menuYadd%,14,(toolsel%=T_text&)*-4,-48)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
             PROCmenutext(6,"ANIM8 LINES  ",SX%+20,menuYadd%,11,0,-48)
-            PROCgtext("GAP",SX%+20,menuYadd%,14,0)
+            PROCgtext("GAP",SX%+20,menuYadd%,14,0,0)
             PROCmenutext(7," - ",SX%+128,menuYadd%,14,4,0)
             PROCmenutext(8," + ",SX%+332,menuYadd%,14,4,-48)
-            PROCgtext("LEN",SX%+20,menuYadd%,14,0)
+            PROCgtext("LEN",SX%+20,menuYadd%,14,0,0)
             PROCmenutext(9," - ",SX%+128,menuYadd%,14,4,0)
             PROCmenutext(10," + ",SX%+332,menuYadd%,14,4,-48)
-
-            GCOL 0,8
-            RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-            menuYadd%-=24
-
-            PROCgtext("SHAPE OPTIONS",SX%+20,menuYadd%,8,0)
-            menuYadd%-=48
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
+            PROCgtext("SHAPE OPTIONS",SX%+20,menuYadd%,8,0,-48)
             PROCmenutext(11,"OUTLINE      ",SX%+20,menuYadd%,11,0,-48)
             PROCmenutext(12,"FILLED       ",SX%+20,menuYadd%,11,0,-48)
             PROCmenutext(13,"EMPTY        ",SX%+20,menuYadd%,11,0,-48)
-
-            GCOL 0,8
-            RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-            menuYadd%-=24
-
-            PROCgtext("FONT:",SX%+20,menuYadd%,14,0)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
+            PROCgtext("FONT:",SX%+20,menuYadd%,14,0,0)
             PROCmenutext(14," < ",SX%+192,menuYadd%,14,4,0)
             PROCmenutext(15," > ",SX%+332,menuYadd%,14,4,-96)
-
-            GCOL 0,8
-            RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-            menuYadd%-=24
-
-            PROCmenutext(16,"KYBRD FONTS  ",SX%+20,menuYadd%,10,(C%=13)*-4,-48)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
+            PROCmenutext(16,"KYBRD FONTS  ",SX%+20,menuYadd%,10,0,-48)
 
           ENDIF
 
+          REM redraw dynamic values
+          menuYadd%=620
+          PROCgtext(CHR$(78+11*animateshape%),SX%+404,menuYadd%,9+animateshape%,0,-48)
+          PROCgtext(RIGHT$("0"+STR$(animategap%),2),SX%+244,menuYadd%,11,8,-48)
+          PROCgtext(RIGHT$("0"+STR$(animatelen%),2),SX%+244,menuYadd%,11,8,-120)
+          PROCgtext(CHR$(78-11*(shapetype%=0)),SX%+404,menuYadd%,9-(shapetype%=0),0,-48)
+          PROCgtext(CHR$(78-11*(shapetype%=1)),SX%+404,menuYadd%,9-(shapetype%=1),0,-48)
+          PROCgtext(CHR$(78-11*(shapetype%=2)),SX%+404,menuYadd%,9-(shapetype%=2),0,-120)
+          PROCgtext(LEFT$(fontname$(fontcur%)+"         ",10),SX%+20,menuYadd%,13,0,432)
+
         WHEN 1 : REM dither
-          PROCgtext("B",SX%+32,996,10,0)
-          PROCmenutext(0,"DITHER 1     ",SX%+20,menuYadd%,14,(toolsel%=T_dither1&)*-4,-48)
-          PROCmenutext(1,"DITHER 2     ",SX%+20,menuYadd%,14,(toolsel%=T_dither2&)*-4,-48)
-          PROCmenutext(2,"DITHER 3     ",SX%+20,menuYadd%,14,(toolsel%=T_dither3&)*-4,-48)
-          PROCmenutext(3,"DITHER 4     ",SX%+20,menuYadd%,14,(toolsel%=T_dither4&)*-4,-48)
-          PROCmenutext(4,"SOLID BLOCK  ",SX%+20,menuYadd%,14,(toolsel%=T_dither5&)*-4,-48)
-
-          GCOL 0,8
-          RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-          menuYadd%-=24
-          PROCmenutext(5,"BRUSH       ",SX%+20,menuYadd%,14,(toolsel%=T_brush1&)*-4,-48)
-          GCOL 0,14
-          LINE SX%+310,menuYadd%+42,SX%+330,menuYadd%+22
-          LINE SX%+310,menuYadd%+44,SX%+332,menuYadd%+22
-          LINE SX%+312,menuYadd%+44,SX%+332,menuYadd%+24
-
-          PROCmenutext(6,"BRUSH    /  ",SX%+20,menuYadd%,14,(toolsel%=T_brush2&)*-4,-48)
-          PROCmenutext(7,"BRUSH    -  ",SX%+20,menuYadd%,14,(toolsel%=T_brush3&)*-4,-48)
-          PROCmenutext(8,"BRUSH       ",SX%+20,menuYadd%,14,(toolsel%=T_brush4&)*-4,-48)
-          GCOL 0,14
-          RECTANGLE FILL SX%+328,menuYadd%+22,2,24
-          PROCmenutext(9,"BRUSH   * 1 ",SX%+20,menuYadd%,14,(toolsel%=T_brush5&)*-4,-48)
-          PROCmenutext(10,"BRUSH   * 2 ",SX%+20,menuYadd%,14,(toolsel%=T_brush6&)*-4,-48)
-          PROCmenutext(11,"BRUSH   * 3 ",SX%+20,menuYadd%,14,(toolsel%=T_brush7&)*-4,-48)
-
+          IF redraw%=-1 THEN
+            PROCgtext("B",SX%+32,menuYadd%,10,0,-64)
+            PROCmenutext(0,"DITHER 1     ",SX%+20,menuYadd%,14,(toolsel%=T_dither1&)*-4,-48)
+            PROCmenutext(1,"DITHER 2     ",SX%+20,menuYadd%,14,(toolsel%=T_dither2&)*-4,-48)
+            PROCmenutext(2,"DITHER 3     ",SX%+20,menuYadd%,14,(toolsel%=T_dither3&)*-4,-48)
+            PROCmenutext(3,"DITHER 4     ",SX%+20,menuYadd%,14,(toolsel%=T_dither4&)*-4,-48)
+            PROCmenutext(4,"SOLID BLOCK  ",SX%+20,menuYadd%,14,(toolsel%=T_dither5&)*-4,-48)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
+            PROCmenutext(5,"BRUSH       ",SX%+20,menuYadd%,14,(toolsel%=T_brush1&)*-4,-48)
+            GCOL 0,14
+            LINE SX%+310,menuYadd%+42,SX%+330,menuYadd%+22
+            LINE SX%+310,menuYadd%+44,SX%+332,menuYadd%+22
+            LINE SX%+312,menuYadd%+44,SX%+332,menuYadd%+24
+            PROCmenutext(6,"BRUSH    /  ",SX%+20,menuYadd%,14,(toolsel%=T_brush2&)*-4,-48)
+            PROCmenutext(7,"BRUSH    -  ",SX%+20,menuYadd%,14,(toolsel%=T_brush3&)*-4,-48)
+            PROCmenutext(8,"BRUSH       ",SX%+20,menuYadd%,14,(toolsel%=T_brush4&)*-4,-48)
+            GCOL 0,14
+            RECTANGLE FILL SX%+328,menuYadd%+22,2,24
+            PROCmenutext(9,"BRUSH   * 1 ",SX%+20,menuYadd%,14,(toolsel%=T_brush5&)*-4,-48)
+            PROCmenutext(10,"BRUSH   * 2 ",SX%+20,menuYadd%,14,(toolsel%=T_brush6&)*-4,-48)
+            PROCmenutext(11,"BRUSH   * 3 ",SX%+20,menuYadd%,14,(toolsel%=T_brush7&)*-4,-48)
+          ENDIF
 
         WHEN 2 : REM copy paste
-          PROCgtext("C",SX%+32,996,10,0)
-          PROCmenutext(0,"COPY/SELECT  ",SX%+20,menuYadd%,14,(toolsel%=T_copy&)*-4,-48)
-          PROCmenutext(1,"PASTE        ",SX%+20,menuYadd%,14,(toolsel%=T_paste&)*-4,-48)
-
-          GCOL 0,8
-          RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-          menuYadd%-=24
-
-          PROCmenutext(2,"PASTE TO ALL ",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(3,"CPY CODES ALL",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(4,"COPY FRAME > ",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(5,"COPY FRAME < ",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(6,"MIRROR SEL   ",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(7,"MIRROR LEFT  ",SX%+20,menuYadd%,13,0,-48)
-          PROCmenutext(8,"REFLECT SEL  ",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(9,"REFLECT TOP  ",SX%+20,menuYadd%,13,0,-48)
-          PROCmenutext(10,"FLIP HORZ    ",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(11,"FLIP VERT    ",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(12,"NEGATIVE     ",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(13,"ERASE        ",SX%+20,menuYadd%,10,0,-48)
-
-
-          GCOL 0,8
-          RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-          menuYadd%-=24
-
-          PROCgtext(CHR$(78+11*copylockxt%),SX%+404,menuYadd%,9+copylockxt%,0)
-          PROCgtext(CHR$(78+11*copylockyt%),SX%+404,menuYadd%-48,9+copylockyt%,0)
-          PROCgtext(CHR$(78+11*copy_trns%),SX%+404,menuYadd%-96,9+copy_trns%,0)
-
-          IF C%=-1 THEN
+          IF redraw%=-1 THEN
+            PROCgtext("C",SX%+32,menuYadd%,10,0,-64)
+            PROCmenutext(0,"COPY/SELECT  ",SX%+20,menuYadd%,14,(toolsel%=T_copy&)*-4,-48)
+            PROCmenutext(1,"PASTE        ",SX%+20,menuYadd%,14,(toolsel%=T_paste&)*-4,-48)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
+            PROCmenutext(2,"PASTE TO ALL ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(3,"CPY CODES ALL",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(4,"COPY FRAME > ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(5,"COPY FRAME < ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(6,"MIRROR SEL   ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(7,"MIRROR LEFT  ",SX%+20,menuYadd%,13,0,-48)
+            PROCmenutext(8,"REFLECT SEL  ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(9,"REFLECT TOP  ",SX%+20,menuYadd%,13,0,-48)
+            PROCmenutext(10,"FLIP HORZ    ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(11,"FLIP VERT    ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(12,"NEGATIVE     ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(13,"ERASE        ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
             PROCmenutext(14,"PASTE FIX X  ",SX%+20,menuYadd%,11,0,-48)
             PROCmenutext(15,"PASTE FIX Y  ",SX%+20,menuYadd%,11,0,-48)
             PROCmenutext(16,"TRANSPARENT  ",SX%+20,menuYadd%,11,0,-48)
           ENDIF
 
+          REM redraw dynamic values
+          menuYadd%=212
+          PROCgtext(CHR$(78+11*copylockxt%),SX%+404,menuYadd%,9+copylockxt%,0,-48)
+          PROCgtext(CHR$(78+11*copylockyt%),SX%+404,menuYadd%,9+copylockyt%,0,-48)
+          PROCgtext(CHR$(78+11*copy_trns%),SX%+404,menuYadd%,9+copy_trns%,0,0)
+
+
         WHEN 3 : REM fill
-          PROCgtext("F",SX%+32,996,10,0)
-          PROCmenutext(0,"FILL SOLID   ",SX%+20,menuYadd%,14,(toolsel%=T_fill&)*-4,-48)
-          PROCmenutext(1,"GRAD LEFT    ",SX%+20,menuYadd%,14,(toolsel%=T_gradl&)*-4,-48)
-          PROCmenutext(2,"GRAD RIGHT   ",SX%+20,menuYadd%,14,(toolsel%=T_gradr&)*-4,-48)
-          PROCmenutext(3,"GRAD TOP     ",SX%+20,menuYadd%,14,(toolsel%=T_gradt&)*-4,-48)
-          PROCmenutext(4,"GRAD BOTTOM  ",SX%+20,menuYadd%,14,(toolsel%=T_gradb&)*-4,-48)
-          PROCmenutext(5,"GRAD TOP-L   ",SX%+20,menuYadd%,14,(toolsel%=T_gradtl&)*-4,-48)
-          PROCmenutext(6,"GRAD TOP-R   ",SX%+20,menuYadd%,14,(toolsel%=T_gradtr&)*-4,-48)
-          PROCmenutext(7,"GRAD BOT-R   ",SX%+20,menuYadd%,14,(toolsel%=T_gradbr&)*-4,-48)
-          PROCmenutext(8,"GRAD BOT-L   ",SX%+20,menuYadd%,14,(toolsel%=T_gradbl&)*-4,-48)
-          FOR I%=0 TO 3
-            PROCgtext("O",SX%+404,menuYadd%-32-I%*60,12+(gradtype%=I%)*2,0)
-          NEXT
-
-          IF C%=-1 THEN
-            GCOL 0,8
-            RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-            menuYadd%-=24
+          IF redraw%=-1 THEN
+            PROCgtext("F",SX%+32,menuYadd%,10,0,-64)
+            PROCmenutext(0,"FILL SOLID   ",SX%+20,menuYadd%,14,(toolsel%=T_fill&)*-4,-48)
+            PROCmenutext(1,"GRAD LEFT    ",SX%+20,menuYadd%,14,(toolsel%=T_gradl&)*-4,-48)
+            PROCmenutext(2,"GRAD RIGHT   ",SX%+20,menuYadd%,14,(toolsel%=T_gradr&)*-4,-48)
+            PROCmenutext(3,"GRAD TOP     ",SX%+20,menuYadd%,14,(toolsel%=T_gradt&)*-4,-48)
+            PROCmenutext(4,"GRAD BOTTOM  ",SX%+20,menuYadd%,14,(toolsel%=T_gradb&)*-4,-48)
+            PROCmenutext(5,"GRAD TOP-L   ",SX%+20,menuYadd%,14,(toolsel%=T_gradtl&)*-4,-48)
+            PROCmenutext(6,"GRAD TOP-R   ",SX%+20,menuYadd%,14,(toolsel%=T_gradtr&)*-4,-48)
+            PROCmenutext(7,"GRAD BOT-R   ",SX%+20,menuYadd%,14,(toolsel%=T_gradbr&)*-4,-48)
+            PROCmenutext(8,"GRAD BOT-L   ",SX%+20,menuYadd%,14,(toolsel%=T_gradbl&)*-4,-48)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
 
             REM gradient fill options
             PROCaddcontrange(9,SX%+40,menuYadd%-50,SX%+440,menuYadd%)
             GCOL 0,9
-            RECTANGLE FILL SX%+40,menuYadd%+2,284,-50
+            RECTANGLE FILL SX%+40,menuYadd%,284,-50
             GCOL 0,11
             menuYadd%-=60
-
 
             FOR P%=0 TO 35
               FOR L%=0 TO 12
                 IF pat%(P% DIV 2,P% MOD 4+(L% MOD 4)*4)=1 THEN
-                  RECTANGLE FILL SX%+40+P%*8,menuYadd%-L%*4+60,6,2
+                  RECTANGLE FILL SX%+40+P%*8,menuYadd%-L%*4+58,6,2
                 ENDIF
               NEXT
             NEXT
 
-            PROCaddcontrange(10,SX%+40,menuYadd%-50,SX%+440,menuYadd%-2)
+            PROCaddcontrange(10,SX%+40,menuYadd%-50,SX%+440,menuYadd%)
             GCOL 0,11
-            RECTANGLE FILL SX%+40,menuYadd%+2,284,-50
+            RECTANGLE FILL SX%+40,menuYadd%,284,-50
             GCOL 0,12
 
             menuYadd%-=60
@@ -3642,14 +3661,14 @@
 
               FOR L%=0 TO 12
                 IF pat%(I%,P% MOD 4+(L% MOD 4)*4)=1 THEN
-                  RECTANGLE FILL SX%+40+P%*8,menuYadd%-L%*4+60,6,2
+                  RECTANGLE FILL SX%+40+P%*8,menuYadd%-L%*4+58,6,2
                 ENDIF
               NEXT
             NEXT
 
-            PROCaddcontrange(11,SX%+40,menuYadd%-50,SX%+440,menuYadd%-2)
+            PROCaddcontrange(11,SX%+40,menuYadd%-50,SX%+440,menuYadd%)
             GCOL 0,12
-            RECTANGLE FILL SX%+40,menuYadd%+2,284,-50
+            RECTANGLE FILL SX%+40,menuYadd%,284,-50
             GCOL 0,14
             menuYadd%-=60
 
@@ -3666,14 +3685,14 @@
 
               FOR L%=0 TO 12
                 IF pat%(I%,P% MOD 4+(L% MOD 4)*4) THEN
-                  RECTANGLE FILL SX%+40+P%*8,menuYadd%-L%*4+60,6,2
+                  RECTANGLE FILL SX%+40+P%*8,menuYadd%-L%*4+58,6,2
                 ENDIF
               NEXT
             NEXT
 
-            PROCaddcontrange(12,SX%+40,menuYadd%-50,SX%+440,menuYadd%-2)
+            PROCaddcontrange(12,SX%+40,menuYadd%-50,SX%+440,menuYadd%)
             GCOL 0,13
-            RECTANGLE FILL SX%+40,menuYadd%+2,284,-50
+            RECTANGLE FILL SX%+40,menuYadd%,284,-50
             GCOL 0,11
 
             menuYadd%-=60
@@ -3690,69 +3709,250 @@
 
               FOR L%=0 TO 12
                 IF pat%(I%,P% MOD 4+(L% MOD 4)*4)=1 THEN
-                  RECTANGLE FILL SX%+40+P%*8,menuYadd%-L%*4+60,6,2
+                  RECTANGLE FILL SX%+40+P%*8,menuYadd%-L%*4+58,6,2
                 ENDIF
               NEXT
             NEXT
-
-
           ENDIF
+
+          REM redraw dynamic values
+          menuYadd%=468
+          FOR I%=0 TO 3
+            PROCgtext("O",SX%+404,menuYadd%,12+(gradtype%=I%)*2,0,-60)
+          NEXT
 
         WHEN 4 : REM special
-          PROCgtext("S",SX%+32,996,10,0)
-          PROCmenutext(0,"FLSH (136)   ",SX%+20,menuYadd%,14,(toolsel%=T_flash&)*-4,-48)
-          PROCmenutext(1,"DBLH (141)   ",SX%+20,menuYadd%,14,(toolsel%=T_double&)*-4,-48)
-          PROCmenutext(2,"SEPR (154)   ",SX%+20,menuYadd%,14,(toolsel%=T_separate&)*-4,-48)
-          PROCmenutext(3,"HOLD (158)   ",SX%+20,menuYadd%,14,(toolsel%=T_hold&)*-4,-48)
-
-          IF C%=-1 THEN
-            GCOL 0,8
-            RECTANGLE SX%+20,menuYadd%,SW%-40,2
-          ENDIF
-
-          menuYadd%-=24
-
-          REM update options
-          PROCgtext(CHR$(78+11*gridshow%),SX%+404,menuYadd%,9+gridshow%,0)
-          PROCgtext(CHR$(78+11*colmode%),SX%+404,menuYadd%-48,9+colmode%,0)
-
-          IF C%=-1 THEN
+          IF redraw%=-1 THEN
+            PROCgtext("S",SX%+32,menuYadd%,10,0,-64)
+            PROCmenutext(0,"FLSH (136)   ",SX%+20,menuYadd%,14,(toolsel%=T_flash&)*-4,-48)
+            PROCmenutext(1,"DBLH (141)   ",SX%+20,menuYadd%,14,(toolsel%=T_double&)*-4,-48)
+            PROCmenutext(2,"SEPR (154)   ",SX%+20,menuYadd%,14,(toolsel%=T_separate&)*-4,-48)
+            PROCmenutext(3,"HOLD (158)   ",SX%+20,menuYadd%,14,(toolsel%=T_hold&)*-4,-48)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
             PROCmenutext(4,"SHOW GRID    ",SX%+20,menuYadd%,11,0,-48)
             PROCmenutext(5,"COLUMN MODE  ",SX%+20,menuYadd%,11,0,-48)
-
-            GCOL 0,8
-            RECTANGLE SX%+20,menuYadd%,SW%-40,2
-
-            menuYadd%-=24
-            PROCmenutext(6,"SPRITES      ",SX%+20,menuYadd%,10,(C%=14)*-4,-48)
-            PROCmenutext(7,"MOVIE MODE   ",SX%+20,menuYadd%,10,(C%=15)*-4,-48)
-            PROCmenutext(8,"EDIT.TF      ",SX%+20,menuYadd%,10,(C%=15)*-4,-48)
-            PROCmenutext(9,"ZXNET        ",SX%+20,menuYadd%,10,(C%=15)*-4,-48)
-            PROCmenutext(10,"SAVE LINK    ",SX%+20,menuYadd%,10,(C%=15)*-4,-48)
-            PROCmenutext(11,"KYBRD FONTS  ",SX%+20,menuYadd%,10,(C%=13)*-4,-48)
-            PROCmenutext(12,"HELP         ",SX%+20,menuYadd%,10,(C%=16)*-4,-48)
+            PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
+            PROCmenutext(6,"SPRITES      ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(7,"MOVIE MODE   ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(8,"EDIT.TF      ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(9,"ZXNET        ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(10,"SAVE LINK    ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(11,"KYBRD FONTS  ",SX%+20,menuYadd%,10,0,-48)
+            PROCmenutext(12,"HELP         ",SX%+20,menuYadd%,10,0,-48)
           ENDIF
 
-        WHEN 5 : REM sprite / frame select
-          IF menufrom%=M_moviemode% THEN
-            PROCgtext("I",SX%+256,996,10,0)
-          ELSE
-            PROCgtext("I",SX%+160,996,10,0)
+          REM redraw dynamic values
+          menuYadd%=716
+          PROCgtext(CHR$(78+11*gridshow%),SX%+404,menuYadd%,9+gridshow%,0,-48)
+          PROCgtext(CHR$(78+11*colmode%),SX%+404,menuYadd%,9+colmode%,0,0)
+
+
+        WHEN 5 : REM insert sprite, ani, frame, text layout
+          IF redraw%=-1 THEN
+            IF menufrom%=M_moviemode% THEN
+              PROCgtext("I",SX%+256,menuYadd%,10,0,-64)
+            ELSE
+              PROCgtext("I",SX%+160,menuYadd%,10,0,-64)
+            ENDIF
           ENDIF
 
+          REM insert menu has standard controls 0,1,2,3 = tab selector, 4 = main panel selector, 5 = scrollbar
           menuXadd%=SX%+16
-          menuYadd%-=24
+          menuYadd%=908
           PROCmenucontrol(0,"SPR",menuXadd%,menuYadd%,12,(insertmode%=0)*2+8,4)
           PROCmenucontrol(1,"ANI",SX%+128,menuYadd%,12,(insertmode%=1)*2+8,4)
           PROCmenucontrol(2,"FRM",SX%+240,menuYadd%,12,(insertmode%=2)*2+8,4)
           PROCmenucontrol(3,"TXT",SX%+352,menuYadd%,12,(insertmode%=3)*2+8,4)
 
-          REM sprites / frame layout
-          IF C%=-1 THEN
+          GCOL 0,0
+          RECTANGLE FILL SX%+16,menuYadd%-824,450,784
+
+          REM full redraw section
+          IF redraw%=-1 THEN
             CASE insertmode% OF
               WHEN 0,1 : REM spr / ani insert
+                REM sprite selector
+                PROCaddcontrange(4,SX%+18,menuYadd%-712,SX%+400,menuYadd%-46)
 
-                REM sprites layout
+                REM scrolLbar
+                PROCdrawscrollbar(5,SX%+412,menuYadd%-712,52,668,7)
+
+                REM draw sprites
+                menuYadd%-=160
+                FOR Y%=0 TO 5
+                  FOR X%=0 TO 3
+                    CASE insertmode% OF
+                      WHEN 0
+                        S%=objsprscroll%*4+X%+Y%*4
+                      WHEN 1
+                        S%=sprani{(objaniscroll%*4+X%+Y%*4)}.s%(0)
+                    ENDCASE
+
+                    DX%=SX%+X%*96+12
+                    DY%=menuYadd%-Y%*112
+                    PROCdrawsprbitmap(S%,DX%+12,DY%+16)
+
+                    GCOL 0,8
+                    RECTANGLE DX%+8,DY%+8,90,106
+                  NEXT
+                NEXT
+
+              WHEN 2 : REM frame insert
+                REM frame selector
+                PROCaddcontrange(4,SX%+18,menuYadd%-726,SX%+394,menuYadd%-46)
+
+                REM scrolLbar
+                PROCdrawscrollbar(5,SX%+412,menuYadd%-726,52,682,7)
+
+                REM draw frames
+                menuYadd%-=218
+                FOR Y%=0 TO 3
+                  FOR X%=0 TO 1
+                    S%=objfrmscroll%*2+X%+Y%*2
+                    DX%=SX%+X%*192+12
+                    DY%=menuYadd%-Y%*172
+                    PROCdrawframetomenu(S%,DX%+12,DY%+12)
+                    GCOL 0,8
+                    RECTANGLE DX%+8,DY%+8,180,164
+                  NEXT
+                NEXT
+
+              WHEN 3 : REM text insert
+                REM text selector
+                PROCaddcontrange(4,SX%+18,menuYadd%-726,SX%+394,menuYadd%-46)
+
+                REM scrolLbar
+                PROCdrawscrollbar(5,SX%+412,menuYadd%-726,52,682,7)
+
+                REM col selector
+                PROCaddcontrange(6,SX%+16,menuYadd%-792,SX%+352,menuYadd%-740)
+                FOR I%=0 TO 6
+                  GCOL 0,I%+9
+                  RECTANGLE FILL SX%+24+I%*48,menuYadd%-786,32,40
+                NEXT
+                RECTANGLE SX%+20+inserttextcol%*48,menuYadd%-790,40,48
+
+                REM text strings
+                menuYadd%-=52
+                IF obj_txtcur%>-1 THEN
+                  FOR Y%=0 TO 16
+                    IF Y%+objtxtscroll%<=obj_txtcur% PROCgtext(LEFT$(txtlist$(Y%+objtxtscroll%),12),SX%+18,menuYadd%,10,0,-40)
+                  NEXT
+                ENDIF
+
+            ENDCASE
+          ENDIF
+
+        WHEN 6 : REM object properties
+          PROCgtext("O",SX%+192,menuYadd%,10,0,-64)
+          IF obj_lstcount%>-1 THEN
+            COL%=10
+            CASE objlist{(obj_lstcur%)}.type% OF
+              WHEN 1 : REM sprite
+                T$="SPR:"
+              WHEN 2 : REM frame
+                T$="FRM:"
+                COL%=8
+              WHEN 3 : REM text
+                T$="TXT:"
+            ENDCASE
+
+            F$="ALL"
+            IF objlist{(obj_lstcur%)}.f%>-1 F$=STR$(objlist{(obj_lstcur%)}.f%+1)
+
+            PROCgtext(" "+RIGHT$("000"+STR$(obj_lstcur%+1),4)+" ",SX%+20,menuYadd%,10,8,-56)
+            PROCgtext(T$,SX%+20,menuYadd%,14,0,0)
+            PROCgtext(RIGHT$("    "+STR$(objlist{(obj_lstcur%)}.obj%+1),5),SX%+162,menuYadd%,11,8,-48)
+            IF spritechange%=-1 THEN
+              PROCgtext(RIGHT$("     "+STR$(objlist{(obj_lstcur%)}.x%),6),SX%+130,menuYadd%,11,8,-48)
+              PROCgtext(RIGHT$("     "+STR$(objlist{(obj_lstcur%)}.y%),6),SX%+130,menuYadd%,11,8,-48)
+              PROCgtext(RIGHT$("     "+F$,6),SX%+130,menuYadd%,11,8,-48)
+              PROCgtext(RIGHT$("     "+STR$(objlist{(obj_lstcur%)}.parent%),6),SX%+130,menuYadd%,11,8,-144)
+              IF objlist{(obj_lstcur%)}.f%>-1 THEN
+                PROCgtext(RIGHT$("  "+STR$(objlist{(obj_lstcur%)}.rep%),3),SX%+148,menuYadd%,11,4,-48)
+                PROCgtext(RIGHT$("  "+STR$(objlist{(obj_lstcur%)}.hop%),3),SX%+148,menuYadd%,11,4,-96)
+                PROCgtext(RIGHT$("  "+STR$(objlist{(obj_lstcur%)}.h%),3),SX%+82,menuYadd%,11,4,-48)
+                PROCgtext(RIGHT$("  "+STR$(objlist{(obj_lstcur%)}.v%),3),SX%+82,menuYadd%,11,4,0)
+              ELSE
+                GCOL 0,0
+                RECTANGLE FILL SX%+20,menuYadd%-286,SW%-40,340
+              ENDIF
+            ENDIF
+
+            IF redraw%=-1 THEN
+              menuYadd%=924
+
+              PROCmenutext(3,"REMOVE",SX%+232,116,14,4,0)
+
+              REM              PROCgtext("@",SX%+20,menuYadd%,14,0)
+              PROCmenutext(0," < ",SX%+244,menuYadd%,14,4,0)
+              PROCmenutext(1," > ",SX%+342,menuYadd%,14,4,-96)
+              PROCaddcontrange(2,SX%+162,menuYadd%+12,SX%+320,menuYadd%+52)
+
+              IF spritechange%=-1 THEN
+                GCOL 0,0
+                RECTANGLE FILL SX%+16,menuYadd%-680,450,688
+
+                PROCgtext("WX:",SX%+20,menuYadd%,14,0,-48)
+                PROCdrawarrow(0,SX%+376,menuYadd%-20,COL%)
+                PROCdrawarrow(1,SX%+376,menuYadd%+20,COL%)
+                PROCdrawarrow(2,SX%+400,menuYadd%,COL%)
+                PROCdrawarrow(3,SX%+352,menuYadd%,COL%)
+                PROCaddcontrange(4,SX%+346,menuYadd%-32,SX%+432,menuYadd%+48)
+                PROCgtext("WY:",SX%+20,menuYadd%,14,0,-48)
+                PROCaddcontrange(5,SX%+130,menuYadd%-36,SX%+320,menuYadd%+4)
+                PROCgtext("FS:",SX%+20,menuYadd%,14,0,-48)
+                PROCgtext("PA:",SX%+20,menuYadd%,14,0,-96)
+
+                IF objlist{(obj_lstcur%)}.f%>-1 THEN
+                  F$=" DUPE "
+                  COL%=14
+                  IF objlist{(obj_lstcur%)}.u%=1 THEN
+                    F$="DEDUPE"
+                    COL%=11
+                  ENDIF
+                  PROCmenutext(6,F$,SX%+20,menuYadd%,COL%,4,0)
+                  PROCmenutext(15,"INIT",SX%+332,menuYadd%,1,3,-48)
+                  PROCgtext("REP:",SX%+20,menuYadd%,14,0,0)
+                  PROCmenutext(7,"-",SX%+274,menuYadd%,14,4,0)
+                  PROCmenutext(8,"+",SX%+338,menuYadd%,14,4,-48)
+
+                  PROCgtext("HOP:",SX%+20,menuYadd%,14,0,0)
+                  PROCmenutext(9,"-",SX%+274,menuYadd%,14,4,0)
+                  PROCmenutext(10,"+",SX%+338,menuYadd%,14,4,-48)
+
+                  PROCgtext("RELATIVE",SX%+20,menuYadd%,11,0,-48)
+                  PROCgtext("H:",SX%+20,menuYadd%,14,0,0)
+                  PROCmenutext(11,"-",SX%+208,menuYadd%,14,4,0)
+                  PROCmenutext(12,"+",SX%+272,menuYadd%,14,4,-48)
+
+                  PROCgtext("V:",SX%+20,menuYadd%,14,0,0)
+                  PROCmenutext(13,"-",SX%+208,menuYadd%,14,4,0)
+                  PROCmenutext(14,"+",SX%+272,menuYadd%,14,4,0)
+
+                ELSE
+                  REM PROCmenutext(4,"      ",SX%+20,menuYadd%-288,7,8,0)
+                ENDIF
+                GCOL 0,0
+                RECTANGLE FILL SX%+24,80,180,164
+
+                IF objlist{(obj_lstcur%)}.type%=1 THEN
+
+                  PROCdrawsprbitmap(objlist{(obj_lstcur%)}.obj%,SX%+28,84)
+                  GCOL 0,8
+                  RECTANGLE SX%+24,80,90,106
+                  REM SY%-204
+
+                ELSE
+                  PROCdrawframetomenu(objlist{(obj_lstcur%)}.obj%,SX%+28,84)
+                  GCOL 0,8
+                  RECTANGLE SX%+24,80,180,164
+
+                ENDIF
+
+              ELSE
+                REM sprites select layout
+                menuYadd%+=48
                 GCOL 0,0
                 RECTANGLE FILL SX%+16,menuYadd%-728,450,688
 
@@ -3769,12 +3969,7 @@
 
                 FOR Y%=0 TO 5
                   FOR X%=0 TO 3
-                    CASE insertmode% OF
-                      WHEN 0
-                        S%=objsprscroll%*4+X%+Y%*4
-                      WHEN 1
-                        S%=sprlist{(objsprscroll%*4+X%+Y%*4)}.s%(0)
-                    ENDCASE
+                    S%=objsprscroll%*4+X%+Y%*4
 
                     DX%=SX%+X%*96+12
                     DY%=menuYadd%-Y%*112
@@ -3785,182 +3980,30 @@
                   NEXT
                 NEXT
 
-              WHEN 2 : REM frame insert
-
-                REM frames layout
-                GCOL 0,0
-                RECTANGLE FILL SX%+16,menuYadd%-728,450,688
-
-                menuYadd%-=218
-                PROCaddcontrange(4,SX%+18,menuYadd%-508,SX%+394,menuYadd%+174)
-
-                PROCaddcontrange(4,SX%+412,menuYadd%-508,SX%+464,menuYadd%+174)
-                GCOL 0,7
-                RECTANGLE SX%+412,menuYadd%-508,52,682
-                LINE SX%+412,menuYadd%-444,SX%+464,menuYadd%-444
-                LINE SX%+412,menuYadd%+110,SX%+464,menuYadd%+110
-                PROCdrawarrow(0,SX%+428,menuYadd%-484,2)
-                PROCdrawarrow(1,SX%+428,menuYadd%+130,2)
-
-
-                FOR Y%=0 TO 3
-                  FOR X%=0 TO 1
-                    S%=objfrmscroll%*2+X%+Y%*2
-                    DX%=SX%+X%*192+12
-                    DY%=menuYadd%-Y%*172
-                    PROCdrawframetomenu(S%,DX%+12,DY%+12)
-                    GCOL 0,8
-                    RECTANGLE DX%+8,DY%+8,180,164
-                  NEXT
-                NEXT
-
-              WHEN 3 : REM text insert
-                GCOL 0,0
-                RECTANGLE FILL SX%+16,menuYadd%-728,450,688
-
-                menuYadd%-=218
-                PROCaddcontrange(4,SX%+18,menuYadd%-508,SX%+394,menuYadd%+174)
-
-                PROCaddcontrange(5,SX%+412,menuYadd%-508,SX%+464,menuYadd%+174)
-                GCOL 0,7
-                RECTANGLE SX%+412,menuYadd%-508,52,682
-                LINE SX%+412,menuYadd%-444,SX%+464,menuYadd%-444
-                LINE SX%+412,menuYadd%+110,SX%+464,menuYadd%+110
-                PROCdrawarrow(0,SX%+428,menuYadd%-484,2)
-                PROCdrawarrow(1,SX%+428,menuYadd%+130,2)
-
-                menuYadd%+=166
-
-                FOR Y%=0 TO 16
-                  IF Y%+objfrmscroll%<=obj_txtcur% PROCgtext(LEFT$(txtlist$(Y%+objfrmscroll%),12),SX%+18,menuYadd%-Y%*40,10,0)
-                NEXT
-
-            ENDCASE
-          ENDIF
-
-        WHEN 6 : REM object properties
-          PROCgtext("O",SX%+192,996,10,0)
-          IF obj_lstcount%>-1 THEN
-            COL%=10
-            CASE objlist{(obj_lstcur%)}.type% OF
-              WHEN 1 : REM sprite
-                T$="SPR:"
-              WHEN 2 : REM frame
-                T$="FRM:"
-                COL%=8
-              WHEN 3 : REM text
-                T$="TXT:"
-            ENDCASE
-
-            F$="ALL"
-            IF objlist{(obj_lstcur%)}.f%>-1 F$=STR$(objlist{(obj_lstcur%)}.f%+1)
-
-            PROCgtext(" "+RIGHT$("000"+STR$(obj_lstcur%+1),4)+" ",SX%+20,menuYadd%,10,8)
-            PROCgtext(T$,SX%+20,menuYadd%-48,14,0)
-            PROCgtext(RIGHT$("    "+STR$(objlist{(obj_lstcur%)}.obj%+1),5),SX%+162,menuYadd%-48,11,8)
-            PROCgtext(RIGHT$("     "+STR$(objlist{(obj_lstcur%)}.x%),6),SX%+130,menuYadd%-96,11,8)
-            PROCgtext(RIGHT$("     "+STR$(objlist{(obj_lstcur%)}.y%),6),SX%+130,menuYadd%-144,11,8)
-            PROCgtext(RIGHT$("     "+F$,6),SX%+130,menuYadd%-192,11,8)
-            PROCgtext(RIGHT$("     "+STR$(objlist{(obj_lstcur%)}.parent%),6),SX%+130,menuYadd%-240,11,8)
-            IF objlist{(obj_lstcur%)}.f%>-1 THEN
-              PROCgtext(RIGHT$("  "+STR$(objlist{(obj_lstcur%)}.rep%),3),SX%+148,menuYadd%-384,11,4)
-              PROCgtext(RIGHT$("  "+STR$(objlist{(obj_lstcur%)}.hop%),3),SX%+148,menuYadd%-432,11,4)
-
-              PROCgtext(RIGHT$("  "+STR$(objlist{(obj_lstcur%)}.h%),3),SX%+82,menuYadd%-528,11,4)
-              PROCgtext(RIGHT$("  "+STR$(objlist{(obj_lstcur%)}.v%),3),SX%+82,menuYadd%-576,11,4)
-
-            ELSE
-              GCOL 0,0
-              RECTANGLE FILL SX%+20,menuYadd%-670,SW%-40,340
-            ENDIF
-
-            IF C%=-1 THEN
-              REM arrows
-
-              PROCdrawarrow(0,SX%+376,menuYadd%-116,COL%)
-              PROCdrawarrow(1,SX%+376,menuYadd%-76,COL%)
-              PROCdrawarrow(2,SX%+400,menuYadd%-96,COL%)
-              PROCdrawarrow(3,SX%+352,menuYadd%-96,COL%)
-              PROCaddcontrange(2,SX%+346,menuYadd%-128,SX%+432,menuYadd%-48)
-
-              REM              PROCgtext("@",SX%+20,menuYadd%,14,0)
-              PROCmenutext(0," < ",SX%+244,menuYadd%,14,4,0)
-              PROCmenutext(1," > ",SX%+342,menuYadd%,14,4,0)
-              PROCgtext("WX:",SX%+20,menuYadd%-96,14,0)
-              PROCgtext("WY:",SX%+20,menuYadd%-144,14,0)
-              PROCgtext("FS:",SX%+20,menuYadd%-192,14,0)
-              PROCaddcontrange(4,SX%+130,menuYadd%-244,SX%+320,menuYadd%-186)
-              PROCgtext("PA:",SX%+20,menuYadd%-240,14,0)
-
-              IF objlist{(obj_lstcur%)}.f%>-1 THEN
-                F$=" DUPE "
-                COL%=14
-                IF objlist{(obj_lstcur%)}.u%=1 THEN
-                  F$="DEDUPE"
-                  COL%=11
-                ENDIF
-                PROCmenutext(5,F$,SX%+20,menuYadd%-336,COL%,4,0)
-                PROCmenutext(14,"INIT",SX%+332,menuYadd%-336,1,3,0)
-                PROCgtext("REP:",SX%+20,menuYadd%-384,14,0)
-                PROCmenutext(6,"-",SX%+274,menuYadd%-384,14,4,0)
-                PROCmenutext(7,"+",SX%+338,menuYadd%-384,14,4,0)
-
-                PROCgtext("HOP:",SX%+20,menuYadd%-432,14,0)
-                PROCmenutext(8,"-",SX%+274,menuYadd%-432,14,4,0)
-                PROCmenutext(9,"+",SX%+338,menuYadd%-432,14,4,0)
-
-                PROCgtext("RELATIVE",SX%+20,menuYadd%-480,11,0)
-                PROCgtext("H:",SX%+20,menuYadd%-528,14,0)
-                PROCmenutext(10,"-",SX%+208,menuYadd%-528,14,4,0)
-                PROCmenutext(11,"+",SX%+272,menuYadd%-528,14,4,0)
-
-                PROCgtext("V:",SX%+20,menuYadd%-576,14,0)
-                PROCmenutext(12,"-",SX%+208,menuYadd%-576,14,4,0)
-                PROCmenutext(13,"+",SX%+272,menuYadd%-576,14,4,0)
-
-              ELSE
-                REM PROCmenutext(4,"      ",SX%+20,menuYadd%-288,7,8,0)
               ENDIF
 
-              PROCmenutext(3,"REMOVE",SX%+232,116,14,4,0)
             ENDIF
 
-            GCOL 0,0
-            RECTANGLE FILL SX%+24,80,180,164
-
-            IF objlist{(obj_lstcur%)}.type%=1 THEN
-
-              PROCdrawsprbitmap(objlist{(obj_lstcur%)}.obj%,SX%+28,84)
-              GCOL 0,8
-              RECTANGLE SX%+24,80,90,106
-              REM SY%-204
-
-            ELSE
-              PROCdrawframetomenu(objlist{(obj_lstcur%)}.obj%,SX%+28,84)
-              GCOL 0,8
-              RECTANGLE SX%+24,80,180,164
-
-            ENDIF
 
           ELSE
-            PROCgtext("No Objects",SX%+20,menuYadd%,9,0)
+            PROCgtext("No Objects",SX%+20,menuYadd%,9,0,0)
           ENDIF
 
         WHEN 7 : REM frame properties
           F$=RIGHT$("000"+STR$(movieframe%+1),4)
           IF movieframe%=-1 F$="----"
           F$="F:"+F$
-          PROCgtext(F$,32,996,10,0)
+          PROCgtext(F$,32,menuYadd%,10,0,0)
 
           REM colour selector
           IF movieframe%>-1 THEN
             GCOL 0,0
             RECTANGLE FILL SX%+872,SY%+128,384,40
             RECTANGLE FILL SX%+872,SY%+72,348,40
-            PROCgtext("FORE",SX%+704,SY%+160,15,0)
-            PROCgtext("F",SX%+874+frmlist{(movieframe%)}.f%*48,SY%+160,frmlist{(movieframe%)}.f%+8,0)
-            PROCgtext("BACK",SX%+704,SY%+104,15,0)
-            PROCgtext("B",SX%+874+frmlist{(movieframe%)}.b%*48,SY%+104,frmlist{(movieframe%)}.b%+8,0)
+            PROCgtext("FORE",SX%+704,SY%+160,15,0,0)
+            PROCgtext("F",SX%+874+frmlist{(movieframe%)}.f%*48,SY%+160,frmlist{(movieframe%)}.f%+8,0,0)
+            PROCgtext("BACK",SX%+704,SY%+104,15,0,0)
+            PROCgtext("B",SX%+874+frmlist{(movieframe%)}.b%*48,SY%+104,frmlist{(movieframe%)}.b%+8,0,0)
             FOR I%=0 TO 7
               GCOL 0,I%-8*(I%<>0)
               IF I%<>frmlist{(movieframe%)}.f% RECTANGLE FILL SX%+872+I%*48,SY%+128,32,40
@@ -3985,7 +4028,7 @@
           REM add frames controls
           menuadd%=32
           PROCanimcontrol(2,"ADD",menuadd%,160,7,14,4)
-          PROCgtext(RIGHT$("000"+STR$(movieframeadd%),3),menuadd%,160,15,4)
+          PROCgtext(RIGHT$("000"+STR$(movieframeadd%),3),menuadd%,160,15,4,0)
           menuadd%+=128
           PROCanimcontrol(3,"<<",menuadd%,160,8,14,0)
           PROCanimcontrol(4,"<",menuadd%,160,8,14,0)
@@ -3993,11 +4036,11 @@
           PROCanimcontrol(6,">>",menuadd%,160,8,14,0)
 
           REM add frame increments
-          PROCgtext("H:",80,112,15,0)
-          PROCgtext("V:",80,64,15,0)
+          PROCgtext("H:",80,112,15,0,0)
+          PROCgtext("V:",80,64,15,0,0)
 
-          PROCgtext(RIGHT$("  "+STR$(movieframeaddh%),3),164,112,11,0)
-          PROCgtext(RIGHT$("  "+STR$(movieframeaddv%),3),164,64,11,0)
+          PROCgtext(RIGHT$("  "+STR$(movieframeaddh%),3),164,112,11,0,0)
+          PROCgtext(RIGHT$("  "+STR$(movieframeaddv%),3),164,64,11,0,0)
 
           REM H,V
           menuadd%=292
@@ -4012,15 +4055,14 @@
           PROCanimcontrol(14,">>",menuadd%,64,8,14,0)
 
         WHEN 8 : REM movie mode menu
-          PROCgtext("M",SX%+128,996,10,0)
+          PROCgtext("M",SX%+128,menuYadd%,10,0,-64)
 
           PROCmenutext(0,"LOAD MOVIE   ",SX%+20,menuYadd%,14,0,-48)
           PROCmenutext(1,"SAVE MOVIE   ",SX%+20,menuYadd%,14,0,-96)
           PROCmenutext(2,"RESET OBJECTS",SX%+20,menuYadd%,11,0,-48)
           PROCmenutext(3,"RESET FRAMES ",SX%+20,menuYadd%,11,0,-48)
           PROCmenutext(4,"RESET MOVIE  ",SX%+20,menuYadd%,11,0,-48)
-          PROCmenutext(5,"HELP SCREEN  ",SX%+20,menuYadd%-480,11,0,-48)
-
+          PROCmenutext(5,"HELP SCREEN  ",SX%+20,116,11,0,0)
 
       ENDCASE
 
@@ -4220,13 +4262,13 @@
                     done%=1
 
                   WHEN 1 : REM spr set insert
-                    SP%=objsprscroll%*4+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*4
-                    IF sprlist{(SP%)}.s%(0)>-1 THEN
+                    SP%=objaniscroll%*4+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*4
+                    IF sprani{(SP%)}.s%(0)>-1 THEN
                       insertrepeat%=1
                       insertset%=SP%
                       insertani%=0
                       insertphase%=0
-                      spritemoving%=sprlist{(SP%)}.s%(0)
+                      spritemoving%=sprani{(SP%)}.s%(0)
                       done%=1
                     ENDIF
 
@@ -4255,6 +4297,7 @@
                     ENDIF
 
                   WHEN 3 : REM txt insert
+                    inserttextcol%=6
 
                 ENDCASE
 
@@ -4281,11 +4324,11 @@
                     IF SP%>L%-2 AND SP%<SY%-64 THEN NS%=6
                     IF SP%>SY%-62 THEN NS%=1
 
-                    OS%=objsprscroll%
-                    objsprscroll%+=NS%
-                    IF objsprscroll%<0 THEN objsprscroll%=0
-                    IF objsprscroll%>19 THEN objsprscroll%=19
-                    IF OS%<>objsprscroll% PROCsubupdate(-1)
+                    OS%=objaniscroll%
+                    objaniscroll%+=NS%
+                    IF objaniscroll%<0 THEN objaniscroll%=0
+                    IF objaniscroll%>19 THEN objaniscroll%=19
+                    IF OS%<>objaniscroll% PROCsubupdate(-1)
 
                   WHEN 2 : REM frm select
                     IF SP%<64 THEN NS%=-1
@@ -4305,13 +4348,22 @@
                     IF SP%>L%-2 AND SP%<SY%-64 THEN NS%=17
                     IF SP%>SY%-62 THEN NS%=1
 
-                    OS%=objfrmscroll%
-                    objfrmscroll%+=NS%
-                    IF objfrmscroll%<0 THEN objfrmscroll%=0
-                    IF objfrmscroll%>(obj_txtcur%-16) THEN objfrmscroll%=obj_txtcur%-16
-                    IF OS%<>objfrmscroll% PROCsubupdate(-1)
+                    OS%=objtxtscroll%
+                    objtxtscroll%+=NS%
+                    IF objtxtscroll%>(obj_txtcur%-16) objtxtscroll%=obj_txtcur%-16
+                    IF objtxtscroll%<0 THEN objtxtscroll%=0
+                    IF OS%<>objtxtscroll% PROCsubupdate(-1)
 
                 ENDCASE
+
+              WHEN 6 : REM text colour selector
+                SP%=(MX%-controlrange{(C%)}.x1%) DIV 48
+                IF SP%<0 SP%=0
+                IF SP%>6 SP%=6
+                IF SP%<>inserttextcol% THEN
+                  inserttextcol%=SP%
+                  PROCsubupdate(-1)
+                ENDIF
 
               OTHERWISE
                 REM done%=1
@@ -4332,12 +4384,9 @@
                 ELSE
                   obj_lstcur%=0
                 ENDIF
-              WHEN 2 : REM move sprite
-                IF objlist{(obj_lstcur%)}.type%=1 THEN
-                  spritemoving%=objlist{(obj_lstcur%)}.obj%
-                  spriterelocate%=1
-                  done%=1
-                ENDIF
+              WHEN 2 : REM change sprite
+                spritechange%=1
+
               WHEN 3 : REM remove object from list
                 PROCremoveobj(obj_lstcur%)
                 IF obj_lstcur%>0 obj_lstcur%-=1
@@ -4345,44 +4394,77 @@
                 spriteselectold%=-1
                 done%=1
 
-              WHEN 4 : REM change frame index
-                SY%=932
-                SX%=controlrange{(C%)}.x1%
-                F%=0
-                F$="ALL"
-                IF objlist{(obj_lstcur%)}.f%>-1 F$=STR$(objlist{(obj_lstcur%)}.f%+1)
-                PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-192,15,0)
-                OS%=LEN(F$)*32
-                REPEAT
-                  K%=INKEY(0)
-                  IF K%=-1 THEN
-                    WAIT 10
-                    F%=1-F%
-                    IF F%=1 OS%=LEN(F$)*32
-                    GCOL 0,F%*15
-                    LINE SX%+160-OS%,SY%-228,SX%+192-OS%,SY%-228
-                  ELSE
-                    REM check for numbers 0 to 9 and update string value ALL=0 all other values are numeric
-                    IF K%>47 AND K%<58 THEN
-                      IF F$="ALL" THEN
-                        IF K%<>48 F$=CHR$(K%)
-                      ELSE
-                        IF LEN(F$)<4 F$=F$+CHR$(K%)
-                      ENDIF
-                    ENDIF
-                    REM check if delete or backspace is pressed
-                    IF K%=135 OR K%=8 THEN
-                      IF VAL(F$)>0 F$=LEFT$(F$,LEN(F$)-1)
-                      IF VAL(F$)=0 F$="ALL"
-                    ENDIF
-                    PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-192,15,0)
+              WHEN 4 : REM move sprite
+                IF spritechange%=-1 THEN
+                  IF objlist{(obj_lstcur%)}.type%=1 THEN
+                    spritemoving%=objlist{(obj_lstcur%)}.obj%
+                    spriterelocate%=1
+                    done%=1
                   ENDIF
-                UNTIL K%=13 OR K%=27
-                IF K%=13 objlist{(obj_lstcur%)}.f%=VAL(F$)-1
-                GCOL 0,0
-                LINE SX%+160-OS%,SY%-228,SX%+192-OS%,SY%-228
+                ELSE
+                  REM select new sprite
+                  SP%=objsprscroll%*4+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*4
+                  objlist{(obj_lstcur%)}.obj%=SP%
+                  spritechange%=-1
+                  PROCsubupdate(-1)
+                ENDIF
 
-              WHEN 5 : REM duplicate button
+              WHEN 5 : REM change frame index
+                IF spritechange%=-1 THEN
+                  SY%=932
+                  SX%=controlrange{(C%)}.x1%
+                  F%=0
+                  F$="ALL"
+                  IF objlist{(obj_lstcur%)}.f%>-1 F$=STR$(objlist{(obj_lstcur%)}.f%+1)
+                  PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-192,15,0,0)
+                  OS%=LEN(F$)*32
+                  REPEAT
+                    K%=INKEY(0)
+                    IF K%=-1 THEN
+                      WAIT 10
+                      F%=1-F%
+                      IF F%=1 OS%=LEN(F$)*32
+                      GCOL 0,F%*15
+                      LINE SX%+160-OS%,SY%-228,SX%+192-OS%,SY%-228
+                    ELSE
+                      REM check for numbers 0 to 9 and update string value ALL=0 all other values are numeric
+                      IF K%>47 AND K%<58 THEN
+                        IF F$="ALL" THEN
+                          IF K%<>48 F$=CHR$(K%)
+                        ELSE
+                          IF LEN(F$)<4 F$=F$+CHR$(K%)
+                        ENDIF
+                      ENDIF
+                      REM check if delete or backspace is pressed
+                      IF K%=135 OR K%=8 THEN
+                        IF VAL(F$)>0 F$=LEFT$(F$,LEN(F$)-1)
+                        IF VAL(F$)=0 F$="ALL"
+                      ENDIF
+                      PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-192,15,0,0)
+                    ENDIF
+                  UNTIL K%=13 OR K%=27
+                  IF K%=13 objlist{(obj_lstcur%)}.f%=VAL(F$)-1
+                  GCOL 0,0
+                  LINE SX%+160-OS%,SY%-228,SX%+192-OS%,SY%-228
+                ELSE
+                  REM select sprite scrolling
+                  SP%=controlrange{(C%)}.y2%-MY%
+                  SY%=controlrange{(C%)}.y2%-controlrange{(C%)}.y1%
+                  L%=SY% / 2
+
+                  IF SP%<64 THEN NS%=-1
+                  IF SP%>62 AND SP%<L% THEN NS%=-6
+                  IF SP%>L%-2 AND SP%<SY%-64 THEN NS%=6
+                  IF SP%>SY%-62 THEN NS%=1
+
+                  OS%=objsprscroll%
+                  objsprscroll%+=NS%
+                  IF objsprscroll%<0 THEN objsprscroll%=0
+                  IF objsprscroll%>19 THEN objsprscroll%=19
+                  REM IF OS%<>objsprscroll% PROCsubupdate(-1)
+                ENDIF
+
+              WHEN 6 : REM duplicate button
                 REM remove duplicates for this object
                 IF objlist{(obj_lstcur%)}.u%=1 THEN
                   objlist{(obj_lstcur%)}.u%=0
@@ -4415,31 +4497,31 @@
                     REM VDU 7 ???
                   ENDIF
                 ENDIF
-              WHEN 6 : REM rep dec
+              WHEN 7 : REM rep dec
                 IF objlist{(obj_lstcur%)}.rep%>0 THEN objlist{(obj_lstcur%)}.rep%-=1
 
-              WHEN 7 : REM rep inc
+              WHEN 8 : REM rep inc
                 IF objlist{(obj_lstcur%)}.rep%<100 THEN objlist{(obj_lstcur%)}.rep%+=1
 
-              WHEN 8 : REM hop dec
+              WHEN 9 : REM hop dec
                 IF objlist{(obj_lstcur%)}.hop%>1 THEN objlist{(obj_lstcur%)}.hop%-=1
 
-              WHEN 9 : REM hop inc
+              WHEN 10 : REM hop inc
                 IF objlist{(obj_lstcur%)}.hop%<100 THEN objlist{(obj_lstcur%)}.hop%+=1
 
-              WHEN 10 : REM h dec
+              WHEN 11 : REM h dec
                 IF objlist{(obj_lstcur%)}.h%>-100 THEN objlist{(obj_lstcur%)}.h%-=1
 
-              WHEN 11 : REM h inc
+              WHEN 12 : REM h inc
                 IF objlist{(obj_lstcur%)}.h%<100 THEN objlist{(obj_lstcur%)}.h%+=1
 
-              WHEN 12 : REM v dev
+              WHEN 13 : REM v dev
                 IF objlist{(obj_lstcur%)}.v%>-100 THEN objlist{(obj_lstcur%)}.v%-=1
 
-              WHEN 13 : REM v inc
+              WHEN 14 : REM v inc
                 IF objlist{(obj_lstcur%)}.v%<100 THEN objlist{(obj_lstcur%)}.v%+=1
 
-              WHEN 14 : REM reset values
+              WHEN 15 : REM reset values
                 objlist{(obj_lstcur%)}.rep%=0
                 objlist{(obj_lstcur%)}.hop%=1
                 objlist{(obj_lstcur%)}.h%=0
@@ -4447,7 +4529,7 @@
 
 
             ENDCASE
-            IF (C%>-1 AND C%<2) OR C%>3 THEN PROCsubupdate(-1)
+            IF (C%>-1 AND C%<3) OR C%>4 THEN PROCsubupdate(-1)
 
           WHEN 7 : REM frm properties
             CASE C% OF
@@ -4733,6 +4815,7 @@
 
           WHEN 4 : REM special
             CASE C% OF
+
               WHEN 6 : REM sprites screen
                 menuext%=M_sprites%
                 menufrom%=M_sprites%
@@ -4922,15 +5005,18 @@
 
       GCOL m%,c%
 
-      SX%=px%-sprsize{(spritemoving%)}.w%
-      SY%=py%-(sprsize{(spritemoving%)}.h%*3 DIV 2)
-
+      SX%=px%-sprlist{(spritemoving%)}.w%
+      SY%=py%-(sprlist{(spritemoving%)}.h%*3 DIV 2)
+      IF sprlist{(spritemoving%)}.m%=1 THEN
+        SX%=(SX% DIV 2)*2
+        SY%=(SY% DIV 3)*3
+      ENDIF
       FOR Y%=0 TO 47
-        IF Y% DIV 3<sprsize{(spritemoving%)}.h% THEN
+        IF Y% DIV 3<sprlist{(spritemoving%)}.h% THEN
           YC%=SY%+Y%
           IF YC%>=0 AND YC%<75 THEN
             FOR X%=0 TO 39
-              IF X% DIV 2<sprsize{(spritemoving%)}.w% THEN
+              IF X% DIV 2<sprlist{(spritemoving%)}.w% THEN
                 XC%=(SX%+X%)*16
                 IF XC%>=0 AND XC%<1280 THEN
                   C%=FNpoint_sprbuf(X%,Y%,spritemoving%)
@@ -4944,7 +5030,6 @@
 
       ENDPROC
 
-
       REM ##########################################################
       REM display initial moving sprite
       DEF PROCspritemoveinit
@@ -4956,18 +5041,6 @@
 
       REM restore previous display
       OSCLI "DISPLAY """+@tmp$+"M7_TMP.BMP"" 0,0"
-
-      IF movieframe%>-1 THEN
-        X%=frmlist{(movieframe%)}.x%-mmWX%
-        Y%=frmlist{(movieframe%)}.y%-mmWY%
-
-        IF X%>-80 AND X%<80 AND Y%>-75 AND Y%<75 THEN
-          YC%=ABS(Y% MOD 75)
-
-          GCOL 0,14
-          RECTANGLE X%*16,SGN(Y%)*sixel{(YC%)}.sdly%*2,1278,998
-        ENDIF
-      ENDIF
 
       REM calculate colour and animation frame to display when selecting destination frame
       IF insertrepeat%>0 THEN
@@ -4982,9 +5055,9 @@
             IF X%>0 THEN
               FOR Y%=1 TO X%
                 insertani%=(insertani%+1) MOD 12
-                IF sprlist{(insertset%)}.s%(insertani%)=-1 insertani%=0
+                IF sprani{(insertset%)}.s%(insertani%)=-1 insertani%=0
               NEXT
-              spritemoving%=sprlist{(insertset%)}.s%(insertani%)
+              spritemoving%=sprani{(insertset%)}.s%(insertani%)
             ENDIF
           ENDIF
         ENDIF
@@ -4993,26 +5066,40 @@
         GCOL 0,C%
         CASE insertphase% OF
           WHEN 0
-            MOVE 120,80
+            MOVE 120,40
             PRINT "Select start frame of animation"
           WHEN 1
-            MOVE 136,80
+            MOVE 136,40
             PRINT "Select last frame of animation"
         ENDCASE
         VDU 4
 
-
       ENDIF
 
+      PROCspriteposition
+
+      REM draw movie frame boundary
+      IF menuext%=M_moviemode% AND movieframe%>-1 THEN
+        X%=frmlist{(movieframe%)}.x%-mmWX%
+        Y%=frmlist{(movieframe%)}.y%-mmWY%
+
+        IF X%>-80 AND X%<80 AND Y%>-75 AND Y%<75 THEN
+          YC%=ABS(Y% MOD 75)
+
+          GCOL 0,14
+          RECTANGLE X%*16,SGN(Y%)*sixel{(YC%)}.sdly%*2,1278,998
+        ENDIF
+      ENDIF
 
       REM overlay existing sprite if relocating
       IF spriterelocate%=1 THEN
-        PROCspritedraw(objlist{(obj_lstcur%)}.x%-mmWX%+sprsize{(spritemoving%)}.w%,mmWY%-objlist{(obj_lstcur%)}.y%+(sprsize{(spritemoving%)}.h%*3 DIV 2),0,8)
+        PROCspritedraw(objlist{(obj_lstcur%)}.x%-mmWX%+sprlist{(spritemoving%)}.w%,mmWY%-objlist{(obj_lstcur%)}.y%+(sprlist{(spritemoving%)}.h%*3 DIV 2),0,8)
       ENDIF
 
       REM Draw initial xor dragged sprite if mouse has moved while holding button
       PROCspritedraw(PX%,PY%,3,13)
-
+      OLD_PX%=PX%
+      OLD_PY%=PY%
 
       ENDPROC
 
@@ -5021,6 +5108,7 @@
       DEF PROCspritemove
       REM erase old sprite and redraw in new mouse pos
       PROCspritedraw(OLD_PX%,OLD_PY%,3,13)
+      PROCspriteposition
       PROCspritedraw(PX%,PY%,3,13)
 
       ENDPROC
@@ -5028,24 +5116,48 @@
       REM ##########################################################
       REM update sprite plot position
       DEF PROCspriteposition
-      VDU 5
-      GCOL 0,0
+      LOCAL X%,Y%,ty%,A$,F$
+
+      ty%=994
+
+      X%=PX%-sprlist{(spritemoving%)}.w%
+      Y%=PY%-(sprlist{(spritemoving%)}.h%*3 DIV 2)
+
+      IF menuext%=M_moviemode% THEN
+        X%=mmWX%+X%
+        Y%=mmWY%-Y%
+
+        IF sprlist{(spritemoving%)}.m%=1 THEN
+          X%=(X% DIV 2)*2
+          Y%=(Y% DIV 3)*3
+        ENDIF
+
+        F$=RIGHT$("000"+STR$(movieframe%+1),4)
+        IF movieframe%=-1 F$="----"
+        A$="F:"+F$+" "
+      ELSE
+        F$=RIGHT$("00"+STR$(frame%),3)
+        A$="F:"+F$+" "
+      ENDIF
 
       IF insertrepeat%>0 AND insertphase%=1 THEN
         FS%=objlist{(obj_lstcount%)}.f%
         C%=movieframe%-FS%
-        A$="SX:"+STR$(objlist{(obj_lstcount%)}.x%)+" SY:"+STR$(objlist{(obj_lstcount%)}.y%)
-        A$=A$+"  EX:"+STR$(mmWX%+PX%-sprsize{(spritemoving%)}.w%)+" EY:"+STR$(mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2))
-        RECTANGLE FILL 0,0,1278,40
+
+        A$=A$+"SX:"+STR$(objlist{(obj_lstcount%)}.x%)+" SY:"+STR$(objlist{(obj_lstcount%)}.y%)
+        A$=A$+"  EX:"+STR$(X%)+" EY:"+STR$(Y%)
       ELSE
-        A$="PX:"+STR$(mmWX%+PX%-sprsize{(spritemoving%)}.w%)+" PY:"+STR$(mmWY%-PY%+(sprsize{(spritemoving%)}.h%*3 DIV 2))
-        RECTANGLE FILL 340,0,600,40
+        A$=A$+"PX:"+STR$(X%)+" PY:"+STR$(Y%)
       ENDIF
 
-      A%=LEN(A$) DIV 2
+      GCOL 0,8
+      RECTANGLE FILL 0,ty%-34,1278,40
+
+      A%=LEN(A$)*32 DIV 2
       GCOL 0,10
-      MOVE 638-A%*32-16,40
-      PRINTA$
+      MOVE 638-A%,ty%
+      VDU 5
+      PRINT A$
       VDU 4
 
       ENDPROC
@@ -5082,7 +5194,7 @@
                   ENDIF
                   IF movieframe%>-1 B%=(frmlist{(movieframe%)}.b%<>0)*-6
 
-                  IF X%>mmWX%-sprsize{(SP%)}.w%*2 AND X%<mmWX%+80 AND Y%<mmWY%+sprsize{(SP%)}.h%*3 AND Y%>mmWY%-75 THEN
+                  IF X%>mmWX%-sprlist{(SP%)}.w%*2 AND X%<mmWX%+80 AND Y%<mmWY%+sprlist{(SP%)}.h%*3 AND Y%>mmWY%-75 THEN
                     PROCspritetomovbuf(SP%,X%-mmWX%,mmWY%-Y%,B%)
                   ENDIF
 
@@ -5096,6 +5208,7 @@
             ENDIF
           ENDIF
         NEXT
+
         REM add colour codes
         FOR L%=0 TO obj_lstcount%
           IF objlist{(L%)}.obj%>-1 THEN
@@ -5117,8 +5230,8 @@
                   ENDIF
                   IF movieframe%>-1 B%=(frmlist{(movieframe%)}.b%<>0)*-2
 
-                  IF X%>mmWX%-sprsize{(SP%)}.w%*2 AND X%<mmWX%+80 AND Y%<mmWY%+sprsize{(SP%)}.h%*3 AND Y%>mmWY%-75 THEN
-                    PROCspritecoltomovbuf(SP%,X%-mmWX%,mmWY%-Y%,B%)
+                  IF X%>mmWX%-sprlist{(SP%)}.w%*2 AND X%<mmWX%+80 AND Y%<mmWY%+sprlist{(SP%)}.h%*3 AND Y%>mmWY%-75 THEN
+                    PROCspritecoltomovbuf(SP%,X%-mmWX%,mmWY%-Y%,B%,0)
                   ENDIF
 
                 WHEN 2 : REM frame
@@ -5130,10 +5243,31 @@
           ENDIF
         NEXT
 
+        REM colour clean up and apply
+        FOR Y%=0 TO 23
+          LC%=movie_buffer&(Y%*40)
+          FOR X%=0 TO 38
+            C%=movie_colbuf&(X%+Y%*40)
+            IF C%>32 THEN
+              IF C%=LC% THEN
+                movie_colbuf&(X%+Y%*40)=32
+              ELSE
+                LC%=C%
+              ENDIF
+            ENDIF
+          NEXT
+        NEXT
+        FOR U%=0 TO 959
+          IF movie_colbuf&(U%)>32 movie_buffer&(U%)=movie_colbuf&(U%)
+        NEXT
       ENDIF
 
       PROCframerestore(1)
-      PROCmenudraw
+      IF spritemoving%>-1 THEN
+
+      ELSE
+        PROCmenudraw
+      ENDIF
 
       IF spriteselect%>-1 THEN
         IF spriteselectold%>-1 PROCupdateselection(spriteselectold%,0)
@@ -5143,13 +5277,14 @@
 
       ENDPROC
 
+      REM update sprite selection box
       DEF PROCupdateselection(sp%,c%)
       LOCAL x1%,x2%,y1%,y2%
 
       x1%=objlist{(sp%)}.x%-mmWX%
-      x2%=x1%+sprsize{(objlist{(sp%)}.obj%)}.w%*2
+      x2%=x1%+sprlist{(objlist{(sp%)}.obj%)}.w%*2
       y1%=mmWY%-objlist{(sp%)}.y%
-      y2%=y1%+sprsize{(objlist{(sp%)}.obj%)}.h%*3
+      y2%=y1%+sprlist{(objlist{(sp%)}.obj%)}.h%*3
 
       IF x1%<0 x1%=-1
       IF x1%>80 x1%=81
@@ -5374,7 +5509,7 @@
           PRINTTAB(0,4)"SPC: SAVE FONT   S: SKIP ASC"
           PRINTTAB(0,5)"TAB: AUTO WIDTH  F: FIND CELL"
 
-          PROCgtext(" CLOSE ",768,998,11,9)
+          PROCgtext(" CLOSE ",768,998,11,9,0)
 
           PROCupdatefont(0,0,name$)
           PROCupdatefont(1,fw%,"")
@@ -6149,7 +6284,7 @@
         X%=sx%+U% MOD 20
         Y%=sy%+U% DIV 20
         IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
-          S%=sprite_buffer&(s%,U%)
+          S%=sprbuf&(s%,U%)
           IF spr_trns%=1 THEN
             IF S%<>32 AND S%<>160 THEN frame_buffer&(f%-1,X%+(Y%-1)*40)=S%
           ELSE
@@ -6199,80 +6334,145 @@
       REM ##########################################################
       REM copy sprite buffer to movie frame
       DEF PROCspritetomovbuf(s%,sx%,sy%,b%)
-      LOCAL X%,Y%,YC%,XC%,CX1%,CX2%,CY1%,CY2%
-      FOR Y%=0 TO 47
-        IF Y% DIV 3<sprsize{(s%)}.h% THEN
-          YC%=sy%+Y%
-          IF YC%>=3 AND YC%<75 THEN
-            FOR X%=0 TO 39
-              IF X% DIV 2<sprsize{(s%)}.w% THEN
-                XC%=sx%+X%
-                IF XC%>=b% AND XC%<80 THEN
-                  C%=FNpoint_sprbuf(X%,Y%,s%)
-                  IF C% PROCpoint_movbuf(XC%, YC%, 1)
+      LOCAL X%,Y%,YC%,XC%,S%,U%,SX%,SY%
+
+      IF sprlist{(s%)}.m%=0 THEN
+        REM pixel mode
+        FOR Y%=0 TO 47
+          IF Y% DIV 3<sprlist{(s%)}.h% THEN
+            YC%=sy%+Y%
+            IF YC%>=3 AND YC%<75 THEN
+              FOR X%=0 TO 39
+                IF X% DIV 2<sprlist{(s%)}.w% THEN
+                  XC%=sx%+X%
+                  IF XC%>=b% AND XC%<80 THEN
+                    C%=FNpoint_sprbuf(X%,Y%,s%)
+                    IF C% PROCpoint_movbuf(XC%, YC%, 1)
+                  ENDIF
                 ENDIF
-              ENDIF
-            NEXT
+              NEXT
+            ENDIF
           ENDIF
-        ENDIF
-      NEXT
+        NEXT
+      ELSE
+        REM char mode - accounts for negative DIV causing too many location 0's
+        SX%=(sx%+(SGN(sx%)=-1)) DIV 2
+        SY%=(sy%+(SGN(sy%)=-1)*2) DIV 3
+
+        FOR U%=0 TO 319
+          XC%=U% MOD 20
+          YC%=U% DIV 20
+          IF XC%<sprlist{(s%)}.w% AND YC%<sprlist{(s%)}.h% THEN
+            X%=SX%+XC%
+            Y%=SY%+YC%
+            IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
+              S%=sprbuf&(s%,U%)
+              IF spr_trns%=1 THEN
+                IF S%<>32 AND S%<>160 THEN movie_buffer&(X%+(Y%-1)*40)=S%
+              ELSE
+                movie_buffer&(X%+(Y%-1)*40)=S%
+              ENDIF
+            ENDIF
+          ENDIF
+        NEXT
+
+      ENDIF
 
       ENDPROC
 
       REM ##########################################################
       REM copy sprite colours to movie frame
-      DEF PROCspritecoltomovbuf(s%,sx%,sy%,b%)
+      DEF PROCspritecoltomovbuf(s%,sx%,sy%,b%,f%)
       LOCAL SC%,FC%,Y%,CX1%,CX2%,CY1%,CY2%
-      SC%=sprite_buffer&(s%,0)
-      IF SC%>144 AND SC%<152 THEN
-        CX1%=sx% DIV 2
-        CX2%=CX1%+sprsize{(s%)}.w%+(sx% MOD 2)
-        CY1%=sy% DIV 3-1
-        CY2%=CY1%+sprsize{(s%)}.h%+(sy% MOD 3=0)
-        IF CX1%<b% CX1%=b%
-        IF CX2%<b% CX2%=b%
-        IF CX1%>39 CX1%=39
-        IF CX2%>40 CX2%=40
-        IF CY1%<0 CY1%=0
-        IF CY2%<0 CY2%=0
-        IF CY1%>23 CY1%=23
-        IF CY2%>23 CY2%=23
-        FC%=151
-        IF movieframe%>-1 FC%=frmlist{(movieframe%)}.f%+144
 
-        FOR Y%=CY1% TO CY2%
-          IF CX1%<39 movie_buffer&(CX1%+Y%*40)=SC%
-          REM IF CX2%<40 movie_buffer&(CX2%+Y%*40)=FC%
+      IF sprlist{(s%)}.m%=0 THEN
+        SC%=sprbuf&(s%,0)
+        IF SC%>144 AND SC%<152 THEN
+          CX1%=sx% DIV 2
+          CX2%=CX1%+sprlist{(s%)}.w%+(sx% MOD 2)
+          CY1%=sy% DIV 3-1
+          CY2%=CY1%+sprlist{(s%)}.h%+(sy% MOD 3=0)
+          IF CX1%<b% CX1%=b%
+          IF CX2%<b% CX2%=b%
+          IF CX1%>38 CX1%=38
+          IF CX2%>40 CX2%=40
+          IF CY1%<0 CY1%=0
+          IF CY2%<0 CY2%=0
+          IF CY1%>23 CY1%=23
+          IF CY2%>23 CY2%=23
+          FC%=151
+          IF movieframe%>-1 FC%=frmlist{(movieframe%)}.f%+144
 
-          REM IF CX1%<39 movie_buffer&(CX1%+Y%*40)=67
-          REM IF CX2%<40 movie_buffer&(CX2%+Y%*40)=66
+          FOR Y%=CY1% TO CY2%
+            IF f%=0 THEN
+              movie_colbuf&(CX1%+Y%*40)=SC%
+            ELSE
+              REM frame_buffer&(f%-1,CX1%+Y%*40)=SC%
+              VDU 31,CX1%,Y%+1,SC%
+            ENDIF
 
-        NEXT
+            REM IF CX2%<40 movie_buffer&(CX2%+Y%*40)=FC%
+
+            REM IF CX1%<39 movie_buffer&(CX1%+Y%*40)=67
+            REM IF CX2%<40 movie_buffer&(CX2%+Y%*40)=66
+
+          NEXT
+        ENDIF
       ENDIF
-
       ENDPROC
 
       REM ##########################################################
       REM copy sprite buffer to movie frame
       DEF PROCspritetocanvas(s%,sx%,sy%)
       LOCAL D%,S%,U%,X%,Y%,LC%
-      FOR Y%=0 TO 47
-        IF Y% DIV 3<sprsize{(s%)}.h% THEN
-          YC%=sy%+Y%
-          IF YC%>2 AND YC%<75 THEN
-            FOR X%=0 TO 39
-              IF X% DIV 2<sprsize{(s%)}.w% THEN
-                XC%=sx%+X%
-                IF XC%>=0 AND XC%<80 THEN
-                  C%=FNpoint_sprbuf(X%,Y%,s%)
-                  IF C% PROCpoint(XC%, YC%, 1)
-                ENDIF
-              ENDIF
-            NEXT
-          ENDIF
-        ENDIF
-      NEXT
 
+      IF sprlist{(s%)}.m%=0 THEN
+        REM pixel mode
+        FOR Y%=0 TO 47
+          IF Y% DIV 3<sprlist{(s%)}.h% THEN
+            YC%=sy%+Y%
+            IF YC%>2 AND YC%<75 THEN
+              FOR X%=0 TO 39
+                IF X% DIV 2<sprlist{(s%)}.w% THEN
+                  XC%=sx%+X%
+                  IF XC%>=0 AND XC%<80 THEN
+                    C%=FNpoint_sprbuf(X%,Y%,s%)
+                    IF C% PROCpoint(XC%, YC%, 1)
+                  ENDIF
+                ENDIF
+              NEXT
+            ENDIF
+          ENDIF
+        NEXT
+        PROCspritecoltomovbuf(s%,sx%,sy%,0,frame%)
+      ELSE
+        REM char mode
+        SX%=(sx%+(SGN(sx%)=-1)) DIV 2
+        SY%=(sy%+(SGN(sy%)=-1)*2) DIV 3
+
+        FOR U%=0 TO 319
+          XC%=U% MOD 20
+          YC%=U% DIV 20
+          IF XC%<sprlist{(s%)}.w% AND YC%<sprlist{(s%)}.h% THEN
+            X%=SX%+XC%
+            Y%=SY%+YC%
+            IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
+              S%=sprbuf&(s%,U%)
+              IF spr_trns%=1 THEN
+                IF S%<>32 AND S%<>160 THEN
+                  D%=0
+                  REM IF S%>160 D%=GET(U% MOD 20+10,U% DIV 20+3)
+                  VDU 31,X%,Y%,S% OR D%
+                ENDIF
+
+              ELSE
+                VDU 31,X%,Y%,S%
+              ENDIF
+            ENDIF
+          ENDIF
+        NEXT
+
+      ENDIF
       ENDPROC
 
       REM ##########################################################
@@ -6285,7 +6485,7 @@
         Y%=sy%+U% DIV 20
 
         IF X%<40 AND X%>0 AND Y%<25 AND Y%>0 THEN
-          C%=sprite_buffer&(s%,U%)
+          C%=sprbuf&(s%,U%)
           IF spr_trns%=0 THEN
             VDU 31,X%,Y%,C%
           ELSE
@@ -6310,18 +6510,18 @@
       H%=0
 
       FOR U%=0 TO 319
-        IF sprite_buffer&(S%,U%)<>32 AND sprite_buffer&(S%,U%)<>160 THEN
+        IF sprbuf&(S%,U%)<>32 AND sprbuf&(S%,U%)<>160 THEN
           IF U% MOD 20>W% W%=U% MOD 20
           IF U% DIV 20>H% H%=U% DIV 20
         ENDIF
       NEXT
 
-      sprsize{(S%)}.w%=W%+1
-      sprsize{(S%)}.h%=H%+1
+      sprlist{(S%)}.w%=W%+1
+      sprlist{(S%)}.h%=H%+1
 
       IF D% THEN
-        PRINTTAB(14,22)RIGHT$("0"+STR$(sprsize{(S%)}.w%),2);
-        PRINTTAB(20,22)RIGHT$("0"+STR$(sprsize{(S%)}.h%),2);
+        PRINTTAB(14,22)RIGHT$("0"+STR$(sprlist{(S%)}.w%),2);
+        PRINTTAB(20,22)RIGHT$("0"+STR$(sprlist{(S%)}.h%),2);
       ENDIF
 
       ENDPROC
@@ -6333,7 +6533,7 @@
       REM 20x16 chars @320 bytes : 40x48 pixels @1920 bytes
 
       FOR U%=0 TO 319
-        sprite_buffer&(S%,U%)=GET(U% MOD 20+10,U% DIV 20+3)
+        sprbuf&(S%,U%)=GET(U% MOD 20+10,U% DIV 20+3)
       NEXT
 
       PROCupdatespritesize(S%,1)
@@ -6352,18 +6552,18 @@
       H%=0
 
       FOR U%=0 TO 319
-        VDU 31,U% MOD 20+10,U% DIV 20+3,sprite_buffer&(sprite_cur%,U%)
-        IF sprite_buffer&(sprite_cur%,U%)<>32 AND sprite_buffer&(sprite_cur%,U%)<>160 THEN
+        VDU 31,U% MOD 20+10,U% DIV 20+3,sprbuf&(sprite_cur%,U%)
+        IF sprbuf&(sprite_cur%,U%)<>32 AND sprbuf&(sprite_cur%,U%)<>160 THEN
           IF U% MOD 20>W% W%=U% MOD 20
           IF U% DIV 20>H% H%=U% DIV 20
         ENDIF
       NEXT
 
-      sprsize{(sprite_cur%)}.w%=W%+1
-      sprsize{(sprite_cur%)}.h%=H%+1
+      sprlist{(sprite_cur%)}.w%=W%+1
+      sprlist{(sprite_cur%)}.h%=H%+1
 
-      PRINTTAB(14,22)RIGHT$("0"+STR$(sprsize{(sprite_cur%)}.w%),2);
-      PRINTTAB(20,22)RIGHT$("0"+STR$(sprsize{(sprite_cur%)}.h%),2);
+      PRINTTAB(14,22)RIGHT$("0"+STR$(sprlist{(sprite_cur%)}.w%),2);
+      PRINTTAB(20,22)RIGHT$("0"+STR$(sprlist{(sprite_cur%)}.h%),2);
 
       PROCdrawspritegrid
 
@@ -6579,7 +6779,7 @@
       RECTANGLE boxx%,boxy%,X%,Y%
 
       C$="S:"+RIGHT$("0"+STR$(SX%),2)+","+RIGHT$("0"+STR$(SY%),2)+" P:"+RIGHT$("0"+STR$(TX%),2)+","+RIGHT$("0"+STR$(TY%),2)
-      PROCgtext(C$,0,996,14,4)
+      PROCgtext(C$,0,996,14,4,0)
 
 
       REPEAT
@@ -6595,7 +6795,7 @@
           RECTANGLE boxx%,boxy%,X%,Y%
 
           C$="S:"+RIGHT$("0"+STR$(SX%),2)+","+RIGHT$("0"+STR$(SY%),2)+" E:"+RIGHT$("0"+STR$(TX%),2)+","+RIGHT$("0"+STR$(TY%),2)
-          PROCgtext(C$,0,996,14,4)
+          PROCgtext(C$,0,996,14,4,0)
 
         ELSE
           WAIT 2
@@ -6634,7 +6834,7 @@
           OY%=TY%
 
           C$="S:"+RIGHT$("0"+STR$(SX%),2)+","+RIGHT$("0"+STR$(SY%),2)+" E:"+RIGHT$("0"+STR$(TX%),2)+","+RIGHT$("0"+STR$(TY%),2)
-          PROCgtext(C$,0,996,14,4)
+          PROCgtext(C$,0,996,14,4,0)
 
         ELSE
           WAIT 2
@@ -7016,23 +7216,23 @@
         REM sprite data
         FOR c%=0 TO sprite_max%-1
           FOR u%=0 TO 319
-            BPUT#f%,sprite_buffer&(c%,u%)
+            BPUT#f%,sprbuf&(c%,u%)
           NEXT
         NEXT
 
         REM sprite animation data
         FOR c%=0 TO 99
           FOR u%=0 TO 11
-            PRINT#f%,sprlist{(c%)}.s%(u%)
+            PRINT#f%,sprani{(c%)}.s%(u%)
           NEXT
-          PRINT#f%,sprlist{(c%)}.f%
-          PRINT#f%,sprlist{(c%)}.r%
-          PRINT#f%,sprlist{(c%)}.x%
-          PRINT#f%,sprlist{(c%)}.y%
-          PRINT#f%,sprlist{(c%)}.h%
-          PRINT#f%,sprlist{(c%)}.v%
-          PRINT#f%,sprlist{(c%)}.m%
-          PRINT#f%,sprlist{(c%)}.d%
+          PRINT#f%,sprani{(c%)}.f%
+          PRINT#f%,sprani{(c%)}.r%
+          PRINT#f%,sprani{(c%)}.x%
+          PRINT#f%,sprani{(c%)}.y%
+          PRINT#f%,sprani{(c%)}.h%
+          PRINT#f%,sprani{(c%)}.v%
+          PRINT#f%,sprani{(c%)}.m%
+          PRINT#f%,sprani{(c%)}.d%
         NEXT
 
         CLOSE#f%
@@ -7074,7 +7274,7 @@
             REM read sprite data, try to read old format if possible
             FOR u%=0 TO 319
               char%=BGET#f%
-              sprite_buffer&(c%,u%)=char%
+              sprbuf&(c%,u%)=char%
             NEXT
             PROCupdatespritesize(c%,0)
             c%+=1
@@ -7082,16 +7282,16 @@
             REM read animation data
             FOR c%=0 TO 99
               FOR u%=0 TO 11
-                INPUT#f%,sprlist{(c%)}.s%(u%)
+                INPUT#f%,sprani{(c%)}.s%(u%)
               NEXT
-              INPUT#f%,sprlist{(c%)}.f%
-              INPUT#f%,sprlist{(c%)}.r%
-              INPUT#f%,sprlist{(c%)}.x%
-              INPUT#f%,sprlist{(c%)}.y%
-              INPUT#f%,sprlist{(c%)}.h%
-              INPUT#f%,sprlist{(c%)}.v%
-              INPUT#f%,sprlist{(c%)}.m%
-              INPUT#f%,sprlist{(c%)}.d%
+              INPUT#f%,sprani{(c%)}.f%
+              INPUT#f%,sprani{(c%)}.r%
+              INPUT#f%,sprani{(c%)}.x%
+              INPUT#f%,sprani{(c%)}.y%
+              INPUT#f%,sprani{(c%)}.h%
+              INPUT#f%,sprani{(c%)}.v%
+              INPUT#f%,sprani{(c%)}.m%
+              INPUT#f%,sprani{(c%)}.d%
             NEXT
           ENDIF
         UNTIL EOF#f%
@@ -7773,6 +7973,7 @@
       D$=FNgetdate
 
       IF session%=0 THEN cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
+      OSCLI "MD """+cursave$+cursavedir$+""""
 
       PROCsaveupdate(1,LEFT$(cursavedir$+"                        ",24))
 
@@ -7888,11 +8089,11 @@
       REM ##########################################################
       REM update save screen options
       DEF PROCsaveupdate(M%,D$)
-      LOCAL SX%,SY%,SW%,SH%,TY%
+      LOCAL SX%,SY%,SW%,SH%
 
       SX%=100: SY%=100
       SW%=1078 : SH%=800
-      TY%=SY%+SH%
+      menuYadd%=860
 
       IF M%=1 THEN
         PROCresetcontrols
@@ -7903,27 +8104,29 @@
         RECTANGLE SX%+8,SY%+8,SW%-16,SH%-16
         RECTANGLE SX%+10,SY%+10,SW%-20,SH%-20
         REM t$,x%,y%,tc%,bc%
-        PROCgtext(" SAVE FILE OPTIONS ",SX%+236,TY%-40,10,0)
-        PROCgtext("PROJECT NAME: ",SX%+40,TY%-100,15,0)
-        PROCgtext("FILES TO SAVE:",SX%+40,TY%-208,15,0)
-        PROCgtext("BIN:",SX%+40,TY%-256,15,0)
-        PROCgtext("(BIN FORMAT 1 KB)",SX%+340,TY%-256,4,0)
-        PROCgtext("BMP:",SX%+40,TY%-304,15,0)
-        PROCgtext("(BMP FORMAT 1 MB)",SX%+340,TY%-304,4,0)
-        PROCgtext("SPR:",SX%+40,TY%-352,15,0)
-        PROCgtext("(ALL SPRITE DATA)",SX%+340,TY%-352,4,0)
-        PROCgtext("TXT:",SX%+40,TY%-400,15,0)
-        PROCgtext("(DATA STATEMENTS)",SX%+340,TY%-400,4,0)
+        PROCgtext(" SAVE FILE OPTIONS ",SX%+236,menuYadd%,10,0,-60)
+        PROCgtext("PROJECT NAME: ",SX%+40,menuYadd%,15,0,-48)
+        PROCgtext(D$,SX%+40,menuYadd%,11,4,-60)
+        PROCgtext("FILES TO SAVE:",SX%+40,menuYadd%,15,0,-48)
+        PROCgtext("BIN:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(BIN FORMAT 1 KB)",SX%+340,menuYadd%,4,0,-48)
+        PROCgtext("BMP:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(BMP FORMAT 1 MB)",SX%+340,menuYadd%,4,0,-48)
+        PROCgtext("SPR:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(ALL SPRITE DATA)",SX%+340,menuYadd%,4,0,-48)
+        PROCgtext("TXT:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(DATA STATEMENTS)",SX%+340,menuYadd%,4,0,0)
         PROCmenucontrol(0,"  SAVE  ",SX%+100,SY%+100,12,10,4)
         PROCmenucontrol(1," CANCEL ",SX%+700,SY%+100,9,11,1)
 
-        PROCgtext(D$,SX%+40,TY%-144,11,4)
+
       ENDIF
 
-      PROCmenucontrol(2," "+CHR$(78+save_bin%*11)+" ",SX%+180,TY%-256,8,11+4*save_bin%,1+save_bin%)
-      PROCmenucontrol(3," "+CHR$(78+save_bmp%*11)+" ",SX%+180,TY%-304,8,11+4*save_bmp%,1+save_bmp%)
-      PROCmenucontrol(4," "+CHR$(78+save_spr%*11)+" ",SX%+180,TY%-352,8,11+4*save_spr%,1+save_spr%)
-      PROCmenucontrol(5," "+CHR$(78+save_dat%*11)+" ",SX%+180,TY%-400,8,11+4*save_dat%,1+save_dat%)
+      menuYadd%=644
+      PROCmenucontrol(2," "+CHR$(78+save_bin%*11)+" ",SX%+180,menuYadd%,8,11+4*save_bin%,1+save_bin%)
+      PROCmenucontrol(3," "+CHR$(78+save_bmp%*11)+" ",SX%+180,menuYadd%-48,8,11+4*save_bmp%,1+save_bmp%)
+      PROCmenucontrol(4," "+CHR$(78+save_spr%*11)+" ",SX%+180,menuYadd%-96,8,11+4*save_spr%,1+save_spr%)
+      PROCmenucontrol(5," "+CHR$(78+save_dat%*11)+" ",SX%+180,menuYadd%-144,8,11+4*save_dat%,1+save_dat%)
 
       ENDPROC
 
@@ -7946,6 +8149,7 @@
       D$=FNgetdate
 
       IF session%=0 THEN cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
+      OSCLI "MD """+cursave$+cursavedir$+""""
 
       PROCsavemovieupdate(1,LEFT$(cursavedir$+"                        ",24))
 
@@ -8119,11 +8323,11 @@
       REM ##########################################################
       REM update save movie screen options
       DEF PROCsavemovieupdate(M%,D$)
-      LOCAL SX%,SY%,SW%,SH%,TY%
+      LOCAL SX%,SY%,SW%,SH%
 
       SX%=100: SY%=100
       SW%=1078 : SH%=800
-      TY%=SY%+SH%
+      menuYadd%=860
 
       IF M%=1 THEN
         PROCresetcontrols
@@ -8134,31 +8338,32 @@
         RECTANGLE SX%+8,SY%+8,SW%-16,SH%-16
         RECTANGLE SX%+10,SY%+10,SW%-20,SH%-20
         REM t$,x%,y%,tc%,bc%
-        PROCgtext(" SAVE MOVIE OPTIONS ",SX%+236,TY%-40,10,0)
-        PROCgtext("MOVIE NAME: ",SX%+40,TY%-100,15,0)
-        PROCgtext("FILES TO SAVE:",SX%+40,TY%-208,15,0)
-        PROCgtext("MOV:",SX%+40,TY%-256,15,0)
-        PROCgtext("(MOVIE FRAME DATA)",SX%+340,TY%-256,4,0)
-        PROCgtext("BIN:",SX%+40,TY%-304,15,0)
-        PROCgtext("(MOVIE BIN DATA 1 KB)",SX%+340,TY%-304,4,0)
-        PROCgtext("BIN:",SX%+40,TY%-352,15,0)
-        PROCgtext("(FRAME BIN DATA 1 KB)",SX%+340,TY%-352,4,0)
-        PROCgtext("BMP:",SX%+40,TY%-400,15,0)
-        PROCgtext("(MOVIE BMP FILES 1 MB)",SX%+340,TY%-400,4,0)
-        PROCgtext("SPR:",SX%+40,TY%-448,15,0)
-        PROCgtext("(SPRITE DATA FILES)",SX%+340,TY%-448,4,0)
+        PROCgtext(" SAVE MOVIE OPTIONS ",SX%+236,menuYadd%,10,0,-60)
+        PROCgtext("MOVIE NAME: ",SX%+40,menuYadd%,15,0,-48)
+        PROCgtext(D$,SX%+40,menuYadd%,11,4,-60)
+        PROCgtext("FILES TO SAVE:",SX%+40,menuYadd%,15,0,-48)
+        PROCgtext("MOV:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(MOVIE FRAME DATA)",SX%+340,menuYadd%,4,0,-48)
+        PROCgtext("BIN:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(MOVIE BIN DATA 1 KB)",SX%+340,menuYadd%,4,0,-48)
+        PROCgtext("BIN:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(FRAME BIN DATA 1 KB)",SX%+340,menuYadd%,4,0,-48)
+        PROCgtext("BMP:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(MOVIE BMP FILES 1 MB)",SX%+340,menuYadd%,4,0,-48)
+        PROCgtext("SPR:",SX%+40,menuYadd%,15,0,0)
+        PROCgtext("(SPRITE DATA FILES)",SX%+340,menuYadd%,4,0,0)
 
         PROCmenucontrol(0,"  SAVE  ",SX%+100,SY%+100,12,10,4)
         PROCmenucontrol(1," CANCEL ",SX%+700,SY%+100,9,11,1)
 
-        PROCgtext(D$,SX%+40,TY%-144,11,4)
-      ENDIF
 
-      PROCmenucontrol(2," "+CHR$(78+mov_frm%*11)+" ",SX%+180,TY%-256,8,11+4*mov_frm%,1+mov_frm%)
-      PROCmenucontrol(3," "+CHR$(78+mov_dat%*11)+" ",SX%+180,TY%-304,8,11+4*mov_dat%,1+mov_dat%)
-      PROCmenucontrol(4," "+CHR$(78+mov_bin%*11)+" ",SX%+180,TY%-352,8,11+4*mov_bin%,1+mov_bin%)
-      PROCmenucontrol(5," "+CHR$(78+mov_bmp%*11)+" ",SX%+180,TY%-400,8,11+4*mov_bmp%,1+mov_bmp%)
-      PROCmenucontrol(6," "+CHR$(78+mov_spr%*11)+" ",SX%+180,TY%-448,8,11+4*mov_spr%,1+mov_spr%)
+      ENDIF
+      menuYadd%=644
+      PROCmenucontrol(2," "+CHR$(78+mov_frm%*11)+" ",SX%+180,menuYadd%,8,11+4*mov_frm%,1+mov_frm%)
+      PROCmenucontrol(3," "+CHR$(78+mov_dat%*11)+" ",SX%+180,menuYadd%-48,8,11+4*mov_dat%,1+mov_dat%)
+      PROCmenucontrol(4," "+CHR$(78+mov_bin%*11)+" ",SX%+180,menuYadd%-96,8,11+4*mov_bin%,1+mov_bin%)
+      PROCmenucontrol(5," "+CHR$(78+mov_bmp%*11)+" ",SX%+180,menuYadd%-144,8,11+4*mov_bmp%,1+mov_bmp%)
+      PROCmenucontrol(6," "+CHR$(78+mov_spr%*11)+" ",SX%+180,menuYadd%-192,8,11+4*mov_spr%,1+mov_spr%)
 
 
       ENDPROC
@@ -8793,6 +8998,7 @@
       REM ##########################################################
       REM display a help screen
       DEF PROCshowhelp
+      LOCAL H$,C%,Y%
 
       PROCprint40(24,ty$+"TelePaint"+tm$+version$+tc$+"by 4thStone & Pixelblip")
 
@@ -8933,47 +9139,50 @@
 
       REM canvas mode hotkeys
       CLS
-      PROCgtext("Canvas Mode Hot Keys",8,980,11,0)
-      PROCgtext("====================",8,932,11,0)
-      PROCgtext("ESC+P  : Show Control Codes",8,886,14,0)
-      PROCgtext("ESC+Ff : Flash/Steady",8,838,14,0)
-      PROCgtext("ESC+Hh : Hold/Releas Graphics",8,790,14,0)
-      PROCgtext("ESC+Dd : Double/Normal Height",8,742,14,0)
-      PROCgtext("ESC+Ss : Separated/Normal Graphics",8,696,14,0)
-      PROCgtext("Ins    : Show Object Insert Menu",8,648,14,0)
-      PROCgtext("End    : Insert Last Selected Object",8,600,14,0)
-      PROCgtext("Esc    : Cancel Insert Object",8,552,14,0)
-      PROCgtext("Left   : Navigate To Previous Frame",8,506,14,0)
-      PROCgtext("Right  : Navigate To Next Frame",8,458,14,0)
-      PROCgtext("CTRL+C : Begin Region Selection",8,410,14,0)
-      PROCgtext("CTRL+Left  : Copy Frame Left",8,362,14,0)
-      PROCgtext("CTRL+Right : Copy Frame Right",8,316,14,0)
-      PROCgtext("SHFT+Cursors : Pixel Shift Selection",8,268,14,0)
+      menuYadd%=980
+      PROCgtext("Canvas Mode Hot Keys",8,menuYadd%,11,0,-48)
+      PROCgtext("====================",8,menuYadd%,11,0,-48)
+      PROCgtext("ESC+Qq : Show Control Codes",8,menuYadd%,14,0,-48)
+      PROCgtext("ESC+Ff : Flash/Steady",8,menuYadd%,14,0,-48)
+      PROCgtext("ESC+Hh : Hold/Releas Graphics",8,menuYadd%,14,0,-48)
+      PROCgtext("ESC+Dd : Double/Normal Height",8,menuYadd%,14,0,-48)
+      PROCgtext("ESC+Ss : Separated/Normal Graphics",8,menuYadd%,14,0,-48)
+      PROCgtext("Ins    : Show Object Insert Menu",8,menuYadd%,14,0,-48)
+      PROCgtext("End    : Insert Last Selected Object",8,menuYadd%,14,0,-48)
+      PROCgtext("Esc    : Cancel Insert Object",8,menuYadd%,14,0,-48)
+      PROCgtext("Left   : Navigate To Previous Frame",8,menuYadd%,14,0,-48)
+      PROCgtext("Right  : Navigate To Next Frame",8,menuYadd%,14,0,-48)
+      PROCgtext("CTRL+C : Begin Region Selection",8,menuYadd%,14,0,-48)
+      PROCgtext("CTRL+Left  : Copy Frame Left",8,menuYadd%,14,0,-48)
+      PROCgtext("CTRL+Right : Copy Frame Right",8,menuYadd%,14,0,-48)
+      PROCgtext("SHFT+Cursors : Pixel Shift Selection",8,menuYadd%,14,0,-48)
 
       PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
 
       REM movie mode hotkeys
       CLS
-      PROCgtext("Movie Mode Hot Keys",8,980,11,0)
-      PROCgtext("====================",8,932,11,0)
-
-      PROCgtext("ENTER : Add Frame At Current Coords",8,886,14,0)
-      PROCgtext("TAB   : Select On Screen Object",8,838,14,0)
-      PROCgtext("D     : Duplicate Selected Sprite",8,790,14,0)
-      PROCgtext("R     : Replicate Sprite To Frames",8,742,14,0)
-      PROCgtext("P     : Show Selected Sprite Detail",8,696,14,0)
-      PROCgtext("M     : Move Selected Sprite",8,648,14,0)
-      PROCgtext("E     : Edit Selected Sprite",8,600,14,0)
-      PROCgtext("Ins   : Show Object Insert Menu",8,552,14,0)
-      PROCgtext("End   : Insert Last Selected Object",8,506,14,0)
-      PROCgtext("Esc   : Cancel Insert Object",8,458,14,0)
-      PROCgtext("PGUP PGDN : Next/Prev Frame (SHFT +50)",8,410,14,0)
-      PROCgtext("HOME END  : First/Last Frame",8,362,14,0)
-      PROCgtext("LMB       : Place Sprite In Frame",8,316,14,0)
-      PROCgtext("SHIFT LMB : Add Sprite To Background",8,268,14,0)
-      PROCgtext("Cursors   : Move World Map",8,220,14,0)
-      PROCgtext("SHFT+Cursors : Move World Map 1 Page",8,174,14,0)
+      menuYadd%=980
+      PROCgtext("Movie Mode Hot Keys",8,menuYadd%,11,0,-48)
+      PROCgtext("====================",8,menuYadd%,11,0,-48)
+      PROCgtext("ENTER : Add Frame At Current Coords",8,menuYadd%,14,0,-48)
+      PROCgtext("TAB   : Select On Screen Object",8,menuYadd%,14,0,-48)
+      PROCgtext("Q     : Show Control Codes",8,menuYadd%,14,0,-48)
+      PROCgtext("D     : Duplicate Selected Sprite",8,menuYadd%,14,0,-48)
+      PROCgtext("R     : Replicate Sprite To Frames",8,menuYadd%,14,0,-48)
+      PROCgtext("P     : Show Selected Sprite Detail",8,menuYadd%,14,0,-48)
+      PROCgtext("M     : Move Selected Sprite",8,menuYadd%,14,0,-48)
+      PROCgtext("E     : Edit Selected Sprite",8,menuYadd%,14,0,-48)
+      PROCgtext("SHFT E: Clone/Replace Selected Sprite",8,menuYadd%,14,0,-48)
+      PROCgtext("Ins   : Show Object Insert Menu",8,menuYadd%,14,0,-48)
+      PROCgtext("End   : Insert Last Selected Object",8,menuYadd%,14,0,-48)
+      PROCgtext("Esc   : Cancel Insert Object",8,menuYadd%,14,0,-48)
+      PROCgtext("PGUP PGDN : Next/Prev Frame (SHFT +50)",8,menuYadd%,14,0,-48)
+      PROCgtext("HOME END  : First/Last Frame",8,menuYadd%,14,0,-48)
+      PROCgtext("LMB       : Place Sprite In Frame",8,menuYadd%,14,0,-48)
+      PROCgtext("SHIFT LMB : Add Sprite To Background",8,menuYadd%,14,0,-48)
+      PROCgtext("Cursors   : Move World Map",8,menuYadd%,14,0,-48)
+      PROCgtext("SHFT+Cursors : Move World Map 1 Page",8,menuYadd%,14,0,-48)
 
       PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
@@ -9236,8 +9445,12 @@
       REM REFRESH DYNAMIC AREAS
       PRINTTAB(22,20)ty$;CHR$(157);tr$;RIGHT$("00"+STR$(sprite_cur%+1),3)+" ";CHR$(156);CHR$(151)
       p$="CHR"
-      IF spr_scroll%=0 THEN p$="PIX"
+      IF spr_scroll%=0 p$="PIX"
       PRINTTAB(36,2)tg$;p$;
+      p$="PIX"
+      IF sprlist{(sprite_cur%)}.m%=1 p$="CHR"
+      PRINTTAB(22,22)tc$;"MODE:";ty$;p$;
+
       PRINTTAB(0,18)CHR$(129+spr_trns%);"TRANS";
 
       PROCdrawsprite
@@ -9283,7 +9496,7 @@
             UNTIL MB%=0
             IF MX%>6 AND MX%<1156 AND MY%>776 AND MY%<890 THEN
               DP%=(MX%-8) DIV 96
-              sprlist{(spr_lstcount%)}.s%(DP%)=SP%
+              sprani{(spr_lstcount%)}.s%(DP%)=SP%
               PROCanimupdate(0)
             ENDIF
           ELSE
@@ -9318,158 +9531,158 @@
                     ENDIF
 
                   WHEN 4 : REM frame dec 10
-                    IF sprlist{(spr_lstcount%)}.f%>1 THEN
-                      sprlist{(spr_lstcount%)}.f%-=10
-                      IF sprlist{(spr_lstcount%)}.f%<1 THEN sprlist{(spr_lstcount%)}.f%=1
+                    IF sprani{(spr_lstcount%)}.f%>1 THEN
+                      sprani{(spr_lstcount%)}.f%-=10
+                      IF sprani{(spr_lstcount%)}.f%<1 THEN sprani{(spr_lstcount%)}.f%=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 5 : REM frame dec 1
-                    IF sprlist{(spr_lstcount%)}.f%>1 THEN
-                      sprlist{(spr_lstcount%)}.f%-=1
+                    IF sprani{(spr_lstcount%)}.f%>1 THEN
+                      sprani{(spr_lstcount%)}.f%-=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 6 : REM frame inc 1
-                    IF sprlist{(spr_lstcount%)}.f%<frame_max% THEN
-                      sprlist{(spr_lstcount%)}.f%+=1
+                    IF sprani{(spr_lstcount%)}.f%<frame_max% THEN
+                      sprani{(spr_lstcount%)}.f%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 7 : REM frame inc 10
-                    IF sprlist{(spr_lstcount%)}.f%<frame_max% THEN
-                      sprlist{(spr_lstcount%)}.f%+=10
-                      IF sprlist{(spr_lstcount%)}.f%>frame_max% THEN sprlist{(spr_lstcount%)}.f%=frame_max%
+                    IF sprani{(spr_lstcount%)}.f%<frame_max% THEN
+                      sprani{(spr_lstcount%)}.f%+=10
+                      IF sprani{(spr_lstcount%)}.f%>frame_max% THEN sprani{(spr_lstcount%)}.f%=frame_max%
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 8 : REM repeat dec 10
-                    IF sprlist{(spr_lstcount%)}.r%>0 THEN
-                      sprlist{(spr_lstcount%)}.r%-=10
-                      IF sprlist{(spr_lstcount%)}.r%<0 THEN sprlist{(spr_lstcount%)}.r%=0
+                    IF sprani{(spr_lstcount%)}.r%>0 THEN
+                      sprani{(spr_lstcount%)}.r%-=10
+                      IF sprani{(spr_lstcount%)}.r%<0 THEN sprani{(spr_lstcount%)}.r%=0
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 9 : REM repeat dec 1
-                    IF sprlist{(spr_lstcount%)}.r%>0 THEN
-                      sprlist{(spr_lstcount%)}.r%-=1
+                    IF sprani{(spr_lstcount%)}.r%>0 THEN
+                      sprani{(spr_lstcount%)}.r%-=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 10 : REM repeat inc
-                    IF sprlist{(spr_lstcount%)}.r%<20 THEN
-                      sprlist{(spr_lstcount%)}.r%+=1
+                    IF sprani{(spr_lstcount%)}.r%<20 THEN
+                      sprani{(spr_lstcount%)}.r%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 11 : REM repeat inc 10
-                    IF sprlist{(spr_lstcount%)}.r%<20 THEN
-                      sprlist{(spr_lstcount%)}.r%+=10
-                      IF sprlist{(spr_lstcount%)}.r%>20 THEN sprlist{(spr_lstcount%)}.r%=20
+                    IF sprani{(spr_lstcount%)}.r%<20 THEN
+                      sprani{(spr_lstcount%)}.r%+=10
+                      IF sprani{(spr_lstcount%)}.r%>20 THEN sprani{(spr_lstcount%)}.r%=20
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 12 : REM x dec 10
-                    IF sprlist{(spr_lstcount%)}.x%>-20 THEN
-                      sprlist{(spr_lstcount%)}.x%-=10
-                      IF sprlist{(spr_lstcount%)}.x%<-20 THEN sprlist{(spr_lstcount%)}.x%=-20
+                    IF sprani{(spr_lstcount%)}.x%>-20 THEN
+                      sprani{(spr_lstcount%)}.x%-=10
+                      IF sprani{(spr_lstcount%)}.x%<-20 THEN sprani{(spr_lstcount%)}.x%=-20
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 13 : REM x dec 1
-                    IF sprlist{(spr_lstcount%)}.x%>-20 THEN
-                      sprlist{(spr_lstcount%)}.x%-=1
+                    IF sprani{(spr_lstcount%)}.x%>-20 THEN
+                      sprani{(spr_lstcount%)}.x%-=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 14 : REM x inc
-                    IF sprlist{(spr_lstcount%)}.x%<40 THEN
-                      sprlist{(spr_lstcount%)}.x%+=1
+                    IF sprani{(spr_lstcount%)}.x%<40 THEN
+                      sprani{(spr_lstcount%)}.x%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 15 : REM x inc 10
-                    IF sprlist{(spr_lstcount%)}.x%<40 THEN
-                      sprlist{(spr_lstcount%)}.x%+=10
-                      IF sprlist{(spr_lstcount%)}.x%>40 THEN sprlist{(spr_lstcount%)}.x%=40
+                    IF sprani{(spr_lstcount%)}.x%<40 THEN
+                      sprani{(spr_lstcount%)}.x%+=10
+                      IF sprani{(spr_lstcount%)}.x%>40 THEN sprani{(spr_lstcount%)}.x%=40
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 16 : REM h dec 10
-                    IF sprlist{(spr_lstcount%)}.h%>-10 THEN
-                      sprlist{(spr_lstcount%)}.h%-=10
-                      IF sprlist{(spr_lstcount%)}.h%<-10 THEN sprlist{(spr_lstcount%)}.h%=-10
+                    IF sprani{(spr_lstcount%)}.h%>-10 THEN
+                      sprani{(spr_lstcount%)}.h%-=10
+                      IF sprani{(spr_lstcount%)}.h%<-10 THEN sprani{(spr_lstcount%)}.h%=-10
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 17 : REM h dec 1
-                    IF sprlist{(spr_lstcount%)}.h%>-10 THEN
-                      sprlist{(spr_lstcount%)}.h%-=1
+                    IF sprani{(spr_lstcount%)}.h%>-10 THEN
+                      sprani{(spr_lstcount%)}.h%-=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 18 : REM h inc 1
-                    IF sprlist{(spr_lstcount%)}.h%<10 THEN
-                      sprlist{(spr_lstcount%)}.h%+=1
+                    IF sprani{(spr_lstcount%)}.h%<10 THEN
+                      sprani{(spr_lstcount%)}.h%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 19 : REM h inc 10
-                    IF sprlist{(spr_lstcount%)}.h%<10 THEN
-                      sprlist{(spr_lstcount%)}.h%+=10
-                      IF sprlist{(spr_lstcount%)}.h%>10 THEN sprlist{(spr_lstcount%)}.h%=10
+                    IF sprani{(spr_lstcount%)}.h%<10 THEN
+                      sprani{(spr_lstcount%)}.h%+=10
+                      IF sprani{(spr_lstcount%)}.h%>10 THEN sprani{(spr_lstcount%)}.h%=10
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 20 : REM y dec 10
-                    IF sprlist{(spr_lstcount%)}.y%>-16 THEN
-                      sprlist{(spr_lstcount%)}.y%-=10
-                      IF sprlist{(spr_lstcount%)}.y%<-16 THEN sprlist{(spr_lstcount%)}.y%=-16
+                    IF sprani{(spr_lstcount%)}.y%>-16 THEN
+                      sprani{(spr_lstcount%)}.y%-=10
+                      IF sprani{(spr_lstcount%)}.y%<-16 THEN sprani{(spr_lstcount%)}.y%=-16
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 21 : REM y dec 1
-                    IF sprlist{(spr_lstcount%)}.y%>-16 THEN
-                      sprlist{(spr_lstcount%)}.y%-=1
+                    IF sprani{(spr_lstcount%)}.y%>-16 THEN
+                      sprani{(spr_lstcount%)}.y%-=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 22 : REM y inc 1
-                    IF sprlist{(spr_lstcount%)}.y%<41 THEN
-                      sprlist{(spr_lstcount%)}.y%+=1
+                    IF sprani{(spr_lstcount%)}.y%<41 THEN
+                      sprani{(spr_lstcount%)}.y%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 23 : REM y inc 10
-                    IF sprlist{(spr_lstcount%)}.y%<25 THEN
-                      sprlist{(spr_lstcount%)}.y%+=10
-                      IF sprlist{(spr_lstcount%)}.y%>25 THEN sprlist{(spr_lstcount%)}.y%=25
+                    IF sprani{(spr_lstcount%)}.y%<25 THEN
+                      sprani{(spr_lstcount%)}.y%+=10
+                      IF sprani{(spr_lstcount%)}.y%>25 THEN sprani{(spr_lstcount%)}.y%=25
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 24 : REM v dec 10
-                    IF sprlist{(spr_lstcount%)}.v%>-10 THEN
-                      sprlist{(spr_lstcount%)}.v%-=10
-                      IF sprlist{(spr_lstcount%)}.v%<-10 THEN sprlist{(spr_lstcount%)}.v%=-10
+                    IF sprani{(spr_lstcount%)}.v%>-10 THEN
+                      sprani{(spr_lstcount%)}.v%-=10
+                      IF sprani{(spr_lstcount%)}.v%<-10 THEN sprani{(spr_lstcount%)}.v%=-10
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 25 : REM v dec 1
-                    IF sprlist{(spr_lstcount%)}.v%>-10 THEN
-                      sprlist{(spr_lstcount%)}.v%-=1
+                    IF sprani{(spr_lstcount%)}.v%>-10 THEN
+                      sprani{(spr_lstcount%)}.v%-=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 26 : REM v inc 1
-                    IF sprlist{(spr_lstcount%)}.v%<10 THEN
-                      sprlist{(spr_lstcount%)}.v%+=1
+                    IF sprani{(spr_lstcount%)}.v%<10 THEN
+                      sprani{(spr_lstcount%)}.v%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 27 : REM v inc 10
-                    IF sprlist{(spr_lstcount%)}.v%<10 THEN
-                      sprlist{(spr_lstcount%)}.v%+=10
-                      IF sprlist{(spr_lstcount%)}.v%>10 THEN sprlist{(spr_lstcount%)}.v%=10
+                    IF sprani{(spr_lstcount%)}.v%<10 THEN
+                      sprani{(spr_lstcount%)}.v%+=10
+                      IF sprani{(spr_lstcount%)}.v%>10 THEN sprani{(spr_lstcount%)}.v%=10
                       PROCanimupdate(X%)
                     ENDIF
 
@@ -9480,27 +9693,27 @@
                   WHEN 30 : REM plot
                     PROCundosaveall
                     FOR L%=0 TO 99
-                      IF sprlist{(L%)}.s%(0)>-1 THEN
+                      IF sprani{(L%)}.s%(0)>-1 THEN
                         REM iniital starting location and frame
-                        X%=sprlist{(L%)}.x%
-                        Y%=sprlist{(L%)}.y%
-                        F%=sprlist{(L%)}.f%
+                        X%=sprani{(L%)}.x%
+                        Y%=sprani{(L%)}.y%
+                        F%=sprani{(L%)}.f%
                         D%=1
 
                         REM count sprites in this set
                         C%=0
                         REPEAT
                           C%+=1
-                        UNTIL sprlist{(L%)}.s%(C%)=-1 OR C%=11
-                        IF C%=11 AND sprlist{(L%)}.s%(C%)>-1 THEN C%=12
+                        UNTIL sprani{(L%)}.s%(C%)=-1 OR C%=11
+                        IF C%=11 AND sprani{(L%)}.s%(C%)>-1 THEN C%=12
 
                         REM plot at least 1 set
                         FOR S%=0 TO C%-1
                           IF F%<frame_max%+1 THEN
-                            PROCspritetoframe(F%,sprlist{(L%)}.s%(S%),X%,Y%)
-                            IF D% MOD sprlist{(L%)}.d%=0 THEN
-                              X%+=sprlist{(L%)}.h%
-                              Y%+=sprlist{(L%)}.v%
+                            PROCspritetoframe(F%,sprani{(L%)}.s%(S%),X%,Y%)
+                            IF D% MOD sprani{(L%)}.d%=0 THEN
+                              X%+=sprani{(L%)}.h%
+                              Y%+=sprani{(L%)}.v%
                             ENDIF
                             F%+=1
                             D%+=1
@@ -9510,15 +9723,15 @@
                         NEXT
 
                         REM repeat set if required
-                        IF sprlist{(L%)}.r%<>1 AND F%<frame_max% THEN
+                        IF sprani{(L%)}.r%<>1 AND F%<frame_max% THEN
                           R%=1
                           REPEAT
                             FOR S%=0 TO C%-1
                               IF F%<frame_max%+1 THEN
-                                PROCspritetoframe(F%,sprlist{(L%)}.s%(S%),X%,Y%)
-                                IF D% MOD sprlist{(L%)}.d%=0 THEN
-                                  X%+=sprlist{(L%)}.h%
-                                  Y%+=sprlist{(L%)}.v%
+                                PROCspritetoframe(F%,sprani{(L%)}.s%(S%),X%,Y%)
+                                IF D% MOD sprani{(L%)}.d%=0 THEN
+                                  X%+=sprani{(L%)}.h%
+                                  Y%+=sprani{(L%)}.v%
                                 ENDIF
                                 F%+=1
                                 D%+=1
@@ -9528,7 +9741,7 @@
                             NEXT
 
                             R%+=1
-                          UNTIL R%=sprlist{(L%)}.r% OR F%>frame_max%
+                          UNTIL R%=sprani{(L%)}.r% OR F%>frame_max%
                         ENDIF
 
                       ENDIF
@@ -9546,16 +9759,16 @@
                   WHEN 33 : REM reset all sets
                     IF FNclearset("RESET ALL SETS?")=1 THEN
                       FOR s%=0 TO 99
-                        sprlist{(s%)}.f%=1
-                        sprlist{(s%)}.r%=0
-                        sprlist{(s%)}.x%=0
-                        sprlist{(s%)}.y%=0
-                        sprlist{(s%)}.h%=0
-                        sprlist{(s%)}.v%=0
-                        sprlist{(s%)}.m%=0
-                        sprlist{(s%)}.d%=1
+                        sprani{(s%)}.f%=1
+                        sprani{(s%)}.r%=0
+                        sprani{(s%)}.x%=0
+                        sprani{(s%)}.y%=0
+                        sprani{(s%)}.h%=0
+                        sprani{(s%)}.v%=0
+                        sprani{(s%)}.m%=0
+                        sprani{(s%)}.d%=1
                         FOR ss%=0 TO 11
-                          sprlist{(s%)}.s%(ss%)=-1
+                          sprani{(s%)}.s%(ss%)=-1
                         NEXT
                       NEXT
                       spr_lstcount%=0
@@ -9571,7 +9784,7 @@
                     menuext%=77
 
                   WHEN 36 : REM put sprite in frame
-                    IF sprlist{(spr_lstcount%)}.s%(0)>-1 THEN
+                    IF sprani{(spr_lstcount%)}.s%(0)>-1 THEN
                       PROCanimput(1)
                       PROCanimredraw
                       PROCanimupdate(0)
@@ -9579,16 +9792,16 @@
 
                   WHEN 37 : REM clear this set
                     IF FNclearset("RESET THIS SET?")=1 THEN
-                      sprlist{(spr_lstcount%)}.f%=1
-                      sprlist{(spr_lstcount%)}.r%=0
-                      sprlist{(spr_lstcount%)}.x%=0
-                      sprlist{(spr_lstcount%)}.y%=0
-                      sprlist{(spr_lstcount%)}.h%=0
-                      sprlist{(spr_lstcount%)}.v%=0
-                      sprlist{(spr_lstcount%)}.m%=0
-                      sprlist{(spr_lstcount%)}.d%=1
+                      sprani{(spr_lstcount%)}.f%=1
+                      sprani{(spr_lstcount%)}.r%=0
+                      sprani{(spr_lstcount%)}.x%=0
+                      sprani{(spr_lstcount%)}.y%=0
+                      sprani{(spr_lstcount%)}.h%=0
+                      sprani{(spr_lstcount%)}.v%=0
+                      sprani{(spr_lstcount%)}.m%=0
+                      sprani{(spr_lstcount%)}.d%=1
                       FOR ss%=0 TO 11
-                        sprlist{(spr_lstcount%)}.s%(ss%)=-1
+                        sprani{(spr_lstcount%)}.s%(ss%)=-1
                       NEXT
 
                     ENDIF
@@ -9596,17 +9809,17 @@
                     PROCanimupdate(0)
 
                   WHEN 38 : REM change plot mode
-                    sprlist{(spr_lstcount%)}.m%=(sprlist{(spr_lstcount%)}.m%+1) MOD 3
-                    PROCanimcontrol(38,plotmode$(sprlist{(spr_lstcount%)}.m%),760+192,656,8,15,4)
+                    sprani{(spr_lstcount%)}.m%=(sprani{(spr_lstcount%)}.m%+1) MOD 3
+                    PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),760+192,656,8,15,4)
 
                   WHEN 39 : REM dec delta per frame count
-                    IF sprlist{(spr_lstcount%)}.d%>1 THEN
-                      sprlist{(spr_lstcount%)}.d%-=1
+                    IF sprani{(spr_lstcount%)}.d%>1 THEN
+                      sprani{(spr_lstcount%)}.d%-=1
                       PROCanimupdate(X%)
                     ENDIF
                   WHEN 40 : REM inc delta per frame count
-                    IF sprlist{(spr_lstcount%)}.d%<12 THEN
-                      sprlist{(spr_lstcount%)}.d%+=1
+                    IF sprani{(spr_lstcount%)}.d%<12 THEN
+                      sprani{(spr_lstcount%)}.d%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
@@ -9639,10 +9852,10 @@
       RECTANGLE 248,308,784,384
       RECTANGLE 250,310,780,380
 
-      PROCgtext(t$,300,540,11,0)
+      PROCgtext(t$,300,540,11,0,0)
 
-      PROCgtext(" RESET ",300,450,10,4)
-      PROCgtext(" CANCEL ",600,450,3,9)
+      PROCgtext(" RESET ",300,450,10,4,0)
+      PROCgtext(" CANCEL ",600,450,3,9,0)
 
       PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
@@ -9701,7 +9914,7 @@
         RECTANGLE FILL 4,DY%+4,1154,116
 
         FOR I%=0 TO 11
-          S%=sprlist{(spr_lstcount%)}.s%(I%)
+          S%=sprani{(spr_lstcount%)}.s%(I%)
           DX%=I%*96
 
           IF S%>-1 THEN
@@ -9715,55 +9928,55 @@
 
         NEXT
 
-        PROCgtext(RIGHT$("00"+STR$(spr_lstcount%+1),3),5*32,760,14,4)
-        PROCgtext(RIGHT$("0"+STR$(SPR%),2),34*32,760,tc%,bc%)
+        PROCgtext(RIGHT$("00"+STR$(spr_lstcount%+1),3),5*32,760,14,4,0)
+        PROCgtext(RIGHT$("0"+STR$(SPR%),2),34*32,760,tc%,bc%,0)
 
-        PROCanimcontrol(38,plotmode$(sprlist{(spr_lstcount%)}.m%),760+192,656,8,15,4)
+        PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),760+192,656,8,15,4)
 
       ENDIF
 
 
       REM frm
       IF c%=1 OR c%=0 THEN
-        PROCgtext(RIGHT$("00"+STR$(sprlist{(spr_lstcount%)}.f%),3),5*32,708,tc%,bc%)
+        PROCgtext(RIGHT$("00"+STR$(sprani{(spr_lstcount%)}.f%),3),5*32,708,tc%,bc%,0)
       ENDIF
 
       REM rep
       IF c%=2 OR c%=0 THEN
-        CASE sprlist{(spr_lstcount%)}.r% OF
+        CASE sprani{(spr_lstcount%)}.r% OF
           WHEN 0
             A$="ALL FRMS"
           WHEN 1
             A$="001 SET "
           OTHERWISE
-            A$=RIGHT$("00"+STR$(sprlist{(spr_lstcount%)}.r%),3)+" SETS"
+            A$=RIGHT$("00"+STR$(sprani{(spr_lstcount%)}.r%),3)+" SETS"
         ENDCASE
-        PROCgtext(A$,5*32,656,tc%,bc%)
+        PROCgtext(A$,5*32,656,tc%,bc%,0)
       ENDIF
 
       REM X
       IF c%=3 OR c%=0 THEN
-        PROCgtext(RIGHT$("  "+STR$(sprlist{(spr_lstcount%)}.x%),3),3*32,552,tc%,bc%)
+        PROCgtext(RIGHT$("  "+STR$(sprani{(spr_lstcount%)}.x%),3),3*32,552,tc%,bc%,0)
       ENDIF
 
       REM H
       IF c%=4 OR c%=0 THEN
-        PROCgtext(RIGHT$("  "+STR$(sprlist{(spr_lstcount%)}.h%),3),20*32,552,tc%,bc%)
+        PROCgtext(RIGHT$("  "+STR$(sprani{(spr_lstcount%)}.h%),3),20*32,552,tc%,bc%,0)
       ENDIF
 
       REM Y
       IF c%=5 OR c%=0 THEN
-        PROCgtext(RIGHT$("  "+STR$(sprlist{(spr_lstcount%)}.y%),3),3*32,500,tc%,bc%)
+        PROCgtext(RIGHT$("  "+STR$(sprani{(spr_lstcount%)}.y%),3),3*32,500,tc%,bc%,0)
       ENDIF
 
       REM V
       IF c%=6 OR c%=0 THEN
-        PROCgtext(RIGHT$("  "+STR$(sprlist{(spr_lstcount%)}.v%),3),20*32,500,tc%,bc%)
+        PROCgtext(RIGHT$("  "+STR$(sprani{(spr_lstcount%)}.v%),3),20*32,500,tc%,bc%,0)
       ENDIF
 
       REM D
       IF c%>8 OR c%=0 THEN
-        PROCgtext(RIGHT$(" "+STR$(sprlist{(spr_lstcount%)}.d%),2),23*32,604,tc%,bc%)
+        PROCgtext(RIGHT$(" "+STR$(sprani{(spr_lstcount%)}.d%),2),23*32,604,tc%,bc%,0)
       ENDIF
 
       REM      VDU 4
@@ -9816,15 +10029,15 @@
       NEXT
 
       REM selected sprite set layout
-      PROCgtext("SET:",0,760,tc%,0)
-      PROCgtext("COUNT:",864,760,lc%,0)
-      PROCgtext("FRM:",0,708,tc%,0)
-      PROCgtext("REP:",0,656,tc%,0)
-      PROCgtext("MODE:",760,656,tc%,0)
-      PROCgtext("START POS:",0,604,lc%,0)
-      PROCgtext("X:",0,552,tc%,0)
-      PROCgtext("Y:",0,500,tc%,0)
-      PROCgtext("  PER    FRAME(S)",544,604,lc%,0)
+      PROCgtext("SET:",0,760,tc%,0,0)
+      PROCgtext("COUNT:",864,760,lc%,0,0)
+      PROCgtext("FRM:",0,708,tc%,0,0)
+      PROCgtext("REP:",0,656,tc%,0,0)
+      PROCgtext("MODE:",760,656,tc%,0,0)
+      PROCgtext("START POS:",0,604,lc%,0,0)
+      PROCgtext("X:",0,552,tc%,0,0)
+      PROCgtext("Y:",0,500,tc%,0,0)
+      PROCgtext("  PER    FRAME(S)",544,604,lc%,0,0)
 
       menuadd%=1100
       PROCanimcontrol(39,"<",menuadd%,604,8,bc%,0)
@@ -9846,8 +10059,8 @@
       LINE X%+2,Y%-2,X%+40,Y%-2
       LINE X%+2,Y%,X%+40,Y%
 
-      PROCgtext("H:",17*32,552,tc%,0)
-      PROCgtext("V:",17*32,500,tc%,0)
+      PROCgtext("H:",17*32,552,tc%,0,0)
+      PROCgtext("V:",17*32,500,tc%,0,0)
 
       REM VDU 4
 
@@ -9881,7 +10094,7 @@
       PROCanimcontrol(9,"<",menuadd%,656,8,bc%,0)
       PROCanimcontrol(10,">",menuadd%,656,8,bc%,0)
       PROCanimcontrol(11,">>",menuadd%,656,8,bc%,0)
-      PROCanimcontrol(38,plotmode$(sprlist{(spr_lstcount%)}.m%),760+192,656,8,15,4)
+      PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),760+192,656,8,15,4)
 
       REM X,H
       menuadd%=212
@@ -9929,7 +10142,7 @@
 
       REM draw frame
       GCOL 0,7
-      F%=sprlist{(spr_lstcount%)}.f%
+      F%=sprani{(spr_lstcount%)}.f%
       FOR Y%=3 TO 74
         OY%=Y%*8-8
         FOR X%=2 TO 79
@@ -9974,7 +10187,7 @@
       IF Y%>123*8 THEN Y%=123*8
       OX%=X%
       OY%=Y%
-      S%=sprlist{(spr_lstcount%)}.s%(0)
+      S%=sprani{(spr_lstcount%)}.s%(0)
       GCOL 3,4
       RECTANGLE X%,Y%-46*8,40*8,48*8
       GCOL 3,10
@@ -10008,8 +10221,8 @@
         REM save the position on click
         IF MB%=4 THEN
           done%=1
-          sprlist{(spr_lstcount%)}.x%=(X% DIV 16)-20
-          sprlist{(spr_lstcount%)}.y%=25-(Y% DIV 24)
+          sprani{(spr_lstcount%)}.x%=(X% DIV 16)-20
+          sprani{(spr_lstcount%)}.y%=25-(Y% DIV 24)
         ENDIF
 
         WAIT 2
@@ -10050,7 +10263,7 @@
       DEF PROCdrawsprbitmap(s%,x%,y%)
       LOCAL X%,Y%,C%,SC%
       IF s%>-1 THEN
-        SC%=sprite_buffer&(s%,0)
+        SC%=sprbuf&(s%,0)
         IF SC%>144 AND SC%<152 THEN
           SC%=SC%-136
         ELSE
@@ -10069,7 +10282,7 @@
       ENDPROC
 
       REM ##########################################################
-      REM draw pixel version of sprite for animation creator
+      REM draw arrow sprite
       DEF PROCdrawarrow(d%,x%,y%,c%)
       LOCAL X%,Y%,C%
       GCOL 0,c%
@@ -10080,6 +10293,21 @@
           IF C% THEN LINE x%+X%*2,y%+Y%*2,x%+X%*2,y%+Y%*2
         NEXT
       NEXT
+      ENDPROC
+
+      REM ##########################################################
+      REM draw scrollbar and add control range
+      DEF PROCdrawscrollbar(cr%,x%,y%,w%,h%,dc%)
+      LOCAL ax%
+      REM (5,SX%+412,menuYadd%-508,52,582,7)
+      IF cr%>-1 PROCaddcontrange(cr%,x%,y%,x%+w%,y%+h%)
+      GCOL 0,dc%
+      RECTANGLE x%,y%,w%,h%
+      LINE x%,y%+64,x%+w%,y%+64
+      LINE x%,y%+h%-64,x%+w%,y%+h%-64
+      ax%=x%+w%/2-10
+      PROCdrawarrow(0,ax%,y%+24,2)
+      PROCdrawarrow(1,ax%,y%+h%-44,2)
       ENDPROC
 
       REM ##########################################################
@@ -10204,6 +10432,7 @@
             frame_buffer&(D%-1,U%)=32
           ELSE
             movie_buffer&(U%)=32
+            movie_colbuf&(U%)=32
           ENDIF
         NEXT
       ENDIF
@@ -10242,7 +10471,7 @@
 
       REM ##########################################################
       REM print text at graphics pos x,y, text col, bg col
-      DEF PROCgtext(t$,x%,y%,tc%,bc%)
+      DEF PROCgtext(t$,x%,y%,tc%,bc%,ma%)
       LOCAL L%
 
       L%=LEN(t$)
@@ -10253,6 +10482,7 @@
       MOVE x%,y%+2
       PRINT t$
       VDU 4
+      menuYadd%+=ma%
 
       ENDPROC
 
@@ -10273,7 +10503,6 @@
       PRINT t$
       VDU 4
       menuYadd%+=ma%
-
 
       REM save control range
       PROCaddcontrange(n%,x%-2,y%-sy%+2,x%+sx%,y%+8)
@@ -10312,6 +10541,14 @@
 
       ENDPROC
 
+      REM ##########################################################
+      REM display a menu line separator X, Y, W, col, menuyadd
+      DEF PROCmenuline(x%,y%,w%,c%,ma%)
+      GCOL 0,c%
+      RECTANGLE x%,y%,w%,2
+      menuYadd%+=ma%
+
+      ENDPROC
 
       REM ##########################################################
       REM save control range
@@ -10430,7 +10667,7 @@
               menuext%=M_canvas%
               menumode%=M_canvas%
               PROCframerestore(frame%)
-              PROCmenudraw
+              IF spritemoving%=-1 PROCmenudraw
 
             WHEN M_moviemode%
               menuext%=M_moviemode%
@@ -10854,7 +11091,6 @@
         ENDIF
       ENDIF
       ENDPROC
-
 
       REM =======================================================================
 
