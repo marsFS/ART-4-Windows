@@ -264,7 +264,7 @@
       curdir$=@dir$
       cursave$=@dir$
       cursavedir$=@dir$
-      gifload$=""
+      bmpload$=""
       save_bin%=1        : REM save bin flag
       save_bmp%=0        : REM save bmp flag
       save_spr%=1        : REM save spr flag - saves sprites and animation information
@@ -3225,12 +3225,9 @@
 
           WHEN 6
             CASE TX% OF
-              WHEN 1,2,3,4,5 : REM import
-                REM menuext%=88
-                REM done%=0
-
-                REM              PROCloadfile(2)
-                PROCimportsprite
+              WHEN 1,2,3,4,5 : REM import sprite from bmp
+                PROCimportsprite(2)
+                menuext%=M_sprites%
                 PROCspritescreen(1)
 
               WHEN 33,34,35,36,37 : REM SCROLL RIGHT
@@ -3451,8 +3448,8 @@
 
           WHEN 20 : REM prev / next sprite
             CASE TX% OF
-              WHEN 1,2,3,4,5 : REM gif convert
-                PROCimportgif
+              WHEN 1,2,3,4,5 : REM import sprite from gif
+                PROCimportsprite(7)
                 menuext%=M_sprites%
                 PROCspritescreen(1)
 
@@ -7533,6 +7530,50 @@
       ENDPROC
 
       REM ##########################################################
+      REM load bmp file and store in import buffer
+      DEF PROCloadbmptobuf(F$)
+      LOCAL C%
+      REM max load size is ~1MB to match import buffer
+      OSCLI "LOAD """+F$+""" "+STR$~import_buffer%%+" +"+STR$~1000000
+
+      REM bmp filetype (2 bytes)
+      T$=CHR$(import_buffer%%?0)+CHR$(import_buffer%%?1)
+      REM bmp filesize (4 bytes) ?2 ?3 ?4 ?5
+      REM bmp reserved (2 bytes) ?6 ?7
+      REM bmp reserved (2 bytes) ?8 ?9
+      REM bmp pixel data offset (4 bytes)
+      bmp_imgofs%=import_buffer%%!10
+      REM bmp header size (4 bytes)
+      REM bmp image width (4 bytes)
+      bmp_imgwid%=import_buffer%%!18
+      REM bmp image height (4 bytes)
+      bmp_imghgt%=import_buffer%%!22
+      REM bmp planes (2 bytes) ?26 ?27
+      REM bmp but per pixel (2 bytes)
+      bmp_imgbpp%=import_buffer%%?28+(import_buffer%%?29*256)
+      REM bmp compression (4 bytes) ?30 ?31 ?32 ?33
+      REM bmp image size (4 bytes) ?34 ?35 ?36 ?37
+      REM bmp x pixels per meter (4 bytes) ?38 ?39 ?40 ?41
+      REM bmp y pixels per meter (4 bytes) ?42 ?43 ?44 ?45
+      REM bmp total colours (4 bytes) ?46 ?47 ?48 ?49
+      REM bmp important colours (4 bytes) ?50 ?51 ?52 ?53
+      IF T$<>"BM" OR bmp_imgofs%<>54 OR bmp_imgbpp%<>24 THEN
+        PRINTTAB(0,0)"Image format not supported, must be BMP 24bpp"
+        C%=0
+        REPEAT
+          PROCREADMOUSE
+          WAIT 5
+          C%+=1
+        UNTIL C%>100 OR MB%<>0
+        PROCWAITMOUSE(0)
+        menuext%=94
+      ELSE
+        menuext%=95
+      ENDIF
+
+      ENDPROC
+
+      REM ##########################################################
       REM load font names
       DEF PROCloadfontnames
       LOCAL N%,I%,C%
@@ -7976,63 +8017,12 @@
             ENDIF
           ENDIF
 
-        WHEN 2 : REM import sprite from bmp
-          PROCchangemode(6,1)
-
-          IF F%=-1 THEN
-            COLOUR 9
-            PRINTTAB(0,0)"NO FILE LOADED"
-            menuext%=94
+        WHEN 2,7 : REM import sprite from bmp or gif
+          IF F%<>-1 THEN
+            bmpload$=curdir$+n$(SEL%)
+            menuext%=95
           ELSE
-
-            REM OSCLI "DISPLAY """+curdir$+n$(SEL%)+""" 0,0"
-
-
-            OSCLI "LOAD """+curdir$+n$(SEL%)+""" "+STR$~import_buffer%%+" +"+STR$~1000000
-
-            REM PRINTTAB(0,0)"LOAD """;curdir$+n$(SEL%);""" ";STR$~import_buffer%%;" +";STR$1000000
-            REM bmp filetype (2 bytes)
-            REM PRINT"Type:";CHR$(import_buffer%%?0);CHR$(import_buffer%%?1)
-            T$=CHR$(import_buffer%%?0)+CHR$(import_buffer%%?1)
-            REM bmp filesize (4 bytes) ?2 ?3 ?4 ?5
-            REM bmp reserved (2 bytes) ?6 ?7
-            REM bmp reserved (2 bytes) ?8 ?9
-            REM bmp pixel data offset (4 bytes)
-            REM PRINT"pOfs:";STR$(import_buffer%%!10)
-            bmp_imgofs%=import_buffer%%!10
-
-            REM bmp header size (4 bytes)
-            REM PRINT"hSze:";STR$(import_buffer%%!14)
-
-            REM bmp image width (4 bytes)
-            REM PRINT"iWid:";STR$(import_buffer%%!18)
-            bmp_imgwid%=import_buffer%%!18
-
-            REM bmp image height (4 bytes)
-            REM PRINT"iHgt:";STR$(import_buffer%%!22)
-            bmp_imghgt%=import_buffer%%!22
-            REM bmp planes (2 bytes) ?26 ?27
-            REM bmp but per pixel (2 bytes)
-            REM PRINT"bpp: ";STR$(import_buffer%%?29);STR$(import_buffer%%?28)
-            bmp_imgbpp%=import_buffer%%?28+(import_buffer%%?29*256)
-
-            REM bmp compression (4 bytes) ?30 ?31 ?32 ?33
-            REM bmp image size (4 bytes) ?34 ?35 ?36 ?37
-            REM bmp x pixels per meter (4 bytes) ?38 ?39 ?40 ?41
-            REM bmp y pixels per meter (4 bytes) ?42 ?43 ?44 ?45
-            REM bmp total colours (4 bytes) ?46 ?47 ?48 ?49
-            REM bmp important colours (4 bytes) ?50 ?51 ?52 ?53
-            IF T$<>"BM" OR bmp_imgofs%<>54 OR bmp_imgbpp%<>24 THEN
-              PRINTTAB(0,0)"Image format not supported, must be BMP 24bpp"
-              PROCWAITMOUSE(4)
-              PROCWAITMOUSE(0)
-              menuext%=94
-            ELSE
-              OSCLI "MDISPLAY "+STR$~import_buffer%%
-              menuext%=95
-            ENDIF
-
-
+            menuext%=94
           ENDIF
 
         WHEN 3 : REM load spr
@@ -8049,22 +8039,11 @@
             PROCWAITMOUSE(0)
           ELSE
 
-            OSCLI "LOAD """+curdir$+n$(SEL%)+""" "+STR$~import_buffer%%+" +"+STR$~1000000
-
-            T$=CHR$(import_buffer%%?0)+CHR$(import_buffer%%?1)
-            bmp_imgofs%=import_buffer%%!10
-            bmp_imgwid%=import_buffer%%!18
-            bmp_imghgt%=import_buffer%%!22
-            bmp_imgbpp%=import_buffer%%?28+(import_buffer%%?29*256)
-
-            IF T$<>"BM" OR bmp_imgofs%<>54 OR bmp_imgbpp%<>24 THEN
-              PRINTTAB(0,0)"Image format not supported, must be BMP 24bpp"
-              PROCWAITMOUSE(4)
-              PROCWAITMOUSE(0)
-            ELSE
+            PROCloadbmptobuf(curdir$+n$(SEL%))
+            IF menuext%=95 THEN
               OSCLI "MDISPLAY "+STR$~import_buffer%%
-              menuext%=95
             ENDIF
+
           ENDIF
 
         WHEN 5 : REM load specific font
@@ -8090,9 +8069,6 @@
             REM WAIT 10
           NEXT
           PROCloadnextframe(1,0)
-
-        WHEN 7 : REM import sprite from bmp
-          IF F%<>-1 gifload$=curdir$+n$(SEL%)
 
       ENDCASE
 
@@ -8802,33 +8778,19 @@
         IF fnum<>0 THEN
           CLOSE#fnum
 
-          OSCLI "LOAD """+curdir$+NAME$+""" "+STR$~import_buffer%%+" +"+STR$1000000
+          PROCloadbmptobuf(curdir$+NAME$)
 
-          T$=CHR$(import_buffer%%?0)+CHR$(import_buffer%%?1)
-          bmp_imgofs%=import_buffer%%!10
-          bmp_imgwid%=import_buffer%%!18
-          bmp_imghgt%=import_buffer%%!22
-          bmp_imgbpp%=import_buffer%%?28+(import_buffer%%?29*256)
+          IF menuext%=95 THEN
+            REM adjust for correct line byte width multiple of 4
+            line_wid%=bmp_imgwid%*3
+            WHILE line_wid% MOD 4<>0
+              line_wid%+=1
+            ENDWHILE
 
-          REM adjust for correct line byte width multiple of 4
-          line_wid%=bmp_imgwid%*3
-          WHILE line_wid% MOD 4<>0
-            line_wid%+=1
-          ENDWHILE
-
-          REM        PRINTTAB(0,0)NAME$;"  F:";STR$(F%);"  ";
-          REM        PRINTT$
-          REM        PRINT"pOfs:";STR$(bmp_imgofs%)
-          REM        PRINT"pWid:";STR$(bmp_imgwid%)
-          REM        PRINT"pHgt:";STR$(bmp_imghgt%)
-          REM        PRINT"pBpp:";STR$(bmp_imgbpp%)
-          REM        PROCWAITMOUSE(4)
-
-          IF T$="BM" AND bmp_imgofs%=54 AND bmp_imgbpp%=24 THEN
             FOR X%=0 TO 77
               FOR Y%=0 TO 71
                 col%=0
-                IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
+                IF X%<bmp_imgwid% AND Y%<bmp_imghgt% THEN
                   ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
                   col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
                 ENDIF
@@ -8839,15 +8801,6 @@
                 ENDIF
               NEXT
             NEXT
-
-          ELSE
-            PRINTTAB(0,0)"INCORRECT IMAGE FORMAT"
-            PRINT"BMP MUST BE 24bpp"
-            PRINT""
-            PRINT"CLICK MOUSE TO CONTINUE."
-            PROCWAITMOUSE(4)
-            PROCWAITMOUSE(0)
-            EXIT FOR
           ENDIF
           S%+=1
         ELSE
@@ -8871,215 +8824,273 @@
 
       REM ##########################################################
       REM import picture to one or more frames
-      DEF PROCimportsprite
+      DEF PROCimportsprite(mode%)
 
-      LOCAL GX%,GY%
+      LOCAL X%,Y%,x%,y%,px%,py%,GX%,GY%,ST%,startx%,starty%,gridsx%,gridsy%,done%
+      LOCAL gf%,nf%,fmax%,delay%,gifobject,initimage%
 
       menuext%=96
       done%=0
-
-      PROCloadfile(2)
+      gf%=0
 
       REM after loadfile menuext% returns: No file: 94, single image: 95, grid: 96
-
-      PROCWAITMOUSE(0)
+      PROCloadfile(mode%)
 
       IF menuext%=94 THEN
-        GX%=0
-        REPEAT
-          PROCREADMOUSE
-          WAIT 5
-          GX%+=1
-        UNTIL GX%>100 OR MB%<>0
+        CLS
+        PRINTTAB(0,0)tr$;" *** NO FILE LOADED *** "
+
       ELSE
 
-        GX%=1
-        GY%=1
+        PROC_imgInit
 
-        startx%=-1
-        starty%=-1
-        gridsx%=78
-        gridsy%=94
+        IF mode%=7 THEN
+          CLS
+          VDU 23,1,0;0;0;0; : REM Disable cursor
 
-        REM adjust for correct byte width multiple of 4
-        line_wid%=bmp_imgwid%*3
-        WHILE line_wid% MOD 4<>0
-          line_wid%+=1
-        ENDWHILE
+          PRINTTAB(0,0)tg$;"LOADING GIF, PLEASE WAIT";CHR$(scode&(0));"...";CHR$(scode&(1));"  ";
 
+          gifobject=FN_imgLoadAnimatedGIF(bmpload$)
 
-        REPEAT
+          REM get gif frame count and initialise first frame
+          IF gifobject<>0 THEN
+            delay%=FN_imgFrame(gifobject, gf%)
+            IF delay%=0 THEN
+              menuext%=94
+            ELSE
+              REPEAT
+                fmax%=gf%
+                gf%+=1
+                delay%=FN_imgFrame(gifobject, gf%)
+              UNTIL delay%=0
+              gf%=0
+              delay%=FN_imgFrame(gifobject, gf%)
+            ENDIF
+          ELSE
+            menuext%=94
+          ENDIF
+          VDU 23,1,1;0;0;0;  : REM Enable cursor
 
-          PROCprint40(0,"Select Sprite: "+RIGHT$("0"+STR$(sprite_cur%+1),2))
-          GCOL 0,2
-          REM RECTANGLE FILL 788,558,494,440
-          RECTANGLE FILL 788,414,638,584
+        ELSE
+          PROCloadbmptobuf(bmpload$)
+        ENDIF
 
-          MX%=(MX% DIV 2)*2
-          MY%=(MY% DIV 2)*2
-          OLDMX%=MX%
-          OLDMY%=MY%
+        REM if bmp or gif loaded then display initial image
+        IF menuext%=95 THEN
+          PROCchangemode(6,1)
+          initimage%=1
 
+          GX%=1
+          GY%=1
 
-          GCOL 3,15
-          FOR X%=0 TO GX%
-            LINE MX%+X%*gridsx%,MY%,MX%+X%*gridsx%,MY%+gridsy%*GY%
-          NEXT
-          FOR Y%=0 TO GY%
-            LINE MX%,MY%+Y%*gridsy%,MX%+gridsx%*GX%,MY%+Y%*gridsy%
-          NEXT
+          startx%=-1
+          starty%=-1
+          gridsx%=78
+          gridsy%=94
 
           REPEAT
-            PROCREADMOUSE
+            IF initimage%=1 THEN
+              REM load current gif frame
+              IF mode%=7 THEN
+                PROC_imgPlot(gifobject, 638, 498, 1, 1, 0)
+                OSCLI "SCREENSAVE """+@tmp$+"M7_TMP.BMP"" 0,0,1280,1000"
+                PROCloadbmptobuf(@tmp$+"M7_TMP.BMP")
+              ELSE
+                OSCLI "MDISPLAY "+STR$~import_buffer%%
+              ENDIF
+
+              REM adjust for correct byte width multiple of 4
+              line_wid%=bmp_imgwid%*3
+              WHILE line_wid% MOD 4<>0
+                line_wid%+=1
+              ENDWHILE
+
+              initimage%=0
+            ENDIF
+
+            PROCprint40(0,"F:"+STR$(gf%+1)+" Select Sprite: "+RIGHT$("0"+STR$(sprite_cur%+1),2))
+            GCOL 0,2
+            REM RECTANGLE FILL 788,558,494,440
+            RECTANGLE FILL 788,414,638,584
 
             MX%=(MX% DIV 2)*2
             MY%=(MY% DIV 2)*2
-            REM start a new selection
+            OLDMX%=-1
+            OLDMY%=MY%
 
-            IF OLDMX%<>MX% OR OLDMY%<>MY% THEN
-              GCOL 3,15
+            REPEAT
+              PROCREADMOUSE
+
+              MX%=(MX% DIV 2)*2
+              MY%=(MY% DIV 2)*2
+              REM start a new selection
+
+              IF OLDMX%<>MX% OR OLDMY%<>MY% THEN
+                IF OLDMX%<>-1 THEN
+                  GCOL 3,15
+                  FOR X%=0 TO GX%
+                    LINE OLDMX%+X%*gridsx%,OLDMY%,OLDMX%+X%*gridsx%,OLDMY%+gridsy%*GY%
+                  NEXT
+                  FOR Y%=0 TO GY%
+                    LINE OLDMX%,OLDMY%+Y%*gridsy%,OLDMX%+gridsx%*GX%,OLDMY%+Y%*gridsy%
+                  NEXT
+                ENDIF
+
+                x%=MX% DIV 2
+                y%=MY% DIV 2
+
+                ST%=0
+                px%=0
+                FOR X%=x% TO x%+39
+                  py%=564
+                  FOR Y%=y% TO y%+47
+
+                    REM IF POINT(X%,Y%)<>0 THEN
+                    col%=0
+                    IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
+                      ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
+                      col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
+                    ENDIF
+                    GCOL 0,SGN(col%)*15
+                    RECTANGLE FILL 794+px%,982-py%,12
+
+                    spr_tmp&(ST%)=SGN(col%)
+                    ST%+=1
+
+                    py%-=12
+                  NEXT
+                  px%+=12
+                NEXT
+
+                GCOL 3,15
+                FOR X%=0 TO GX%
+                  LINE MX%+X%*gridsx%,MY%,MX%+X%*gridsx%,MY%+gridsy%*GY%
+                NEXT
+                FOR Y%=0 TO GY%
+                  LINE MX%,MY%+Y%*gridsy%,MX%+gridsx%*GX%,MY%+Y%*gridsy%
+                NEXT
+                OLDMX%=MX%
+                OLDMY%=MY%
+
+              ELSE
+                WAIT 2
+
+                REM check for cursor keys and enter to capture sprite, esc cancels
+                IF INKEY(-26) AND MX%>0 MX%-=2
+                IF INKEY(-122) AND MX%<1278 MX%+=2
+                IF INKEY(-58) AND MY%<998 MY%+=2
+                IF INKEY(-42) AND MY%>0 MY%-=2
+                IF INKEY(-74) MB%=4
+                IF INKEY(-113) initimage%=2
+
+                REM next image if gif loaded
+                IF mode%=7 THEN
+                  IF INKEY(-64) nf%=gf%+1
+                  IF INKEY(-79) nf%=gf%-1
+                  IF nf%<0 THEN nf%=fmax%
+                  IF nf%>fmax% THEN nf%=0
+                  IF gf%<>nf% THEN
+                    gf%=nf%
+                    delay%=FN_imgFrame(gifobject, gf%)
+                    initimage%=1
+                    WAIT 10
+                  ENDIF
+                ENDIF
+
+                IF OLDMX%<>MX% OR OLDMY%<>MY% THEN MOUSE TO MX%,MY%
+
+              ENDIF
+
+            UNTIL MB%=4 OR initimage%<>0
+            PROCWAITNOKEY(-74,0)
+            PROCWAITNOKEY(-113,0)
+
+            IF initimage%=0 THEN
               FOR X%=0 TO GX%
                 LINE OLDMX%+X%*gridsx%,OLDMY%,OLDMX%+X%*gridsx%,OLDMY%+gridsy%*GY%
               NEXT
               FOR Y%=0 TO GY%
                 LINE OLDMX%,OLDMY%+Y%*gridsy%,OLDMX%+gridsx%*GX%,OLDMY%+Y%*gridsy%
               NEXT
+              PROCWAITMOUSE(0)
 
-              x%=MX% DIV 2
-              y%=MY% DIV 2
-
-              REM PRINTTAB(0,1)STR$(x%);"  ";STR$(y%);"   ";
-
-              REM 48x12 576
-              px%=0
-              FOR X%=x% TO x%+39
-                py%=564
-                FOR Y%=y% TO y%+47
-
-                  REM IF POINT(X%,Y%)<>0 THEN
-                  col%=0
-                  IF X%>-1 AND X%<bmp_imgwid% AND Y%>-1 AND Y%<bmp_imghgt% THEN
-                    ofs%=bmp_imgofs%+X%*3+Y%*line_wid%
-                    col%=import_buffer%%?ofs%+import_buffer%%?(ofs%+1)+import_buffer%%?(ofs%+2)
-                  ENDIF
-                  IF col%>0 THEN
-                    GCOL 0,15
-                  ELSE
-                    GCOL 0,0
-                  ENDIF
-                  RECTANGLE FILL 794+px%,982-py%,12
-
-                  py%-=12
+              REM process selection(s)
+              ST%=0
+              FOR x%=0 TO 39
+                FOR y%=47 TO 0 STEP -1
+                  PROCpoint_sprbuf(x%,y%,spr_tmp&(ST%),sprite_cur%)
+                  ST%+=1
                 NEXT
-                px%+=12
               NEXT
 
-              GCOL 3,15
-              FOR X%=0 TO GX%
-                LINE MX%+X%*gridsx%,MY%,MX%+X%*gridsx%,MY%+gridsy%*GY%
-              NEXT
-              FOR Y%=0 TO GY%
-                LINE MX%,MY%+Y%*gridsy%,MX%+gridsx%*GX%,MY%+Y%*gridsy%
-              NEXT
-              OLDMX%=MX%
-              OLDMY%=MY%
+              PROCprint40(0,"Complete! Process next sprite?  Y   N")
+              GCOL 3,10
+              RECTANGLE FILL 980,960,108,40
 
-            ELSE
-              WAIT 2
+              GCOL 3,9
+              RECTANGLE FILL 1108,960,108,40
 
-              REM check for cursor keys and update mouse
-              IF INKEY(-26) AND MX%>0 THEN MX%-=2
-              IF INKEY(-122) AND MX%<1278 THEN MX%+=2
-              IF INKEY(-58) AND MY%<998 THEN MY%+=2
-              IF INKEY(-42) AND MY%>0 THEN MY%-=2
-              IF INKEY(-74) THEN MB%=4
+              REM check if next sprite should be loaded< either click yes with mouse or press Y or ENTER
+              NSPR%=0
 
-              IF OLDMX%<>MX% OR OLDMY%<>MY% THEN MOUSE TO MX%,MY%
+              REPEAT
+                PROCREADMOUSE
+                IF INKEY(-69) OR INKEY(-74) THEN NSPR%=1
+                IF INKEY(-86) THEN NSPR%=2
+                WAIT 2
+              UNTIL MB%=4 OR NSPR%>0
 
-            ENDIF
+              PROCWAITMOUSE(0)
+              PROCWAITNOKEY(-86,0)
+              PROCWAITNOKEY(-74,0)
+              PROCWAITNOKEY(-69,0)
 
-          UNTIL MB%=4
-          FOR X%=0 TO GX%
-            LINE OLDMX%+X%*gridsx%,OLDMY%,OLDMX%+X%*gridsx%,OLDMY%+gridsy%*GY%
-          NEXT
-          FOR Y%=0 TO GY%
-            LINE OLDMX%,OLDMY%+Y%*gridsy%,OLDMX%+gridsx%*GX%,OLDMY%+Y%*gridsy%
-          NEXT
+              IF (TY%=0 AND TX%>30 AND TX%<34) OR NSPR%=1 THEN
 
-          REM process selection(s)
-          x1%=MX%
-          y1%=MY%
-          x2%=MX%+78
-          y2%=MY%+94
+                REM reset selection
+                startx%=-1
+                IF sprite_cur%<sprite_max%-1 THEN
+                  sprite_cur%+=1
+                ELSE
+                  done%=1
+                ENDIF
 
-          IF x1%>x2% THEN SWAP x1%,x2%
-          IF y1%>y2% THEN SWAP y1%,y2%
-
-          PROCprint40(0,"Processing selection, Sprite: "+STR$(sprite_cur%+1))
-          REM A=GET
-
-          x%=0
-          FOR X%=x1% TO x2% STEP 2
-            y%=47
-            FOR Y%=y1% TO y2% STEP 2
-              REM PRINTTAB(0,1)STR$(x%);"  ";STR$(y%);"   ";
-              IF POINT(X%,Y%)<>0 THEN
-                PROCpoint_sprbuf(x%,y%,1,sprite_cur%)
-              ELSE
-                PROCpoint_sprbuf(x%,y%,0,sprite_cur%)
-              ENDIF
-              y%-=1
-            NEXT
-            x%+=1
-          NEXT
-          REM          PRINTTAB(0,1)STR$(x%);"  ";STR$(y%);"   ";
-          REM          A=GET
-
-          IF menuext%=95 THEN
-            PROCprint40(0,"Complete! Process next sprite?  Y   N")
-            GCOL 3,10
-            RECTANGLE FILL 980,960,108,40
-
-            GCOL 3,9
-            RECTANGLE FILL 1108,960,108,40
-
-            REM check if next sprite should be loaded< either click yes with mouse or press Y or ENTER
-            NSPR%=0
-
-            REPEAT
-              PROCREADMOUSE
-
-              WAIT 2
-
-              IF INKEY(-69) OR INKEY(-74) THEN NSPR%=1
-              IF INKEY(-86) THEN NSPR%=2
-
-            UNTIL MB%=4 OR NSPR%>0
-
-            PROCWAITMOUSE(0)
-
-            IF (TY%=0 AND TX%>30 AND TX%<34) OR NSPR%=1 THEN
-
-              REM reset selection
-              startx%=-1
-              IF sprite_cur%<sprite_max%-1 THEN
-                sprite_cur%+=1
               ELSE
                 done%=1
+
               ENDIF
-
-            ELSE
-              done%=1
-
             ENDIF
+            IF initimage%=2 THEN
+              done%=1
+            ENDIF
+
+          UNTIL done%=1
+
+          PROCchangemode(7,1)
+
+        ELSE
+          IF mode%=2 THEN
+            PRINTTAB(0,0)tr$;" *** ERROR LOADING BMP *** "
+          ELSE
+            PRINTTAB(0,0)tr$;" *** ERROR LOADING GIF *** "
           ENDIF
+        ENDIF
 
-
-        UNTIL done%=1
+        PROC_imgExit
 
       ENDIF
+
+      REM delay exit to display info
+      IF menuext%=94 THEN
+        gf%=0
+        REPEAT
+          PROCREADMOUSE
+          WAIT 5
+          gf%+=1
+        UNTIL gf%>100 OR MB%<>0
+      ENDIF
       PROCWAITMOUSE(0)
-      PROCchangemode(7,1)
+
       menuext%=M_sprites%
 
       ENDPROC
@@ -9087,19 +9098,79 @@
       REM ##########################################################
       REM load gif and save each frame as bmp
       DEF PROCimportgif
-      LOCAL f%,delay%,N$,gifobject
-      gifload$=""
+      LOCAL f%,delay%,gifobject
+      bmpload$=""
 
       PROCloadfile(7)
       CLS
 
-      IF gifload$<>"" THEN
+      IF bmpload$<>"" THEN
         VDU 23,1,0;0;0;0; : REM Disable cursor
 
         PRINTTAB(0,0)tg$;"LOADING GIF, PLEASE WAIT";CHR$(scode&(0));"...";CHR$(scode&(1));"  ";
 
         PROC_imgInit
-        gifobject=FN_imgLoadAnimatedGIF(gifload$)
+        gifobject=FN_imgLoadAnimatedGIF(bmpload$)
+
+        IF gifobject<>0 THEN
+          CLS
+
+          f%=0
+          delay% = FN_imgFrame(gifobject, f%)
+
+          IF delay%>0 THEN
+            REPEAT
+
+              PROC_imgPlot(gifobject, 638, 498, 1, 1, 0)
+              WAIT 5
+
+              REPEAT
+                f%+=1
+                WAIT 5
+                PROCREADMOUSE
+              UNTIL
+            UNTIL MB%<>0
+          ENDIF
+
+          PRINTTAB(0,0)tg$;" *** GIF EXPORT COMPLETE *** "
+
+        ELSE
+          PRINTTAB(0,0)tr$;" *** ERROR LOADING GIF *** "
+        ENDIF
+
+        PROC_imgExit
+        VDU 23,1,1;0;0;0;  : REM Enable cursor
+
+      ELSE
+        PRINTTAB(0,0)tr$;" *** NO FILE LOADED *** "
+      ENDIF
+
+      f%=0
+      REPEAT
+        PROCREADMOUSE
+        WAIT 5
+        f%+=1
+      UNTIL f%>100 OR MB%<>0
+      PROCWAITMOUSE(0)
+
+      ENDPROC
+
+      REM ##########################################################
+      REM load gif and save each frame as bmp
+      DEF PROCexportgif
+      LOCAL f%,delay%,N$,gifobject
+      bmpload$=""
+
+      PROCloadfile(7)
+      CLS
+
+      IF bmpload$<>"" THEN
+        VDU 23,1,0;0;0;0; : REM Disable cursor
+
+        PRINTTAB(0,0)tg$;"LOADING GIF, PLEASE WAIT";CHR$(scode&(0));"...";CHR$(scode&(1));"  ";
+
+        PROC_imgInit
+        gifobject=FN_imgLoadAnimatedGIF(bmpload$)
 
         IF gifobject<>0 THEN
           CLS
