@@ -32,6 +32,8 @@ Current TelePaint features:
 * Canvas Mode - Configure up to 100 animation frames and 48 sprites
 * Movie Mode - Upto 9999 frames, animated sprites
 * Import sprites and BMP files (specific format required 640x480 24bpp BMP)
+* Import sprites from GIF files, step through GIF frames to grab specific sequences of sprites
+* Import GIF includes a special mode for 8 extra large sprites
 * Added Fonts, requires download of M7_FONTS folder
 * Added Transformation tools
 * Implemented gradients correctly
