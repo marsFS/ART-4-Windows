@@ -1822,19 +1822,21 @@
 
       IF insertrepeat%>0 AND movieframe%=-1 skip%=1
 
-      CASE insertmode% OF
-        WHEN 0,1 : REM sprite,ani
-          IF insertlarge%=0 THEN
-            X%=mmWX%+PX%-sprlist{(spritemoving%)}.w%
-            Y%=mmWY%-PY%+(sprlist{(spritemoving%)}.h%*3 DIV 2)
-          ELSE
-            X%=mmWX%+PX%
-            Y%=mmWY%-PY%
-          ENDIF
-        WHEN 3 : REM text
-          X%=((mmWX%+PX%-(LEN(txtlist$(spritemoving%))+1)) DIV 2)*2
-          Y%=((mmWY%-PY%) DIV 3)*3
-      ENDCASE
+      IF spritemoving%>-1 THEN
+        CASE insertmode% OF
+          WHEN 0,1 : REM sprite,ani
+            IF insertlarge%=0 THEN
+              X%=mmWX%+PX%-sprlist{(spritemoving%)}.w%
+              Y%=mmWY%-PY%+(sprlist{(spritemoving%)}.h%*3 DIV 2)
+            ELSE
+              X%=mmWX%+PX%
+              Y%=mmWY%-PY%
+            ENDIF
+          WHEN 3 : REM text
+            X%=((mmWX%+PX%-(LEN(txtlist$(spritemoving%))+1)) DIV 2)*2
+            Y%=((mmWY%-PY%) DIV 3)*3
+        ENDCASE
+      ENDIF
 
       IF skip%=0 THEN
         IF spritemoving%>-1 THEN
@@ -6775,7 +6777,7 @@
       sprlist{(S%)}.h%=H%+1
 
       IF sprlist{(S%)}.m%=0 AND C%>144 THEN
-        FOR Y%=0 TO sprlist{(S%)}.h%
+        FOR Y%=0 TO sprlist{(S%)}.h%-1
           sprbuf&(S%,Y%*20)=C%
         NEXT
       ENDIF
@@ -7457,10 +7459,20 @@
       REM ##########################################################
       REM save sprite file
       DEF PROCsavespritefile(F$,S%,D%)
-      LOCAL f%,u%,c%
+      LOCAL f%,u%,c%,O$
+
+      REM sprite scroll mode
+      O$=STR$(sprlist{(0)}.m%)
+      FOR c%=1 TO sprite_max%-1
+        O$=O$+","+STR$(sprlist{(c%)}.m%)
+      NEXT
 
       IF S%=1 THEN
         f%=OPENOUT(F$+".SPR")
+
+        PRINT#f%,"TELEPAINT_SPR"
+        PRINT#f%,O$
+
         REM sprite data
         FOR c%=0 TO sprite_max%-1
           FOR u%=0 TO 319
@@ -7512,10 +7524,23 @@
       REM ##########################################################
       REM load sprite file
       DEF PROCloadspritefile(F$)
-      LOCAL f%,u%,char%,c%
+      LOCAL f%,u%,char%,c%,I$
+
       f%=OPENIN(F$)
 
       IF f% THEN
+        REM read header for new spr file format or reset ptr if old format
+        INPUT#f%,I$
+        IF I$="TELEPAINT_SPR" THEN
+          INPUT#f%,I$
+          c% = FN_split(I$, ",", a$())
+          FOR u%=0 TO c%-1
+            sprlist{(u%)}.m%=VAL(a$(u%))
+          NEXT
+        ELSE
+          PTR#f%=0
+        ENDIF
+
         c%=0
         REPEAT
           IF c%<sprite_max% THEN
