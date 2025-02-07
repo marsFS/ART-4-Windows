@@ -59,7 +59,7 @@
       INSTALL @lib$+"sortlib"
       INSTALL @lib$+"imglib"
 
-      version$="v0.31"
+      version$="v0.33"
 
       DEBUG%=0 : REM for displaying mouse and other debug details
 
@@ -97,8 +97,6 @@
       M_sprSelect%=16
       M_frmProperty%=17
       M_movieMenu%=18
-
-      M_tempscreen%=20
 
       REM tool constants
       T_paint&=0
@@ -269,6 +267,7 @@
       session%=0
       curdir$=@dir$
       cursave$=@dir$
+      saverootdir$=@dir$
       cursavedir$=@dir$
       bmpload$=""
       save_bin%=1        : REM save bin flag
@@ -934,34 +933,27 @@
           SYS "SDL_SetRenderDrawColor", @memhdc%, 127, 127, 127, 0
           SYS "SDL_RenderDrawLine", @memhdc%, 41*8, 499, 41*8, 20
           SYS "SDL_RenderDrawLine", @memhdc%, 0, 13*20, 639, 13*20
-      ENDCASE
-      *REFRESH
-
-      ENDPROC
-
-      REM ##########################################################
-      REM update sprite grid
-      DEF PROCdrawspritegrid
-      LOCAL X%
-      SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
-
-      FOR X%=0 TO 20
-        IF X%<>10 THEN
+        WHEN M_sprites%
           SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
-        ELSE
-          SYS "SDL_SetRenderDrawColor", @memhdc%, 16, 127, 16, 0
-        ENDIF
-        SYS "SDL_RenderDrawLine", @memhdc%, X%*16+160, 60, X%*16+160, 379
-        IF X%<17 THEN
-          IF X%<>8 THEN
-            SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
-          ELSE
-            SYS "SDL_SetRenderDrawColor", @memhdc%, 16, 127, 16, 0
-          ENDIF
-          SYS "SDL_RenderDrawLine", @memhdc%, 160, X%*20+59, 480, X%*20+59
-        ENDIF
-      NEXT
 
+          FOR X%=0 TO 20
+            IF X%<>10 THEN
+              SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
+            ELSE
+              SYS "SDL_SetRenderDrawColor", @memhdc%, 16, 127, 16, 0
+            ENDIF
+            SYS "SDL_RenderDrawLine", @memhdc%, X%*16+160, 60, X%*16+160, 379
+            IF X%<17 THEN
+              IF X%<>8 THEN
+                SYS "SDL_SetRenderDrawColor", @memhdc%, 63, 63, 63, 0
+              ELSE
+                SYS "SDL_SetRenderDrawColor", @memhdc%, 16, 127, 16, 0
+              ENDIF
+              SYS "SDL_RenderDrawLine", @memhdc%, 160, X%*20+59, 480, X%*20+59
+            ENDIF
+          NEXT
+
+      ENDCASE
       *REFRESH
 
       ENDPROC
@@ -1938,7 +1930,6 @@
                     YC=YF%
                   ENDIF
 
-
                   IF frameskip%=0 THEN
                     IF obj_lstcount%<obj_lstmax% obj_lstcount%+=1
                     obj_lstcur%=obj_lstcount%
@@ -2455,6 +2446,19 @@
               ENDIF
             ENDIF
             PROCspritecommit(sprite_cur%)
+          ENDIF
+
+          REM Q & q - toggle control codes
+          IF INKEY(-17) THEN
+            PROCWAITNOKEY(-17,0)
+            PROCcontrolcodes
+            REPEAT
+              PROCREADMOUSE
+            UNTIL MB%=4 OR INKEY(-17)
+            PROCWAITMOUSE(0)
+            PROCWAITNOKEY(-17,0)
+            PROCchangemode(7,1)
+            PROCspritescreen(1)
           ENDIF
 
         WHEN M_moviemode% : REM movie mode keyboard controls
@@ -3224,12 +3228,11 @@
                 IF session%=0 THEN
                   D$=FNgetdate
                   cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
-                  OSCLI "MD """+cursave$+cursavedir$+""""
-                  OSCLI "CD """+cursave$+cursavedir$+""""
+                  PROCcreatefolder(saverootdir$+cursavedir$)
+                  cursave$=saverootdir$+cursavedir$+"/"
                   session%=1
-                  cursave$=cursave$+cursavedir$+"/"
-
                 ENDIF
+                OSCLI "CD """+saverootdir$+cursavedir$+""""
 
                 PROCsavespritefile(cursave$+"SPRITEDATA",1,0)
 
@@ -3941,7 +3944,7 @@
         WHEN 6 : REM object properties
           PROCgtext("O",SX%+192,menuYadd%,10,0,-64)
           IF redraw%=-1 THEN
-            GCOL 0,3
+            GCOL 0,0
             RECTANGLE FILL SX%+16,64,450,878
           ENDIF
 
@@ -4069,8 +4072,6 @@
               ENDIF
 
             ENDIF
-
-
           ELSE
             PROCgtext("No Objects",SX%+20,menuYadd%,9,0,0)
           ENDIF
@@ -4084,22 +4085,22 @@
           REM colour selector
           IF movieframe%>-1 THEN
             GCOL 0,0
-            RECTANGLE FILL SX%+872,SY%+128,384,40
-            RECTANGLE FILL SX%+872,SY%+72,348,40
-            PROCgtext("FORE",SX%+704,SY%+160,15,0,0)
-            PROCgtext("F",SX%+874+frmlist{(movieframe%)}.f%*48,SY%+160,frmlist{(movieframe%)}.f%+8,0,0)
-            PROCgtext("BACK",SX%+704,SY%+104,15,0,0)
-            PROCgtext("B",SX%+874+frmlist{(movieframe%)}.b%*48,SY%+104,frmlist{(movieframe%)}.b%+8,0,0)
+            RECTANGLE FILL SX%+872,SY%+136,384,40
+            RECTANGLE FILL SX%+872,SY%+80,348,40
+            PROCgtext("FORE",SX%+704,SY%+168,15,0,0)
+            PROCgtext("F",SX%+874+frmlist{(movieframe%)}.f%*48,SY%+168,frmlist{(movieframe%)}.f%+8,0,0)
+            PROCgtext("BACK",SX%+704,SY%+112,15,0,0)
+            PROCgtext("B",SX%+874+frmlist{(movieframe%)}.b%*48,SY%+112,frmlist{(movieframe%)}.b%+8,0,0)
             FOR I%=0 TO 7
               GCOL 0,I%-8*(I%<>0)
-              IF I%<>frmlist{(movieframe%)}.f% RECTANGLE FILL SX%+872+I%*48,SY%+128,32,40
-              IF I%<>frmlist{(movieframe%)}.b% RECTANGLE FILL SX%+872+I%*48,SY%+72,32,40
+              IF I%<>frmlist{(movieframe%)}.f% RECTANGLE FILL SX%+872+I%*48,SY%+136,32,40
+              IF I%<>frmlist{(movieframe%)}.b% RECTANGLE FILL SX%+872+I%*48,SY%+80,32,40
             NEXT
-            PROCanimcontrol(15,"CopyAll",704,48,7,14,4)
-            PROCanimcontrol(16,"RsetAll",1000,48,7,14,4)
+            PROCanimcontrol(15,"CopyAll",704,56,8,7,14,4)
+            PROCanimcontrol(16,"RsetAll",1000,56,8,7,14,4)
           ENDIF
-          PROCaddcontrange(0,SX%+872,SY%+128,SX%+1240,SY%+168)
-          PROCaddcontrange(1,SX%+872,SY%+72,SX%+1240,SY%+112)
+          PROCaddcontrange(0,SX%+872,SY%+136,SX%+1240,SY%+176)
+          PROCaddcontrange(1,SX%+872,SY%+80,SX%+1240,SY%+120)
 
           REM frame selector
           F%=0
@@ -4113,13 +4114,13 @@
 
           REM add frames controls
           menuadd%=32
-          PROCanimcontrol(2,"ADD",menuadd%,160,7,14,4)
+          PROCanimcontrol(2,"ADD",menuadd%,160,0,7,14,4)
           PROCgtext(RIGHT$("000"+STR$(movieframeadd%),3),menuadd%,160,15,4,0)
           menuadd%+=128
-          PROCanimcontrol(3,"<<",menuadd%,160,8,14,0)
-          PROCanimcontrol(4,"<",menuadd%,160,8,14,0)
-          PROCanimcontrol(5,">",menuadd%,160,8,14,0)
-          PROCanimcontrol(6,">>",menuadd%,160,8,14,0)
+          PROCanimcontrol(3,"<<",menuadd%,160,0,8,14,0)
+          PROCanimcontrol(4,"<",menuadd%,160,0,8,14,0)
+          PROCanimcontrol(5,">",menuadd%,160,0,8,14,0)
+          PROCanimcontrol(6,">>",menuadd%,160,0,8,14,0)
 
           REM add frame increments
           PROCgtext("H:",80,112,15,0,0)
@@ -4130,15 +4131,15 @@
 
           REM H,V
           menuadd%=292
-          PROCanimcontrol(7,"<<",menuadd%,112,8,14,0)
-          PROCanimcontrol(8,"<",menuadd%,112,8,14,0)
-          PROCanimcontrol(9,">",menuadd%,112,8,14,0)
-          PROCanimcontrol(10,">>",menuadd%,112,8,14,0)
+          PROCanimcontrol(7,"<<",menuadd%,112,0,8,14,0)
+          PROCanimcontrol(8,"<",menuadd%,112,0,8,14,0)
+          PROCanimcontrol(9,">",menuadd%,112,0,8,14,0)
+          PROCanimcontrol(10,">>",menuadd%,112,0,8,14,0)
           menuadd%=292
-          PROCanimcontrol(11,"<<",menuadd%,64,8,14,0)
-          PROCanimcontrol(12,"<",menuadd%,64,8,14,0)
-          PROCanimcontrol(13,">",menuadd%,64,8,14,0)
-          PROCanimcontrol(14,">>",menuadd%,64,8,14,0)
+          PROCanimcontrol(11,"<<",menuadd%,64,0,8,14,0)
+          PROCanimcontrol(12,"<",menuadd%,64,0,8,14,0)
+          PROCanimcontrol(13,">",menuadd%,64,0,8,14,0)
+          PROCanimcontrol(14,">>",menuadd%,64,0,8,14,0)
 
         WHEN 8 : REM movie mode menu
           PROCgtext("M",SX%+128,menuYadd%,10,0,-64)
@@ -4521,7 +4522,7 @@
                   F%=0
                   F$="ALL"
                   IF objlist{(obj_lstcur%)}.f%>-1 F$=STR$(objlist{(obj_lstcur%)}.f%+1)
-                  PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-192,15,0,0)
+                  PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-200,15,0,0)
                   OS%=LEN(F$)*32
                   REPEAT
                     K%=INKEY(0)
@@ -4545,7 +4546,7 @@
                         IF VAL(F$)>0 F$=LEFT$(F$,LEN(F$)-1)
                         IF VAL(F$)=0 F$="ALL"
                       ENDIF
-                      PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-192,15,0,0)
+                      PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-200,15,0,0)
                     ENDIF
                   UNTIL K%=13 OR K%=27
                   IF K%=13 objlist{(obj_lstcur%)}.f%=VAL(F$)-1
@@ -6413,7 +6414,6 @@
           VDU 31,(U% MOD 40),(U% DIV 40+1),frame_buffer&(f%-1,U%)
         NEXT
       ELSE
-
         FOR U%=0 TO 959
           VDU 31,(U% MOD 40),(U% DIV 40+1),movie_buffer&(U%)
         NEXT
@@ -6447,7 +6447,12 @@
       REM load next frame from buffer and display it
       DEF PROCloadnextframe(F%,S%)
 
-      IF S% THEN
+      IF spritemoving%>-1 THEN
+        PROCchangemode(7,1)
+        PROCframerestore(frame%)
+      ENDIF
+
+      IF S%<>0 AND spritemoving%=-1 THEN
         PROCWAITMOUSE(0)
         PROCframesave(frame%)
       ENDIF
@@ -6456,14 +6461,10 @@
       IF frame%<1 THEN frame%=frame_max%
       PROCframerestore(frame%)
 
-      PROCmenudraw
-
       IF spritemoving%>-1 THEN
-        PROCobjdraw(PX%,PY%,3,13)
-        OLD_PX%=PX%
-        OLD_PY%=PY%
-        PROCmenurestore
         PROCspritemoveinit
+      ELSE
+        PROCmenudraw
       ENDIF
 
       REM reset text cursor
@@ -6530,7 +6531,7 @@
       REM ##########################################################
       REM copy sprite buffer to movie frame
       DEF PROCspritetomovbuf(s%,sx%,sy%,b%)
-      LOCAL X%,Y%,YC%,XC%,SW%,SH%,S%,U%,SX%,SY%
+      LOCAL M%,X%,Y%,YC%,XC%,SW%,SH%,S%,U%,SX%,SY%
 
       IF sprlist{(s%)}.m%=0 THEN
         REM pixel mode
@@ -6564,10 +6565,20 @@
               S%=sprbuf&(s%,U%)
               IF S%>144 AND S%<152 AND X%<=(b% DIV 3) THEN movie_buffer&((b% DIV 3)+(Y%-1)*40)=S%
               IF X%>(b% DIV 3) AND X%<40 THEN
+                M%=movie_buffer&(X%+(Y%-1)*40)
                 IF spr_trns%=1 THEN
-                  IF S%<>32 AND S%<>160 THEN movie_buffer&(X%+(Y%-1)*40)=S%
+                  IF S%<>32 AND S%<>160 THEN
+                    IF M%>144 AND M%<152 THEN
+                    ELSE
+                      movie_buffer&(X%+(Y%-1)*40)=S%
+                    ENDIF
+                  ENDIF
                 ELSE
-                  movie_buffer&(X%+(Y%-1)*40)=S%
+                  IF M%>144 AND M%<152 THEN
+                  ELSE
+                    movie_buffer&(X%+(Y%-1)*40)=S%
+                  ENDIF
+
                 ENDIF
               ENDIF
             ENDIF
@@ -6801,7 +6812,7 @@
 
       PROCupdatespritesize(S%,1)
 
-      PROCdrawspritegrid
+      PROCdrawgrid
 
       ENDPROC
 
@@ -6815,7 +6826,7 @@
         VDU 31,U% MOD 20+10,U% DIV 20+3,sprbuf&(sprite_cur%,U%)
       NEXT
 
-      PROCdrawspritegrid
+      PROCdrawgrid
 
       ENDPROC
 
@@ -8242,7 +8253,7 @@
       REM ##########################################################
       REM save all frames to file, create session folder if not already exists
       DEF PROCsavefile
-      LOCAL D$,done%,OG%,L%,C%
+      LOCAL D$,done%,OG%,L%,C%,F%
 
       PROCWAITMOUSE(0)
 
@@ -8251,15 +8262,13 @@
       REM turn off grid and save state
       OG%=gridshow%
       gridshow%=0
-      C%=-1
 
       PROCchangemode(6,0)
 
       D$=FNgetdate
       IF session%=0 THEN cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
-      REM OSCLI "MD """+cursave$+cursavedir$+""""
 
-      PROCsaveupdate(1,LEFT$(cursavedir$+"                        ",24))
+      PROCsaveupdate(1)
 
       REPEAT
         PROCREADMOUSE
@@ -8268,7 +8277,7 @@
 
           PROCWAITMOUSE(0)
           IF TY%=0 THEN done%=2
-
+          C%=-1
           FOR L%=0 TO controls%
             IF controlrange{(L%)}.x1%>-1 THEN
               IF MX%>controlrange{(L%)}.x1% AND MX%<controlrange{(L%)}.x2% AND MY%>controlrange{(L%)}.y1% AND MY%<controlrange{(L%)}.y2% THEN
@@ -8283,22 +8292,38 @@
           CASE C% OF
             WHEN 2 : REM bin
               save_bin%=(save_bin%+1) AND 1
-              PROCsaveupdate(0,"BIN")
+              PROCsaveupdate(0)
 
             WHEN 3 : REM bmp
               save_bmp%=(save_bmp%+1) AND 1
-              PROCsaveupdate(0,"BMP")
+              PROCsaveupdate(0)
 
             WHEN 4 : REM spr
               save_spr%=(save_spr%+1) AND 1
-              PROCsaveupdate(0,"SPR")
+              PROCsaveupdate(0)
 
             WHEN 5 : REM dat
               save_dat%=(save_dat%+1) AND 1
-              PROCsaveupdate(0,"DAT")
+              PROCsaveupdate(0)
 
-            WHEN 0 : REM save
-              done%=1
+            WHEN 6 : REM reset folder name
+              cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
+              PROCsaveupdate(1)
+
+            WHEN 0 : REM save - if folder already exists then set it as the current save folder, otherwise set flag to create new folder
+              IF cursavedir$<>"" THEN
+                F%=0
+                ON ERROR LOCAL F%=1
+                IF F%=0 OSCLI "CD """+saverootdir$+cursavedir$+""""
+                IF F%=1 THEN
+                  session%=0
+                ELSE
+                  REM done%=FNmsgbox("PROJECT FOLDER EXISTS!","OVERWRITE?"," YES "," NO ")
+                  session%=1
+                  cursave$=saverootdir$+cursavedir$+"/"
+                ENDIF
+                done%=1
+              ENDIF
 
             WHEN 1 : REM cancel
               done%=2
@@ -8306,11 +8331,11 @@
           ENDCASE
           IF save_bin%+save_bmp%+save_spr%+save_dat%=0 THEN
             save_bin%=1
-            PROCsaveupdate(0,"BIN")
+            PROCsaveupdate(0)
           ENDIF
 
         ELSE
-          WAIT 2
+          PROCupdatefilename
         ENDIF
 
       UNTIL done%>0
@@ -8319,13 +8344,13 @@
 
       IF done%=1 THEN
         REM create and change to session folder, strip off seconds value
-        IF session%=0 THEN
-          OSCLI "MD """+cursave$+cursavedir$+""""
-          OSCLI "CD """+cursave$+cursavedir$+""""
-          session%=1
-          cursave$=cursave$+cursavedir$+"/"
-        ENDIF
 
+        IF session%=0 THEN
+          PROCcreatefolder(saverootdir$+cursavedir$)
+          cursave$=saverootdir$+cursavedir$+"/"
+          session%=1
+        ENDIF
+        OSCLI "CD """+saverootdir$+cursavedir$+""""
         REM update last session file
         f%=OPENOUT(@dir$+"telepaint_pref.ini")
         IF f% THEN
@@ -8371,9 +8396,17 @@
       ENDPROC
 
       REM ##########################################################
+      REM create folder ignore any errors
+      DEF PROCcreatefolder(F$)
+      LOCAL F%
+      ON ERROR LOCAL F%=1
+      IF F%=0 OSCLI "MD """+F$+""""
+      ENDPROC
+
+      REM ##########################################################
       REM update save screen options
-      DEF PROCsaveupdate(M%,D$)
-      LOCAL SX%,SY%,SW%,SH%
+      DEF PROCsaveupdate(M%)
+      LOCAL SX%,SY%,SW%,SH%,D$
 
       SX%=100: SY%=100
       SW%=1078 : SH%=800
@@ -8381,17 +8414,18 @@
 
       IF M%=1 THEN
         PROCresetcontrols
+        D$=LEFT$(cursavedir$+"                        ",24)
 
         GCOL 0,0
         RECTANGLE FILL SX%,SY%,SW%,SH%
         GCOL 0,15
         RECTANGLE SX%+8,SY%+8,SW%-16,SH%-16
         RECTANGLE SX%+10,SY%+10,SW%-20,SH%-20
-        REM t$,x%,y%,tc%,bc%
         PROCgtext(" SAVE FILE OPTIONS ",SX%+236,menuYadd%,10,0,-60)
-        PROCgtext("PROJECT NAME: ",SX%+40,menuYadd%,15,0,-48)
-        PROCgtext(D$,SX%+40,menuYadd%,11,4,-60)
-        PROCgtext("FILES TO SAVE:",SX%+40,menuYadd%,15,0,-48)
+        PROCgtext("PROJECT NAME: ",SX%+40,menuYadd%,11,0,-48)
+        PROCmenucontrol(6,"X",SX%+820,menuYadd%,0,9,0)
+        PROCgtext(D$,SX%+40,menuYadd%,11,4,-80)
+        PROCgtext("FILES TO SAVE:",SX%+40,menuYadd%,11,0,-48)
         PROCgtext("BIN:",SX%+40,menuYadd%,15,0,0)
         PROCgtext("(BIN FORMAT 1 KB)",SX%+340,menuYadd%,4,0,-48)
         PROCgtext("BMP:",SX%+40,menuYadd%,15,0,0)
@@ -8399,14 +8433,12 @@
         PROCgtext("SPR:",SX%+40,menuYadd%,15,0,0)
         PROCgtext("(ALL SPRITE DATA)",SX%+340,menuYadd%,4,0,-48)
         PROCgtext("TXT:",SX%+40,menuYadd%,15,0,0)
-        PROCgtext("(DATA STATEMENTS)",SX%+340,menuYadd%,4,0,0)
+        PROCgtext("(SPR DATA STATEMENTS)",SX%+340,menuYadd%,4,0,0)
         PROCmenucontrol(0,"  SAVE  ",SX%+100,SY%+100,12,10,4)
         PROCmenucontrol(1," CANCEL ",SX%+700,SY%+100,9,11,1)
-
-
       ENDIF
 
-      menuYadd%=644
+      menuYadd%=624
       PROCmenucontrol(2," "+CHR$(78+save_bin%*11)+" ",SX%+180,menuYadd%,8,11+4*save_bin%,1+save_bin%)
       PROCmenucontrol(3," "+CHR$(78+save_bmp%*11)+" ",SX%+180,menuYadd%-48,8,11+4*save_bmp%,1+save_bmp%)
       PROCmenucontrol(4," "+CHR$(78+save_spr%*11)+" ",SX%+180,menuYadd%-96,8,11+4*save_spr%,1+save_spr%)
@@ -8415,9 +8447,44 @@
       ENDPROC
 
       REM ##########################################################
+      REM update save screen filename
+      DEF PROCupdatefilename
+      LOCAL SX%,SY%,OS%,K%,F$
+      PRIVATE F%
+      SY%=752
+      SX%=140
+      F$=cursavedir$
+      REM PROCgtext(F$,SX%,SY%,11,4,0)
+      OS%=LEN(F$)*32
+      K%=INKEY(0)
+      IF K%=-1 THEN
+        F%=1-F%
+        GCOL 0,F%*15
+        IF LEN(F$)<24 LINE SX%+OS%,SY%-32,SX%+30+OS%,SY%-32
+
+        WAIT 10
+      ELSE
+        REM check for numbers, letters, _ -
+        IF (K%>47 AND K%<58) OR (K%>64 AND K%<91) OR (K%>96 AND K%<123) OR K%=95 OR K%=45 THEN
+          IF LEN(F$)<24 F$=F$+CHR$(K%)
+        ENDIF
+        REM check if delete or backspace is pressed
+        IF K%=135 OR K%=8 THEN
+          IF LEN(F$)>0 F$=LEFT$(F$,LEN(F$)-1)
+        ENDIF
+
+        REM update dir name if changed
+        IF F$<>cursavedir$ THEN
+          PROCgtext(LEFT$(F$+"                        ",24),SX%,SY%,11,4,0)
+          cursavedir$=F$
+        ENDIF
+      ENDIF
+      ENDPROC
+
+      REM ##########################################################
       REM save all frames to file, create session folder if not already exists
       DEF PROCsavemovie
-      LOCAL D$,N$,done%,OG%,L%,C%,I%
+      LOCAL D$,N$,done%,OG%,L%,C%,I%,F%
 
       PROCWAITMOUSE(0)
 
@@ -8426,16 +8493,13 @@
       REM turn off grid and save state
       OG%=gridshow%
       gridshow%=0
-      C%=-1
 
       PROCchangemode(6,0)
 
       D$=FNgetdate
       IF session%=0 cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
 
-      REM OSCLI "MD """+cursave$+cursavedir$+""""
-
-      PROCsavemovieupdate(1,LEFT$(cursavedir$+"                        ",24))
+      PROCsavemovieupdate(1)
 
       REPEAT
         PROCREADMOUSE
@@ -8444,7 +8508,7 @@
 
           PROCWAITMOUSE(0)
           IF TY%=0 THEN done%=2
-
+          C%=-1
           FOR L%=0 TO controls%
             IF controlrange{(L%)}.x1%>-1 THEN
               IF MX%>controlrange{(L%)}.x1% AND MX%<controlrange{(L%)}.x2% AND MY%>controlrange{(L%)}.y1% AND MY%<controlrange{(L%)}.y2% THEN
@@ -8459,30 +8523,46 @@
           CASE C% OF
             WHEN 2 : REM movie frame data .MOV
               mov_frm%=1-mov_frm%
-              PROCsavemovieupdate(0,"")
+              PROCsavemovieupdate(0)
 
             WHEN 3 : REM movie bin data .BIN
               mov_dat%=1-mov_dat%
-              PROCsavemovieupdate(0,"")
+              PROCsavemovieupdate(0)
 
             WHEN 4 : REM frame bin data .BIN
               mov_bin%=1-mov_bin%
-              PROCsavemovieupdate(0,"")
+              PROCsavemovieupdate(0)
 
             WHEN 5 : REM movie frames .BMP
               mov_bmp%=1-mov_bmp%
-              PROCsavemovieupdate(0,"")
+              PROCsavemovieupdate(0)
 
             WHEN 6 : REM sprite data .SPR
               mov_spr%=1-mov_spr%
-              PROCsavemovieupdate(0,"")
+              PROCsavemovieupdate(0)
 
             WHEN 7 : REM text data .TXT
               mov_txt%=1-mov_txt%
-              PROCsavemovieupdate(0,"")
+              PROCsavemovieupdate(0)
+
+            WHEN 8 : REM reset folder name
+              cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
+              PROCsavemovieupdate(1)
 
             WHEN 0 : REM save
-              done%=1
+              IF cursavedir$<>"" THEN
+                F%=0
+                ON ERROR LOCAL F%=1
+                IF F%=0 OSCLI "CD """+saverootdir$+cursavedir$+""""
+                IF F%=1 THEN
+                  session%=0
+                ELSE
+                  REM done%=FNmsgbox("PROJECT FOLDER EXISTS!","OVERWRITE?"," YES "," NO ")
+                  session%=1
+                  cursave$=saverootdir$+cursavedir$+"/"
+                ENDIF
+                done%=1
+              ENDIF
 
             WHEN 1 : REM cancel
               done%=2
@@ -8490,11 +8570,11 @@
           ENDCASE
           IF mov_frm%+mov_bin%+mov_bmp%+mov_spr%+mov_txt%+mov_dat%=0 THEN
             mov_frm%=1
-            PROCsavemovieupdate(0,"")
+            PROCsavemovieupdate(0)
           ENDIF
 
         ELSE
-          WAIT 2
+          PROCupdatefilename
         ENDIF
 
       UNTIL done%>0
@@ -8504,12 +8584,12 @@
       IF done%=1 THEN
         REM create and change to session folder, strip off seconds value
         IF session%=0 THEN
-          OSCLI "MD """+cursave$+cursavedir$+""""
-          OSCLI "MD """+cursave$+cursavedir$+"/MOVIE_BMP"+""""
-          OSCLI "CD """+cursave$+cursavedir$+""""
+          PROCcreatefolder(saverootdir$+cursavedir$)
+          PROCcreatefolder(saverootdir$+cursavedir$+"/MOVIE_BMP")
+          cursave$=saverootdir$+cursavedir$+"/"
           session%=1
-          cursave$=cursave$+cursavedir$+"/"
         ENDIF
+        OSCLI "CD """+saverootdir$+cursavedir$+""""
 
         REM update last session file
         f%=OPENOUT(@dir$+"telepaint_pref.ini")
@@ -8629,8 +8709,8 @@
 
       REM ##########################################################
       REM update save movie screen options
-      DEF PROCsavemovieupdate(M%,D$)
-      LOCAL SX%,SY%,SW%,SH%
+      DEF PROCsavemovieupdate(M%)
+      LOCAL SX%,SY%,SW%,SH%,D$
 
       SX%=100: SY%=100
       SW%=1078 : SH%=800
@@ -8638,6 +8718,7 @@
 
       IF M%=1 THEN
         PROCresetcontrols
+        D$=LEFT$(cursavedir$+"                        ",24)
 
         GCOL 0,0
         RECTANGLE FILL SX%,SY%,SW%,SH%
@@ -8647,7 +8728,8 @@
         REM t$,x%,y%,tc%,bc%
         PROCgtext(" SAVE MOVIE OPTIONS ",SX%+236,menuYadd%,10,0,-60)
         PROCgtext("MOVIE NAME: ",SX%+40,menuYadd%,15,0,-48)
-        PROCgtext(D$,SX%+40,menuYadd%,11,4,-60)
+        PROCmenucontrol(8,"X",SX%+820,menuYadd%,0,9,0)
+        PROCgtext(D$,SX%+40,menuYadd%,11,4,-80)
         PROCgtext("FILES TO SAVE:",SX%+40,menuYadd%,15,0,-48)
         PROCgtext("MOV:",SX%+40,menuYadd%,15,0,0)
         PROCgtext("(MOVIE FRAME DATA)",SX%+340,menuYadd%,4,0,-48)
@@ -8667,7 +8749,7 @@
 
 
       ENDIF
-      menuYadd%=644
+      menuYadd%=624
       PROCmenucontrol(2," "+CHR$(78+mov_frm%*11)+" ",SX%+180,menuYadd%,8,11+4*mov_frm%,1+mov_frm%)
       PROCmenucontrol(3," "+CHR$(78+mov_dat%*11)+" ",SX%+180,menuYadd%-48,8,11+4*mov_dat%,1+mov_dat%)
       PROCmenucontrol(4," "+CHR$(78+mov_bin%*11)+" ",SX%+180,menuYadd%-96,8,11+4*mov_bin%,1+mov_bin%)
@@ -9116,13 +9198,14 @@
               MY%=(MY% DIV 2)*2
               REM start a new selection
 
-              IF OLDMX%<>MX% OR OLDMY%<>MY% OR oldtop%<>coltop% THEN
+              IF OLDMX%<>MX% OR OLDMY%<>MY% OR oldtop%<>coltop% OR startx%=-1 THEN
                 IF OLDMX%<>-1 PROCupdategrid(OLDMX%,OLDMY%,gridsx%,gridsy%,1,1,3,15)
                 x%=MX% DIV 2
                 y%=MY% DIV 2
 
                 ST%=0
                 px%=0
+                startx%=x%
                 FOR X%=x% TO x%+xsize%
                   py%=384
                   FOR Y%=y% TO y%+ysize%
@@ -9272,43 +9355,22 @@
                 NEXT
               ENDIF
 
-              PROCprint40(0,"Complete! Process next sprite?  Y   N")
-              GCOL 3,10
-              RECTANGLE FILL 980,960,108,40
-
-              GCOL 3,9
-              RECTANGLE FILL 1108,960,108,40
-
-              REM check if next sprite should be loaded< either click yes with mouse or press Y or ENTER
-              NSPR%=0
-
-              REPEAT
-                PROCREADMOUSE
-                IF INKEY(-69) OR INKEY(-74) THEN NSPR%=1
-                IF INKEY(-86) THEN NSPR%=2
-                WAIT 2
-              UNTIL MB%=4 OR NSPR%>0
-
-              PROCWAITMOUSE(0)
-              PROCWAITNOKEY(-86,0)
-              PROCWAITNOKEY(-74,0)
-              PROCWAITNOKEY(-69,0)
-
-              IF (TY%=0 AND TX%>30 AND TX%<34) OR NSPR%=1 THEN
-                REM reset selection
-                startx%=-1
-                IF lrg%=0 THEN
-                  IF sprite_cur%<sprite_max%-1 THEN
-                    sprite_cur%+=1
-                  ELSE
-                    done%=1
-                  ENDIF
-                ELSE
+              REM reset selection
+              startx%=-1
+              IF lrg%=0 THEN
+                IF sprite_cur%<sprite_max%-1 THEN
                   sprite_cur%+=1
-                  IF sprite_cur%=8 done%=1
+                  gf%+=1
+                  IF gf%>fmax% THEN gf%=0
+                  nf%=gf%
+                  delay%=FN_imgFrame(gifobject, gf%)
+                  initimage%=1
+                ELSE
+                  done%=1
                 ENDIF
               ELSE
-                done%=1
+                sprite_cur%+=1
+                IF sprite_cur%=8 done%=1
               ENDIF
             ENDIF
             IF initimage%=2 THEN
@@ -9331,7 +9393,11 @@
 
       ENDIF
 
-      IF lrg%<>0 sprite_cur%=oldsprc%
+      IF lrg%<>0 THEN
+        sprite_cur%=oldsprc%
+      ELSE
+        IF sprite_cur%>0 sprite_cur%-=1
+      ENDIF
 
       REM delay exit to display info
       IF menuext%=94 THEN
@@ -9370,14 +9436,12 @@
           D$=FNgetdate
           IF session%=0 THEN
             cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
-            OSCLI "MD """+cursave$+cursavedir$+""""
-            OSCLI "MD """+cursave$+cursavedir$+"/GIF_BMP"+""""
-            OSCLI "CD """+cursave$+cursavedir$+""""
+            PROCcreatefolder(saverootdir$+cursavedir$)
+            PROCcreatefolder(saverootdir$+cursavedir$+"/GIF_BMP")
+            cursave$=saverootdir$+cursavedir$+"/"
             session%=1
-            cursave$=cursave$+cursavedir$+"/"
-
           ENDIF
-
+          OSCLI "CD """+saverootdir$+cursavedir$+""""
           f%=0
           REPEAT
             delay% = FN_imgFrame(gifobject, f%)
@@ -9796,9 +9860,22 @@
       REM change to mode 6 and overlay control codes on current screen
       DEF PROCcontrolcodes
 
-      LOCAL C%,col%,p%,x%,y%
+      LOCAL C%,col%,p%,x%,y%,xs%,xe%,ys%,ye%
 
       showcodes%=0
+      CASE menuext% OF
+        WHEN M_canvasmode%,M_moviemode%
+          xs%=0
+          xe%=39
+          ys%=0
+          ye%=23
+        WHEN M_sprites%
+          xs%=10
+          xe%=29
+          ys%=2
+          ye%=17
+      ENDCASE
+
       PROCframesave(frame%)
       PROCchangemode(6,0)
       PROCdrawgrid
@@ -9845,10 +9922,9 @@
 
       VDU 5
 
-      FOR x%=0 TO 39
-
-        REM show codes
-        FOR y%=0 TO 23
+      REM show codes
+      FOR x%=xs% TO xe%
+        FOR y%=ys% TO ye%
           C%=frame_buffer&(frame%-1,x%+y%*40)
           p%=0
           CASE C% OF
@@ -9888,7 +9964,6 @@
             WHEN 159 : REM release
               col%=9
               p%=235
-
           ENDCASE
 
           IF p% THEN
@@ -9899,12 +9974,11 @@
             MOVE x%*32+4,953-(y%*40)
             GCOL 0,col%
             VDU p%
-
           ENDIF
-
         NEXT
       NEXT
 
+      VDU 4
       ENDPROC
 
       REM ##########################################################
@@ -9921,12 +9995,7 @@
 
         PRINTTAB(10,1)tb$;CHR$(157);ty$;"SPRITE EDITOR  ";CHR$(156);
 
-        REM PRINTTAB(10,6)STRING$(20,CHR$(172));
-        REM PRINTTAB(10,19)STRING$(20,CHR$(172));
-
         FOR Y%=2 TO 19
-          REM   PRINTTAB(9,Y%)CHR$(181);
-          REM PRINTTAB(30,Y%)CHR$(234);
           VDU 31,8,Y%,151
           VDU 31,31,Y%,156
         NEXT
@@ -9936,7 +10005,6 @@
         VDU 31,30,2,228
         VDU 31,30,19,166
 
-        REM        PRINTTAB(18,19)tb$;CHR$(157);tc$;">  ";CHR$(156);
         PRINTTAB(10,20)tb$;CHR$(157);tc$;"< ";CHR$(156);tb$;CHR$(157);tc$;"> ";CHR$(156);
 
         PRINTTAB(1,24)tb$;CHR$(157);ty$;"MOVIE  ";CHR$(156);
@@ -9965,8 +10033,6 @@
         PRINTTAB(32,14)tc$;"FLP-^";
         PRINTTAB(32,16)tc$;"ROT >";
         PRINTTAB(32,18)tc$;"ROT <";
-
-
       ENDIF
 
       REM REFRESH DYNAMIC AREAS
@@ -10006,7 +10072,6 @@
       LOCAL X%,Y%,S%,SP%,DP%,done%
       REM MODE 6 : CHAR 40x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16  CHARS: 32X40 GU
       PROCchangemode(6,1) : REM MODE 3 : CHAR 80x25 PIXELS: 640x500 GRAPHICS UNITS: 1280x1000 COLOURS: 16
-
 
       PROCanimredraw
       PROCanimupdate(0)
@@ -10284,7 +10349,7 @@
                   WHEN 32 : REM spare
 
                   WHEN 33 : REM reset all sets
-                    IF FNclearset("RESET ALL SETS?")=1 THEN
+                    IF FNmsgbox("RESET ALL SETS?",""," RESET "," CANCEL ")=1 THEN
                       FOR s%=0 TO 99
                         sprani{(s%)}.f%=1
                         sprani{(s%)}.r%=0
@@ -10318,7 +10383,7 @@
                     ENDIF
 
                   WHEN 37 : REM clear this set
-                    IF FNclearset("RESET THIS SET?")=1 THEN
+                    IF FNmsgbox("RESET THIS SET?",""," RESET "," CANCEL ")=1 THEN
                       sprani{(spr_lstcount%)}.f%=1
                       sprani{(spr_lstcount%)}.r%=0
                       sprani{(spr_lstcount%)}.x%=0
@@ -10337,7 +10402,7 @@
 
                   WHEN 38 : REM change plot mode
                     sprani{(spr_lstcount%)}.m%=(sprani{(spr_lstcount%)}.m%+1) MOD 3
-                    PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),760+192,656,8,15,4)
+                    PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),952,656,0,8,15,4)
 
                   WHEN 39 : REM dec delta per frame count
                     IF sprani{(spr_lstcount%)}.d%>1 THEN
@@ -10369,8 +10434,8 @@
 
       REM ##########################################################
       REM display a warning for clearing sets
-      DEF FNclearset(t$)
-      LOCAL done%
+      DEF FNmsgbox(t1$,t2$,b1$,b2$)
+      LOCAL done%,BX%
 
       GCOL 0,0
       RECTANGLE FILL 240,300,800,400
@@ -10379,26 +10444,29 @@
       RECTANGLE 248,308,784,384
       RECTANGLE 250,310,780,380
 
-      PROCgtext(t$,300,540,11,0,0)
+      PROCgtext(t1$,300,640,11,0,0)
+      IF t2$<>"" PROCgtext(t2$,300,600,11,0,0)
 
-      PROCgtext(" RESET ",300,450,10,4,0)
-      PROCgtext(" CANCEL ",600,450,3,9,0)
+      PROCgtext(b1$,300,450,10,4,0)
+      PROCgtext(b2$,600,450,3,9,0)
+
+      BX%=LEN(b1$)*32
 
       PROCWAITMOUSE(4)
       PROCWAITMOUSE(0)
-      IF MX%>298 AND MX%<524 AND MY%>410 AND MY%<500 THEN done%=1
+      IF MX%>298 AND MX%<300+BX% AND MY%>410 AND MY%<500 THEN done%=1
 
       =done%
 
       REM ##########################################################
       REM display a control button, Title, X, Y, border col, text col, fill col
-      DEF PROCanimcontrol(n%,t$,x%,y%,bc%,tc%,fc%)
+      DEF PROCanimcontrol(n%,t$,x%,y%,ya%,bc%,tc%,fc%)
       LOCAL l%,sx%,sy%
 
       l%=LEN(t$)
       sx%=l%*32+20
       REM sx%=l%*32+16
-      sy%=36
+      sy%=38+ya%
 
       GCOL 0,fc%
       RECTANGLE FILL x%+2,y%-sy%+6,sx%-4,sy%
@@ -10458,7 +10526,7 @@
         PROCgtext(RIGHT$("00"+STR$(spr_lstcount%+1),3),5*32,760,14,4,0)
         PROCgtext(RIGHT$("0"+STR$(SPR%),2),34*32,760,tc%,bc%,0)
 
-        PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),760+192,656,8,15,4)
+        PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),952,656,0,8,15,4)
 
       ENDIF
 
@@ -10567,8 +10635,8 @@
       PROCgtext("  PER    FRAME(S)",544,604,lc%,0,0)
 
       menuadd%=1100
-      PROCanimcontrol(39,"<",menuadd%,604,8,bc%,0)
-      PROCanimcontrol(40,">",menuadd%,604,8,bc%,0)
+      PROCanimcontrol(39,"<",menuadd%,604,0,8,bc%,0)
+      PROCanimcontrol(40,">",menuadd%,604,0,8,bc%,0)
 
       GCOL 0,14
 
@@ -10598,65 +10666,65 @@
 
       REM set
       menuadd%=272
-      PROCanimcontrol(0,"<<",menuadd%,760,8,bc%,0)
-      PROCanimcontrol(1,"<",menuadd%,760,8,bc%,0)
-      PROCanimcontrol(2,">",menuadd%,760,8,bc%,0)
-      PROCanimcontrol(3,">>",menuadd%,760,8,bc%,0)
+      PROCanimcontrol(0,"<<",menuadd%,760,0,8,bc%,0)
+      PROCanimcontrol(1,"<",menuadd%,760,0,8,bc%,0)
+      PROCanimcontrol(2,">",menuadd%,760,0,8,bc%,0)
+      PROCanimcontrol(3,">>",menuadd%,760,0,8,bc%,0)
 
       REM put button
-      PROCanimcontrol(36,"PUT",menuadd%,760,7,14,4)
-      PROCanimcontrol(37,"CLR",menuadd%,760,7,1,0)
+      PROCanimcontrol(36,"PUT",menuadd%,760,0,7,14,4)
+      PROCanimcontrol(37,"CLR",menuadd%,760,0,7,1,0)
 
       REM FRM
       menuadd%=272
-      PROCanimcontrol(4,"<<",menuadd%,708,8,bc%,0)
-      PROCanimcontrol(5,"<",menuadd%,708,8,bc%,0)
-      PROCanimcontrol(6,">",menuadd%,708,8,bc%,0)
-      PROCanimcontrol(7,">>",menuadd%,708,8,bc%,0)
+      PROCanimcontrol(4,"<<",menuadd%,708,0,8,bc%,0)
+      PROCanimcontrol(5,"<",menuadd%,708,0,8,bc%,0)
+      PROCanimcontrol(6,">",menuadd%,708,0,8,bc%,0)
+      PROCanimcontrol(7,">>",menuadd%,708,0,8,bc%,0)
 
 
       REM REP
       menuadd%=432
-      PROCanimcontrol(8,"<<",menuadd%,656,8,bc%,0)
-      PROCanimcontrol(9,"<",menuadd%,656,8,bc%,0)
-      PROCanimcontrol(10,">",menuadd%,656,8,bc%,0)
-      PROCanimcontrol(11,">>",menuadd%,656,8,bc%,0)
-      PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),760+192,656,8,15,4)
+      PROCanimcontrol(8,"<<",menuadd%,656,0,8,bc%,0)
+      PROCanimcontrol(9,"<",menuadd%,656,0,8,bc%,0)
+      PROCanimcontrol(10,">",menuadd%,656,0,8,bc%,0)
+      PROCanimcontrol(11,">>",menuadd%,656,0,8,bc%,0)
+      PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),952,656,0,8,15,4)
 
       REM X,H
       menuadd%=212
-      PROCanimcontrol(12,"<<",menuadd%,552,8,bc%,0)
-      PROCanimcontrol(13,"<",menuadd%,552,8,bc%,0)
-      PROCanimcontrol(14,">",menuadd%,552,8,bc%,0)
-      PROCanimcontrol(15,">>",menuadd%,552,8,bc%,0)
+      PROCanimcontrol(12,"<<",menuadd%,552,0,8,bc%,0)
+      PROCanimcontrol(13,"<",menuadd%,552,0,8,bc%,0)
+      PROCanimcontrol(14,">",menuadd%,552,0,8,bc%,0)
+      PROCanimcontrol(15,">>",menuadd%,552,0,8,bc%,0)
       menuadd%=752
-      PROCanimcontrol(16,"<<",menuadd%,552,8,bc%,0)
-      PROCanimcontrol(17,"<",menuadd%,552,8,bc%,0)
-      PROCanimcontrol(18,">",menuadd%,552,8,bc%,0)
-      PROCanimcontrol(19,">>",menuadd%,552,8,bc%,0)
+      PROCanimcontrol(16,"<<",menuadd%,552,0,8,bc%,0)
+      PROCanimcontrol(17,"<",menuadd%,552,0,8,bc%,0)
+      PROCanimcontrol(18,">",menuadd%,552,0,8,bc%,0)
+      PROCanimcontrol(19,">>",menuadd%,552,0,8,bc%,0)
 
       REM Y,V
       menuadd%=212
-      PROCanimcontrol(20,"<<",menuadd%,500,8,bc%,0)
-      PROCanimcontrol(21,"<",menuadd%,500,8,bc%,0)
-      PROCanimcontrol(22,">",menuadd%,500,8,bc%,0)
-      PROCanimcontrol(23,">>",menuadd%,500,8,bc%,0)
+      PROCanimcontrol(20,"<<",menuadd%,500,0,8,bc%,0)
+      PROCanimcontrol(21,"<",menuadd%,500,0,8,bc%,0)
+      PROCanimcontrol(22,">",menuadd%,500,0,8,bc%,0)
+      PROCanimcontrol(23,">>",menuadd%,500,0,8,bc%,0)
       menuadd%=752
-      PROCanimcontrol(24,"<<",menuadd%,500,8,bc%,0)
-      PROCanimcontrol(25,"<",menuadd%,500,8,bc%,0)
-      PROCanimcontrol(26,">",menuadd%,500,8,bc%,0)
-      PROCanimcontrol(27,">>",menuadd%,500,8,bc%,0)
+      PROCanimcontrol(24,"<<",menuadd%,500,0,8,bc%,0)
+      PROCanimcontrol(25,"<",menuadd%,500,0,8,bc%,0)
+      PROCanimcontrol(26,">",menuadd%,500,0,8,bc%,0)
+      PROCanimcontrol(27,">>",menuadd%,500,0,8,bc%,0)
 
       REM menu
       menuadd%=16
-      PROCanimcontrol(28,"LOAD",menuadd%,940,7,15,0)
-      PROCanimcontrol(29,"SAVE",menuadd%,940,7,15,0)
-      PROCanimcontrol(30,"PLOT",menuadd%,940,7,14,4)
-      PROCanimcontrol(31,"UNDO",menuadd%,940,7,3,0)
-      PROCanimcontrol(32,"----",menuadd%,940,7,8,0)
-      PROCanimcontrol(33,"RSET",menuadd%,940,7,1,0)
-      PROCanimcontrol(34,"SPR",menuadd%,940,9,11,1)
-      PROCanimcontrol(35,"EXIT",menuadd%,940,9,11,1)
+      PROCanimcontrol(28,"LOAD",menuadd%,940,0,7,15,0)
+      PROCanimcontrol(29,"SAVE",menuadd%,940,0,7,15,0)
+      PROCanimcontrol(30,"PLOT",menuadd%,940,0,7,14,4)
+      PROCanimcontrol(31,"UNDO",menuadd%,940,0,7,3,0)
+      PROCanimcontrol(32,"----",menuadd%,940,0,7,8,0)
+      PROCanimcontrol(33,"RSET",menuadd%,940,0,7,1,0)
+      PROCanimcontrol(34,"SPR",menuadd%,940,0,9,11,1)
+      PROCanimcontrol(35,"EXIT",menuadd%,940,0,9,11,1)
 
       ENDPROC
 
@@ -11182,7 +11250,7 @@
               menuext%=M_canvasmode%
               menumode%=M_canvasmode%
               PROCframerestore(frame%)
-              PROCmenudraw
+              IF spritemoving%=-1 PROCmenudraw
 
             WHEN M_moviemode%
               menuext%=M_moviemode%
