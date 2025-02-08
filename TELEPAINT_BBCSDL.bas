@@ -401,7 +401,7 @@
       REM sprlist Width, Height, Mode - 0 for pixel (single colour or code, 1 for char (multiple colours and codes)
       REM sprlrg - 8 large sprites for importing and displaying large images
       DIM sprbuf&(sprite_max%-1,319)
-      DIM sprlrg&(7,30000)
+      DIM sprlrg&(11,30000)
       DIM sprlist{(sprite_max%-1) w%,h%,m%}
       DIM spr_tmp&(2000)
 
@@ -417,7 +417,7 @@
       REM u% = toggle undo repeat action, will remove any objs with matching parent=obj number
       DIM objlist{(obj_lstmax%) obj%,type%,f%,rep%,hop%,parent%,x%,y%,h%,v%,m%,c%,u%}
       DIM frmlist{(9999) x%,y%,b%,f%}
-      DIM sprani{(99) s%(11),f%,r%,x%,y%,h%,v%,m%,d%}
+      DIM sprani{(99) s%(11),f%,r%,x%,y%,h%,v%,m%,d%,c%}
       DIM txtlist$(999)
 
       REM animation and menu controls - can be redfinable depending on current screen
@@ -506,6 +506,7 @@
         FOR ss%=0 TO 11
           sprani{(S%)}.s%(ss%)=-1
           sprani{(S%)}.d%=1
+          sprani{(S%)}.c%=0
         NEXT
       NEXT
 
@@ -1918,7 +1919,7 @@
                       IF sprani{(insertset%)}.s%(insertani%)=-1 insertani%=0
                       spritemoving%=sprani{(insertset%)}.s%(insertani%)
                     ELSE
-                      IF insertani%>7 insertani%=0
+                      IF insertani%>11 insertani%=0
                       spritemoving%=insertani%
                     ENDIF
 
@@ -5177,7 +5178,7 @@
                 IF insertset%>-1 THEN
                   IF sprani{(insertset%)}.s%(insertani%)=-1 insertani%=0
                 ELSE
-                  IF insertani%>7 insertani%=0
+                  IF insertani%>11 insertani%=0
                 ENDIF
               NEXT
               IF insertset%>-1 THEN
@@ -7504,6 +7505,7 @@
           PRINT#f%,sprani{(c%)}.v%
           PRINT#f%,sprani{(c%)}.m%
           PRINT#f%,sprani{(c%)}.d%
+          PRINT#f%,sprani{(c%)}.c%
         NEXT
 
         CLOSE#f%
@@ -7576,6 +7578,7 @@
               INPUT#f%,sprani{(c%)}.v%
               INPUT#f%,sprani{(c%)}.m%
               INPUT#f%,sprani{(c%)}.d%
+              INPUT#f%,sprani{(c%)}.c%
             NEXT
           ENDIF
         UNTIL EOF#f%
@@ -9353,6 +9356,7 @@
                     ST%+=1
                   NEXT
                 NEXT
+                PROCupdatespritesize(sprite_cur%,0)
               ENDIF
 
               REM reset selection
@@ -9360,18 +9364,27 @@
               IF lrg%=0 THEN
                 IF sprite_cur%<sprite_max%-1 THEN
                   sprite_cur%+=1
-                  gf%+=1
-                  IF gf%>fmax% THEN gf%=0
-                  nf%=gf%
-                  delay%=FN_imgFrame(gifobject, gf%)
                   initimage%=1
                 ELSE
                   done%=1
                 ENDIF
               ELSE
-                sprite_cur%+=1
-                IF sprite_cur%=8 done%=1
+                IF sprite_cur%<11 THEN
+                  sprite_cur%+=1
+                  initimage%=1
+                ELSE
+                  done%=1
+                ENDIF
               ENDIF
+
+              REM advance gif frame
+              IF mode%=7 AND initimage%=1 THEN
+                gf%+=1
+                IF gf%>fmax% THEN gf%=0
+                nf%=gf%
+                delay%=FN_imgFrame(gifobject, gf%)
+              ENDIF
+
             ENDIF
             IF initimage%=2 THEN
               done%=1
@@ -10063,7 +10076,6 @@
       REM SYS "SDL_SetRenderDrawColor", @memhdc%, 0, 0, 255, 255
       REM SYS "SDL_RenderFillRect", @memhdc%, pt{}
 
-
       ENDPROC
 
       REM ##########################################################
@@ -10082,14 +10094,17 @@
           IF MX%>6 AND MX%<1156 AND MY%>6 AND MY%<450 THEN
             SP%=(MX%-8) DIV 96+((448-MY%) DIV 112)*12
 
-            REM handle sprite dragging
-            REPEAT
-              PROCREADMOUSE
-            UNTIL MB%=0
-            IF MX%>6 AND MX%<1156 AND MY%>776 AND MY%<890 THEN
-              DP%=(MX%-8) DIV 96
-              sprani{(spr_lstcount%)}.s%(DP%)=SP%
-              PROCanimupdate(0)
+            REM insert next sprite set obj
+            PROCWAITMOUSE(0)
+            IF MX%>6 AND MX%<1156 AND MY%>6 AND MY%<450 THEN
+              IF SP%=(MX%-8) DIV 96+((448-MY%) DIV 112)*12 THEN
+                DP%=sprani{(spr_lstcount%)}.c%
+                IF DP%<12 THEN
+                  sprani{(spr_lstcount%)}.c%+=1
+                  sprani{(spr_lstcount%)}.s%(sprani{(spr_lstcount%)}.c%-1)=SP%
+                  PROCanimupdate(0)
+                ENDIF
+              ENDIF
             ENDIF
           ELSE
             PROCWAITMOUSE(0)
@@ -10110,15 +10125,15 @@
                     ENDIF
 
                   WHEN 2 : REM set inc
-                    IF spr_lstcount%<98 THEN
+                    IF spr_lstcount%<99 THEN
                       spr_lstcount%+=1
                       PROCanimupdate(X%)
                     ENDIF
 
                   WHEN 3 : REM set inc 10
-                    IF spr_lstcount%<98 THEN
+                    IF spr_lstcount%<99 THEN
                       spr_lstcount%+=10
-                      IF spr_lstcount%>98 THEN spr_lstcount%=98
+                      IF spr_lstcount%>99 THEN spr_lstcount%=99
                       PROCanimupdate(X%)
                     ENDIF
 
@@ -10293,11 +10308,7 @@
                         D%=1
 
                         REM count sprites in this set
-                        C%=0
-                        REPEAT
-                          C%+=1
-                        UNTIL sprani{(L%)}.s%(C%)=-1 OR C%=11
-                        IF C%=11 AND sprani{(L%)}.s%(C%)>-1 THEN C%=12
+                        C%=sprani{(L%)}.c%
 
                         REM plot at least 1 set
                         FOR S%=0 TO C%-1
@@ -10359,6 +10370,7 @@
                         sprani{(s%)}.v%=0
                         sprani{(s%)}.m%=0
                         sprani{(s%)}.d%=1
+                        sprani{(s%)}.c%=0
                         FOR ss%=0 TO 11
                           sprani{(s%)}.s%(ss%)=-1
                         NEXT
@@ -10392,6 +10404,7 @@
                       sprani{(spr_lstcount%)}.v%=0
                       sprani{(spr_lstcount%)}.m%=0
                       sprani{(spr_lstcount%)}.d%=1
+                      sprani{(spr_lstcount%)}.c%=0
                       FOR ss%=0 TO 11
                         sprani{(spr_lstcount%)}.s%(ss%)=-1
                       NEXT
@@ -10494,7 +10507,7 @@
       REM ##########################################################
       REM update animation screen details
       DEF PROCanimupdate(c%)
-      LOCAL SPR%,I%,S%,DX%,DY%,tc%,bc%
+      LOCAL I%,S%,DX%,DY%,tc%,bc%
       c%=c% DIV 4
 
       tc%=11
@@ -10513,7 +10526,6 @@
           DX%=I%*96
 
           IF S%>-1 THEN
-            SPR%+=1
             PROCdrawanimspr(S%,DX%+12,DY%+16)
             GCOL 0,15
           ELSE
@@ -10524,7 +10536,7 @@
         NEXT
 
         PROCgtext(RIGHT$("00"+STR$(spr_lstcount%+1),3),5*32,760,14,4,0)
-        PROCgtext(RIGHT$("0"+STR$(SPR%),2),34*32,760,tc%,bc%,0)
+        PROCgtext(RIGHT$("0"+STR$(sprani{(spr_lstcount%)}.c%),2),34*32,760,tc%,bc%,0)
 
         PROCanimcontrol(38,plotmode$(sprani{(spr_lstcount%)}.m%),952,656,0,8,15,4)
 
