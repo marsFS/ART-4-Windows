@@ -28,12 +28,13 @@ Current ART features (needs updating for each version):
 Current TelePaint features:
 * Requires BBC Basic for SDL 2.0
 * Configured for BBC Micro Mode 7 (40x25 chars, 78x72 sixels)
-* Save and load files in BIN and/or BMP format
+* Save and load files in BIN and/or BMP format, project name can now be edited
 * Canvas Mode - Configure up to 100 animation frames and 48 sprites
-* Movie Mode - Upto 9999 frames, animated sprites
+* Movie Mode - Up to 9999 frames, animated sprites
+* Movie Mode - Up to 99999 insetable objects, including sprites, animated sprites, text
 * Import sprites and BMP files (specific format required 640x480 24bpp BMP)
 * Import sprites from GIF files, step through GIF frames to grab specific sequences of sprites
-* Import GIF includes a special mode for 8 extra large sprites
+* Import GIF includes a special mode for 12 extra large sprites
 * Added Fonts, requires download of M7_FONTS folder
 * Added Transformation tools
 * Implemented gradients correctly
