@@ -44,4 +44,4 @@ Current TelePaint features:
 * * CTRL + C  : Open Selection Tool
 * * SHIFT + Cursors   : Move selected region around in pixel increments
 * * CRTL + Left / Right  : Copy current frame to prev / next frame
-* * Moive mode added many hotkeys, access the help screen for details
+* * Movie mode added many hotkeys, access the help screen for details
