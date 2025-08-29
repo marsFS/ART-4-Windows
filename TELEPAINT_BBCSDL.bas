@@ -66,7 +66,7 @@
       INSTALL @lib$+"sortlib"
       INSTALL @lib$+"imglib"
 
-      version$="v0.34"
+      version$="v0.35"
 
       DEBUG%=0 : REM for displaying mouse and other debug details, F12 toggles debug mode while running Telepaint
 
@@ -1967,7 +1967,7 @@
 
       REM skip inserting object on background frame if animated or relative objects selected
       IF insertrepeat%>0 AND insertrepeat%<4 AND movieframe%=-1 skip%=1
-      REM IF insertrelflag%=1 AND movieframe%=-1 skip%=1
+      IF insertrelflag%=1 AND movieframe%=-1 skip%=1
 
       IF skip%=0 THEN
 
@@ -3550,10 +3550,10 @@
                 IF session%=0 THEN
                   D$=FNgetdate
                   cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
-                  PROCcreatefolder(saverootdir$+cursavedir$)
-                  cursave$=saverootdir$+cursavedir$+"/"
                   session%=1
                 ENDIF
+                PROCcreatefolder(saverootdir$+cursavedir$)
+                cursave$=saverootdir$+cursavedir$+"/"
                 OSCLI "CD """+saverootdir$+cursavedir$+""""
 
                 PROCsavespritefile(cursave$+"SPRITEDATA",1,0)
@@ -5487,7 +5487,7 @@
         insertskipcount%=0 : REM multiple frames skip count
         insertfrmrep%=0    : REM animation frame repeat count
         insertfrmindex%=1  : REM animation frame start index
-        insertrelflag%=1   : REM sprite relative position flag
+        IF menufrom%=M_moviemode% insertrelflag%=1 ELSE insertrelflag%=0  : REM sprite relative position flag
       ELSE
         IF insertfrmindex%>sprani{(insertset%)}.c% insertfrmindex%=1
       ENDIF
@@ -5507,7 +5507,7 @@
             insertsave%=1-insertsave%
           WHEN 2 : REM toggle multiple frames flag
             insertrepflag%=1-insertrepflag%
-          WHEN 3 : REM increment repeat frames
+          WHEN 3 : REM toggle relative flag
             insertrelflag%=1-insertrelflag%
           WHEN 4 : REM decrement frame skip count
             IF insertskipcount%>0 insertskipcount%-=1
@@ -5582,18 +5582,18 @@
         WHEN 0,3 : REM sprite or text
           IF r%=1 THEN
             PROCgtext("Multiple Frames?",dx%+84,dt%-100,7,0,0)
-            PROCgtext("Relative To Frame?",dx%+84,dt%-160,7,0,0)
+            IF menufrom%=M_moviemode% PROCgtext("Relative To Frame?",dx%+84,dt%-160,7,0,0)
             PROCgtext("Skip Frames:",dx%+36,dt%-220,7,0,0)
             PROCanimcontrol(4,"<",dx%+564,dt%-220,0,7,10,8)
             PROCanimcontrol(5,">",dx%+624,dt%-220,0,7,10,8)
           ENDIF
           PROCdrawcustomspr(2,4+insertrepflag%,dx%+36,dt%-126,10)
-          PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-186,10)
+          IF menufrom%=M_moviemode% PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-186,10)
           PROCgtext(RIGHT$("0"+STR$(insertskipcount%),2),dx%+484,dt%-220,11,8,0)
 
         WHEN 1 : REM ani
           IF r%=1 THEN
-            PROCgtext("Relative To Frame?",dx%+84,dt%-100,7,0,0)
+            IF menufrom%=M_moviemode% PROCgtext("Relative To Frame?",dx%+84,dt%-100,7,0,0)
             PROCgtext("Skip Frames:",dx%+36,dt%-160,7,0,0)
             PROCanimcontrol(4,"<",dx%+564,dt%-160,0,7,10,8)
             PROCanimcontrol(5,">",dx%+624,dt%-160,0,7,10,8)
@@ -5604,7 +5604,7 @@
             PROCanimcontrol(8,"<",dx%+564,dt%-280,0,7,10,8)
             PROCanimcontrol(9,">",dx%+624,dt%-280,0,7,10,8)
           ENDIF
-          PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-126,10)
+          IF menufrom%=M_moviemode% PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-126,10)
           PROCgtext(RIGHT$("0"+STR$(insertskipcount%),2),dx%+484,dt%-160,11,8,0)
           PROCgtext(RIGHT$("0"+STR$(insertfrmrep%),2),dx%+484,dt%-220,11,8,0)
           PROCgtext(RIGHT$("0"+STR$(insertfrmindex%),2),dx%+484,dt%-280,11,8,0)
@@ -5623,7 +5623,7 @@
             PROCgtext("Pixel Mode?",dx%+84,dt%-160,7,0,0)
           ENDIF
           PROCdrawcustomspr(2,4+insertrepflag%,dx%+36,dt%-126,10)
-          PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-186,10)
+          IF menufrom%=M_moviemode% PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-186,10)
 
       ENDCASE
 
@@ -8997,7 +8997,7 @@
       PROCchangemode(6,0)
 
       D$=FNgetdate
-      IF session%=0 THEN cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
+      IF session%=0 cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
 
       PROCsaveupdate(1)
 
@@ -9033,16 +9033,10 @@
 
             WHEN 0 : REM save - if folder already exists then set it as the current save folder, otherwise set flag to create new folder
               IF cursavedir$<>"" THEN
-                F%=0
-                ON ERROR LOCAL F%=1
-                IF F%=0 OSCLI "CD """+saverootdir$+cursavedir$+""""
-                IF F%=1 THEN
-                  session%=0
-                ELSE
-                  REM done%=FNmsgbox("PROJECT FOLDER EXISTS!","OVERWRITE?"," YES "," NO ")
-                  session%=1
-                  cursave$=saverootdir$+cursavedir$+"/"
-                ENDIF
+                PROCcreatefolder(saverootdir$+cursavedir$)
+                OSCLI "CD """+saverootdir$+cursavedir$+""""
+                cursave$=saverootdir$+cursavedir$+"/"
+                session%=1
                 done%=1
               ENDIF
 
@@ -9064,14 +9058,6 @@
       PROCchangemode(7,1)
 
       IF done%=1 THEN
-        REM create and change to session folder, strip off seconds value
-
-        IF session%=0 THEN
-          PROCcreatefolder(saverootdir$+cursavedir$)
-          cursave$=saverootdir$+cursavedir$+"/"
-          session%=1
-        ENDIF
-        OSCLI "CD """+saverootdir$+cursavedir$+""""
         REM update last session file
         f%=OPENOUT(@dir$+"telepaint_pref.ini")
         IF f% THEN
@@ -9262,16 +9248,11 @@
 
             WHEN 0 : REM save
               IF cursavedir$<>"" THEN
-                F%=0
-                ON ERROR LOCAL F%=1
-                IF F%=0 OSCLI "CD """+saverootdir$+cursavedir$+""""
-                IF F%=1 THEN
-                  session%=0
-                ELSE
-                  REM done%=FNmsgbox("PROJECT FOLDER EXISTS!","OVERWRITE?"," YES "," NO ")
-                  session%=1
-                  cursave$=saverootdir$+cursavedir$+"/"
-                ENDIF
+                PROCcreatefolder(saverootdir$+cursavedir$)
+                PROCcreatefolder(saverootdir$+cursavedir$+"/MOVIE_BMP")
+                OSCLI "CD """+saverootdir$+cursavedir$+""""
+                session%=1
+                cursave$=saverootdir$+cursavedir$+"/"
                 done%=1
               ENDIF
 
@@ -9293,14 +9274,6 @@
       PROCchangemode(7,1)
 
       IF done%=1 THEN
-        REM create and change to session folder, strip off seconds value
-        IF session%=0 THEN
-          PROCcreatefolder(saverootdir$+cursavedir$)
-          PROCcreatefolder(saverootdir$+cursavedir$+"/MOVIE_BMP")
-          cursave$=saverootdir$+cursavedir$+"/"
-          session%=1
-        ENDIF
-        OSCLI "CD """+saverootdir$+cursavedir$+""""
 
         REM update last session file
         f%=OPENOUT(@dir$+"telepaint_pref.ini")
@@ -9355,13 +9328,13 @@
               PROCobjtoworldmap
               N$=RIGHT$("0000"+STR$(I%),5)
               IF mov_dat%=1 PROCsavebinaryfile(cursave$+"M7_" + D$ + "_MOV_" + N$ +".BIN")
-              IF mov_bmp%=1 OSCLI "SCREENSAVE """+cursave$+"/MOVIE_BMP/M7_" + D$ + "_" + N$ +".BMP"" 0,0,1280,1000"
+              IF mov_bmp%=1 OSCLI "SCREENSAVE """+cursave$+"MOVIE_BMP/M7_" + D$ + "_" + N$ +".BMP"" 0,0,1280,1000"
               REM SYS "SDL_SavePNG", @memhdc%, "C:\DATA\Retro\BeebEm\BB4WProjects\test.PNG"
               WAIT 10
             NEXT
           ELSE
             IF mov_dat%=1 PROCsavebinaryfile(cursave$+"M7_" + D$ + "_MOV.BIN")
-            IF mov_bmp%=1 OSCLI "SCREENSAVE """+cursave$+"/MOVIE_BMP/M7_" + D$ + ".BMP"" 0,0,1280,1000"
+            IF mov_bmp%=1 OSCLI "SCREENSAVE """+cursave$+"MOVIE_BMP/M7_" + D$ + ".BMP"" 0,0,1280,1000"
           ENDIF
 
         ENDIF
@@ -10170,11 +10143,13 @@
           D$=FNgetdate
           IF session%=0 THEN
             cursavedir$= "M7_"+LEFT$(D$,LEN(D$)-2)
-            PROCcreatefolder(saverootdir$+cursavedir$)
-            PROCcreatefolder(saverootdir$+cursavedir$+"/GIF_BMP")
-            cursave$=saverootdir$+cursavedir$+"/"
             session%=1
           ENDIF
+
+          PROCcreatefolder(saverootdir$+cursavedir$)
+          PROCcreatefolder(saverootdir$+cursavedir$+"/GIF_BMP")
+          cursave$=saverootdir$+cursavedir$+"/"
+
           OSCLI "CD """+saverootdir$+cursavedir$+""""
           f%=0
           REPEAT
