@@ -66,7 +66,7 @@
       INSTALL @lib$+"sortlib"
       INSTALL @lib$+"imglib"
 
-      version$="v0.35"
+      version$="v0.36"
 
       DEBUG%=0 : REM for displaying mouse and other debug details, F12 toggles debug mode while running Telepaint
 
@@ -1528,7 +1528,6 @@
               XC=insertstartx%+deltax
               YC=insertstarty%+deltay
 
-              insertani%=0
               insertani%=insertfrmindex%
 
               frame%=spritestartframe%
@@ -2078,29 +2077,29 @@
 
                   REM select starting sprite
                   IF insertrepeat%=1 THEN
+                    SP%=insertfrmrep%
                     IF insertset%>-1 THEN
-                      SP%=insertfrmrep%
                       insertani%=insertfrmindex%-1
                       spritemoving%=sprani{(insertset%)}.s%(insertani%)
                     ELSE
-                      insertani%=0
+                      insertani%=insertfrmindex%-1
                     ENDIF
                   ENDIF
 
                   REM loop through frames and insert sprites
                   FOR F%=1 TO C%
                     IF insertrepeat%=1 THEN
-                      IF insertset%>-1 THEN
-                        IF SP%=0 THEN
+                      IF SP%=0 THEN
+                        SP%=insertfrmrep%
+                        IF insertset%>-1 THEN
                           insertani%=(insertani%+1) MOD sprani{(insertset%)}.c%
                           spritemoving%=sprani{(insertset%)}.s%(insertani%)
-                          SP%=insertfrmrep%
                         ELSE
-                          SP%-=1
+                          insertani%=(insertani%+1) MOD sprlrg_count%
+                          spritemoving%=insertani%
                         ENDIF
                       ELSE
-                        insertani%=(insertani%+1) MOD sprlrg_count%
-                        spritemoving%=insertani%
+                        SP%-=1
                       ENDIF
                     ENDIF
 
@@ -3045,6 +3044,57 @@
             ENDIF
             REM PRINTTAB(0,20);STR$(movieframe%);"  ("STR$(movieframetotal%);")  ";
           ENDIF
+
+        WHEN M_frmProperty% : REM frame properties menu
+          IF K%>1 THEN
+
+            OMF%=movieframe%
+
+            REM handle specific keypresses
+            CASE K% OF
+
+              WHEN 132,158 : REM pgup
+                REM advance to next frame in frame list
+                IF movieframetotal%>-1 THEN
+                  nf%=1
+                  IF ctrl% nf%=10
+                  IF shift% nf%=50
+                  IF movieframe%+nf%<=movieframetotal% THEN
+                    movieframe%+=nf%
+                  ENDIF
+                ENDIF
+
+              WHEN 133,159 : REM pgdn
+                REM move to previous frame in frame list
+                IF movieframetotal%>-1 THEN
+                  nf%=-1
+                  IF ctrl% nf%=-10
+                  IF shift% nf%=-50
+                  IF movieframe%+nf%>=-1 THEN
+                    movieframe%+=nf%
+                  ENDIF
+                ENDIF
+
+              WHEN  130 : REM home
+                REM jump to first frame in frame list
+                IF movieframetotal%>-1 movieframe%=0
+
+              WHEN  131 : REM end
+                REM jump to last frame in frame list
+                IF movieframetotal%>-1 movieframe%=movieframetotal%
+
+            ENDCASE
+            REM if movie screnn has changed then update screen and redrew menu
+            IF OMF%<>movieframe% THEN
+              spriteselect%=-1
+              PROCmenurestore
+              PROCobjtoworldmap
+              menuext%=M_frmProperty%
+              PROCsubinit(7)
+            ENDIF
+
+          ENDIF
+
 
         WHEN M_sprProperty% : REM close properties menu
           IF K%=80 THEN
@@ -4780,6 +4830,7 @@
                     insertphase%=0
                     spritemoving%=0
                     insertlarge%=1
+                    PROCspriteinserthandler(0)
                     done%=1
 
                   WHEN 3 : REM text colour selector
@@ -5489,7 +5540,11 @@
         insertfrmindex%=1  : REM animation frame start index
         IF menufrom%=M_moviemode% insertrelflag%=1 ELSE insertrelflag%=0  : REM sprite relative position flag
       ELSE
-        IF insertfrmindex%>sprani{(insertset%)}.c% insertfrmindex%=1
+        IF insertlarge%=0 THEN
+          IF insertfrmindex%>sprani{(insertset%)}.c% insertfrmindex%=1
+        ELSE
+          IF insertfrmindex%=>sprlrg_count% insertfrmindex%=1
+        ENDIF
       ENDIF
 
       PROCspriteinsertupdate(1)
@@ -5520,7 +5575,11 @@
           WHEN 8 : REM decrement start animation frame
             IF insertfrmindex%>1 insertfrmindex%-=1
           WHEN 9 : REM increment start animation frame
-            IF insertfrmindex%<sprani{(insertset%)}.c% insertfrmindex%+=1
+            IF insertlarge%=0 THEN
+              IF insertfrmindex%<sprani{(insertset%)}.c% insertfrmindex%+=1
+            ELSE
+              IF insertfrmindex%<sprlrg_count% insertfrmindex%+=1
+            ENDIF
         ENDCASE
 
         IF C%>0 PROCspriteinsertupdate(0)
@@ -5564,7 +5623,11 @@
           WHEN 0 : REM spr
             t$="Insert Sprite Options"
           WHEN 1 : REM ani
-            t$="Insert Animation Options"
+            IF insertlarge%=0 THEN
+              t$="Insert Animation Options"
+            ELSE
+              t$="Insert Large Ani Options"
+            ENDIF
           WHEN 2 : REM frm
             t$="Insert Frame Options"
           WHEN 3 : REM text
@@ -5591,7 +5654,7 @@
           IF menufrom%=M_moviemode% PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-186,10)
           PROCgtext(RIGHT$("0"+STR$(insertskipcount%),2),dx%+484,dt%-220,11,8,0)
 
-        WHEN 1 : REM ani
+        WHEN 1 : REM ani or large sprite
           IF r%=1 THEN
             IF menufrom%=M_moviemode% PROCgtext("Relative To Frame?",dx%+84,dt%-100,7,0,0)
             PROCgtext("Skip Frames:",dx%+36,dt%-160,7,0,0)
@@ -5607,14 +5670,21 @@
           IF menufrom%=M_moviemode% PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-126,10)
           PROCgtext(RIGHT$("0"+STR$(insertskipcount%),2),dx%+484,dt%-160,11,8,0)
           PROCgtext(RIGHT$("0"+STR$(insertfrmrep%),2),dx%+484,dt%-220,11,8,0)
-          PROCgtext(RIGHT$("0"+STR$(insertfrmindex%),2),dx%+484,dt%-280,11,8,0)
+          PROCgtext(RIGHT$("00"+STR$(insertfrmindex%),3),dx%+452,dt%-280,11,8,0)
 
           IF insertani%<>insertfrmindex%-1 OR r%=1 THEN
             insertani%=insertfrmindex%-1
-            spritemoving%=sprani{(insertset%)}.s%(insertani%)
-            GCOL 0,0
-            RECTANGLE FILL dx%+32,dy%+32,86,102
-            PROCdrawanimspr(sprani{(insertset%)}.s%(insertani%),dx%+36,dy%+36)
+
+            IF insertlarge%=0 THEN
+              spritemoving%=sprani{(insertset%)}.s%(insertani%)
+              GCOL 0,0
+              RECTANGLE FILL dx%+32,dy%+32,86,102
+
+              PROCdrawanimspr(sprani{(insertset%)}.s%(insertani%),dx%+36,dy%+36)
+            ELSE
+
+            ENDIF
+
           ENDIF
 
         WHEN 2 : REM frame
@@ -5707,9 +5777,10 @@
                 ENDIF
                 spritemoving%=sprani{(insertset%)}.s%(insertani%)
               ELSE
-                insertani%=0
+                insertani%=insertfrmindex%-1
                 IF X%>0 THEN
-                  insertani%=X% MOD sprlrg_count%
+                  REM insertani%=X% MOD sprlrg_count%
+                  insertani%=(X% DIV (insertfrmrep%+1)+(insertfrmindex%-1)) MOD sprlrg_count%
                 ENDIF
                 spritemoving%=insertani%
               ENDIF
