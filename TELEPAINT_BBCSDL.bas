@@ -180,7 +180,7 @@
       OTY%=0
 
       REM sub menu pos data
-      sub_count%=8
+      READ sub_count%
       sub_cur%=-1
       DIM subm{(sub_count%) x%,y%,w%,h%}
 
@@ -237,6 +237,7 @@
       movieframeaddh%=0    : REM h increment for new frames
       movieframeaddv%=0    : REM v increment for new frames
       insertmode%=0        : REM movie mode insert mode 0=sprite, 1=animation, 3=large, 3=frame, 4=text, 5=panned frames
+      insertold%=0         : REM keep track of previous state of insertmode
       insertrepeat%=0      : REM flag for inserting animation or sprite on multiple frames 1=animation, 2=sprite, 3=text, 4=frames, 5=panned frames, ???
       insertani%=0         : REM animation counter for inserting sprites
       insertset%=0         : REM current animation set
@@ -248,7 +249,7 @@
       insertpanspeed%=10   : REM insert panned frames max speed
       insertpanacc%=10     : REM insert panned frames accelerate frame count
       insertpandec%=10     : REM insert panned frames decelerate frame count
-      aniset_max%=32       : REM animation set sprite count max
+      aniset_max%=48       : REM animation set sprite count max
       aniset_scroll%=0     : REM set scroll counter for animation screen
       anispr_scroll%=0     : REM sprite scroll counter for animation screen
       insertphase%=0       : REM current animation click phase for selecting first and last animation frames
@@ -454,6 +455,7 @@
       DIM frmlist{(9999) x%,y%,b%,f%}
       DIM sprani{(99) s%(aniset_max%-1),c%}
       DIM txtlist$(999)
+      DIM insertoptions{(5) o%(19),s%}
 
       REM animation and menu controls - redfinable depending on current screen / menu
       controls%=47
@@ -1459,7 +1461,7 @@
       DEF PROCaddFill(x%,y%)
       fill{(bCnt%)}.x%=x%
       fill{(bCnt%)}.y%=y%
-      IF bCnt%<fillmax% THEN bCnt%+=1
+      IF bCnt%<fillmax% bCnt%+=1
       ENDPROC
 
       REM ##########################################################
@@ -1976,7 +1978,7 @@
       REM ##########################################################
       REM MOVIE MODE click handler
       DEF PROCmoviemode
-      LOCAL shift%,skip%,F%,X%,Y%,framestart%,frameskip%,SP%,RS%
+      LOCAL shift%,skip%,F%,X%,Y%,framestart%,frameskip%,SP%,RS%,fa%,fd%
 
       shift%=INKEY(-1)
       PROCWAITMOUSE(0)
@@ -2269,27 +2271,78 @@
               insertstarty%=mmWY%
             ELSE
 
-              REM insertpanspeed%=50   : REM insert panned frames max speed
-              REM insertpanacc%=10     : REM insert panned frames accelerate frame count
-              REM insertpandec%=10     : REM insert panned frames decelerate frame count
+              fa%=insertpanacc%
+              fd%=insertpandec%
 
-              REM accelerate and decelerate need to be based on the distance for each section not frames
-
-              REM
               insertendx%=mmWX%
               insertendy%=mmWY%
 
-              deltax=(insertendx%-insertstartx%) / movieframeadd%
-              deltay=(insertendy%-insertstarty%) / movieframeadd%
+              REM distance and angle of frame movement
+              distance=SQR((insertstartx%-insertendx%)*(insertstartx%-insertendx%)+(insertstarty%-insertendy%)*(insertstarty%-insertendy%))
+              angle=FNatan2(insertstarty%-insertendy%,insertstartx%-insertendx%)
+              distmoved=0
 
               XC=insertstartx%
               YC=insertstarty%
 
-              FOR F%=1 TO movieframeadd%
+              REM set acc and dec to 0 if start and end positions are the same
+              IF insertstartx%=insertendx% AND insertstarty%=insertendy% THEN
+                fa%=0
+                fd%=0
+              ENDIF
+
+              REM accelerate and decelerate need to be based on the distance for each section
+              IF fa%>0 THEN
+                accelerate=1
+                coastspeed=0
+                coastdist=0
+
+                REM FOR D%=0 TO 3
+                REPEAT
+                  accdist=0
+                  accspeed=0
+                  accelerate-=.01
+
+                  FOR F%=1 TO fa%
+                    accspeed=accspeed+accelerate
+                    accdist=accdist+accspeed
+                  NEXT
+                  coastdist=distance-accdist*2
+                  coastspeed=coastdist/(movieframeadd%-fa%-fd%)
+
+                UNTIL accspeed<coastspeed
+                REM NEXT
+
+                accspeed=0
+
+                FOR F%=1 TO fa%
+                  REM add frame
+                  movieframetotal%+=1
+                  frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
+                  frmlist{(movieframetotal%)}.y%=INT(YC+0.5)
+                  frmlist{(movieframetotal%)}.b%=0
+                  frmlist{(movieframetotal%)}.f%=7
+
+                  accspeed+=accelerate
+                  distmoved+=accspeed
+
+                  XC=insertstartx%-distmoved*COS(angle)
+                  YC=insertstarty%-distmoved*SIN(angle)
+
+                NEXT
+              ELSE
+                coastspeed=distance/movieframeadd%
+              ENDIF
+
+              FOR F%=fa%+1 TO movieframeadd%-fd%
                 REM normalise end point
                 IF F%=movieframeadd% THEN
                   XC=insertendx%
                   YC=insertendy%
+                ENDIF
+
+                IF fd%=0 THEN
+                  IF INT(XC+0.5)=insertendx% AND INT(YC+0.5)=insertendy% coastspeed=0
                 ENDIF
 
                 REM add frame
@@ -2299,10 +2352,54 @@
                 frmlist{(movieframetotal%)}.b%=0
                 frmlist{(movieframetotal%)}.f%=7
 
-                XC+=deltax
-                YC+=deltay
+                REM update position if moving
+                IF coastspeed<>0 THEN
+                  distmoved+=coastspeed
+                  XC=insertstartx%-distmoved*COS(angle)
+                  YC=insertstarty%-distmoved*SIN(angle)
+                ENDIF
 
               NEXT
+
+              IF fd%>0 THEN
+                decelerate = 2 * ((distance-distmoved) - (coastspeed * fd%)) / (fd%*fd%)
+                FOR F%=1 TO fd%
+                  REM normalise end point
+                  IF F%=fd% THEN
+                    XC=insertendx%
+                    YC=insertendy%
+                  ENDIF
+                  IF INT(XC+0.5)=insertendx% AND INT(YC+0.5)=insertendy% THEN
+                    coastspeed=0
+                    decelerate=0
+                  ENDIF
+
+                  REM PRINTTAB(0,2) "FRAME    :";STR$(movieframetotal%+1);"  ";
+                  REM PRINTTAB(0,3) "DISTANCE :";STR$(distmoved);"  ";
+                  REM PRINTTAB(0,4) "DEC      :";STR$(decelerate);"  ";
+                  REM PRINTTAB(0,5) "DEC SPEED: ";STR$(coastspeed);"  ";
+                  REM PRINTTAB(0,6) "XC : ";STR$(XC);"    ";
+                  REM PRINTTAB(0,7) "YC : ";STR$(YC);"    ";
+
+                  REM A=GET
+
+                  REM add frame
+                  movieframetotal%+=1
+                  frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
+                  frmlist{(movieframetotal%)}.y%=INT(YC+0.5)
+                  frmlist{(movieframetotal%)}.b%=0
+                  frmlist{(movieframetotal%)}.f%=7
+
+                  coastspeed+=decelerate
+                  distmoved+=coastspeed
+                  IF coastspeed<>0 THEN
+                    XC=insertstartx%-distmoved*COS(angle)
+                    YC=insertstarty%-distmoved*SIN(angle)
+                  ENDIF
+
+                NEXT
+
+              ENDIF
 
               movieframe%=movieframetotal%
 
@@ -2311,6 +2408,7 @@
               insertrepeat%=0
               spriteselect%=-1
               spriteselectold%=-1
+              insertmode%=insertold%
 
             ENDIF
           ENDIF
@@ -2320,123 +2418,6 @@
         IF spritemoving%>-1 PROCspritemoveinit(1)
 
       ENDIF
-
-      ENDPROC
-
-      DEF PROCOLDFRAMES
-
-
-      REM SECTIONS IDEA
-
-      xtotaldistance%=insertendx%-insertstartx%
-      xdistperframe=xtotaldistance% / movieframeadd%
-      xaccdistance=insertpanacc% * xdistperframe
-      xdecdistance=insertpandec% * xdistperframe
-      xcoastdistance=(movieframeadd%-insertpanacc%-insertpandec%) * xdistperframe
-
-      xdir%=SGN(insertendx%-insertstartx%)
-      ydir%=SGN(insertendy%-insertstarty%)
-
-      accelerate=insertpanspeed% / insertpanacc%
-      decelerate=insertpanspeed% / insertpandec%
-      deltax = accelerate
-      XC=insertstartx%+deltax
-      insertcoast%=movieframeadd%-insertpanacc%-insertpandec%
-
-      IF insertpanacc%>0 THEN
-        REM add the frames
-        FOR X%=1 TO insertpanacc%
-          movieframetotal%+=1
-          frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
-          frmlist{(movieframetotal%)}.y%=insertstarty%
-          frmlist{(movieframetotal%)}.b%=0
-          frmlist{(movieframetotal%)}.f%=7
-          deltax += accelerate
-          IF deltax>insertpanspeed% deltax=insertpanspeed%
-          XC+=deltax
-
-        NEXT
-      ENDIF
-
-      REM add coast frames
-      FOR X%=1 TO insertcoast%-1
-        movieframetotal%+=1
-        frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
-        frmlist{(movieframetotal%)}.y%=insertstarty%
-        frmlist{(movieframetotal%)}.b%=0
-        frmlist{(movieframetotal%)}.f%=7
-        XC+=insertpanspeed%
-      NEXT
-
-      XC-= decelerate
-      IF insertpandec%>0 THEN
-        REM add the frames
-        FOR X%=1 TO insertpandec%
-          movieframetotal%+=1
-          frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
-          frmlist{(movieframetotal%)}.y%=insertstarty%
-          frmlist{(movieframetotal%)}.b%=0
-          frmlist{(movieframetotal%)}.f%=7
-          deltax -= accelerate
-          IF deltax<0 deltax=0
-          XC+=deltax
-        NEXT
-      ENDIF
-
-
-
-      REM OLD IDEA
-
-      accelerate = 0.1
-      decelearterad = 1
-      topspeed = 5
-      deltax = accelerate
-      deltay = 0
-
-      XC=insertstartx%
-      YC=insertstarty%
-
-      REPEAT
-        IF movieframetotal%<movieframemax% THEN
-          movieframetotal%+=1
-          frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
-          frmlist{(movieframetotal%)}.y%=INT(YC+0.5)
-          frmlist{(movieframetotal%)}.b%=0
-          frmlist{(movieframetotal%)}.f%=7
-
-          XC+=deltax*xdir%
-          YC+=deltay*ydir%
-
-          distance=(XC-insertendx%)^2+(YC-insertendy%)^2
-          inrange=distance+(topspeed/2)<=(decelearterad^2)
-
-          REM IF XC>=(insertendx%-decelearterad) THEN
-          IF inrange THEN
-            IF DEBUG% PRINTTAB(0,6)"DECELERATE!!";
-            IF deltax>accelerate deltax -= accelerate
-            IF deltax<accelerate deltax = accelerate
-            IF distance<1 THEN
-              XC = insertendx%
-              YC = insertendx%
-            ENDIF
-          ELSE
-            IF deltax<topspeed THEN
-              deltax += accelerate
-              IF deltax>topspeed deltax=topspeed
-              decelearterad=ABS(INT(XC+0.5)-insertstartx%)
-            ENDIF
-          ENDIF
-
-        ENDIF
-        IF DEBUG% THEN
-          PRINTTAB(0,1)"XS: ";STR$(insertstartx%);"  XE: ";STR$(insertendx%)
-          PRINTTAB(0,2)"XC: ";STR$(XC);"   ";
-          PRINTTAB(0,3)"DX: ";STR$(deltax);"   ";
-          PRINTTAB(0,4)"DC: ";STR$(decelearterad);"   ";
-          PRINTTAB(0,5)"IN: ";STR$(inrange);"  ";
-          A=GET
-        ENDIF
-      UNTIL XC = insertendx%
 
       ENDPROC
 
@@ -2660,6 +2641,7 @@
           insertrepeat%=0
           insertphase%=0
           nf%=1
+          insertmode%=insertold%
         ENDIF
         IF spriteselect%>-1 THEN
           spriteselect%=-1
@@ -4997,16 +4979,7 @@
 
           REM add frames controls
           menuadd%=32
-          PROCanimcontrol(2,"FIXED",menuadd%,100,0,7,14,4)
-          PROCanimcontrol(3,"PANNED",menuadd%,100,0,7,14,4)
-          menuadd%=32
-          PROCgtext(RIGHT$("0000"+STR$(movieframeadd%),4),menuadd%,160,15,4,0)
-          menuadd%+=160
-          PROCanimcontrol(4,"<<",menuadd%,160,0,8,14,0)
-          PROCanimcontrol(5,"<",menuadd%,160,0,8,14,0)
-          PROCanimcontrol(6,">",menuadd%,160,0,8,14,0)
-          PROCanimcontrol(7,">>",menuadd%,160,0,8,14,0)
-
+          PROCanimcontrol(2,"ADD FRAMES",menuadd%,100,0,7,14,4)
 
         WHEN 8 : REM movie mode menu
           PROCgtext("M",SX%+128,menuYadd%,10,0,-64)
@@ -5199,6 +5172,7 @@
               WHEN 0,1,2,3,4 : REM sprite, ani, large, frame, text selector
                 IF insertmode%<>C% THEN
                   insertmode%=C%
+                  insertold%=insertmode%
                   PROCsubupdate(-1)
                 ENDIF
 
@@ -5491,23 +5465,8 @@
                   SP%=(MX%-controlrange{(C%)}.x1%) DIV 48
                   IF SP%>-1 AND SP%<8 frmlist{(movieframe%)}.b%=SP%
                 ENDIF
-              WHEN 2 : REM add fixed frames button
-                IF movieframeadd%>0 THEN
-                  FOR X%=1 TO movieframeadd%
-                    IF movieframetotal%<movieframemax% THEN
-                      movieframetotal%+=1
-                      frmlist{(movieframetotal%)}.x%=mmWX%
-                      frmlist{(movieframetotal%)}.y%=mmWY%
-                      frmlist{(movieframetotal%)}.b%=0
-                      frmlist{(movieframetotal%)}.f%=7
-                      mmWX%+=movieframeaddh%
-                      mmWY%+=movieframeaddv%
-                    ENDIF
-                  NEXT
-                  movieframe%=movieframetotal%
-                ENDIF
-              WHEN 3 : REM add panned frames button
 
+              WHEN 2 : REM add frames button
                 spritemoving%=9999
                 insertrepeat%=4
                 insertphase%=0
@@ -5515,28 +5474,6 @@
                 PROCspriteinserthandler(0)
                 done%=1
 
-              WHEN 4 : REM frame dec ++
-                IF shift% THEN
-                  movieframeadd%=0
-                ELSE
-                  movieframeadd%-=10
-                  IF movieframeadd%<0 movieframeadd%=0
-                ENDIF
-              WHEN 5 : REM frame dec
-                movieframeadd%-=1
-                IF shift% movieframeadd%-=99
-                IF movieframeadd%<0 movieframeadd%=0
-              WHEN 6 : REM frame inc
-                movieframeadd%+=1
-                IF shift% movieframeadd%+=99
-                IF movieframeadd%>2000 movieframeadd%=2000
-              WHEN 7 : REM frame inc ++
-                IF shift% THEN
-                  movieframeadd%=2000
-                ELSE
-                  movieframeadd%+=10
-                  IF movieframeadd%>2000 movieframeadd%=2000
-                ENDIF
               WHEN 15,16 : REM copy / reset colours to all frames
                 IF movieframe%>-1 THEN
                   IF movieframetotal%>-1 THEN
@@ -6036,11 +5973,13 @@
       REM ##########################################################
       REM display and update sprite details dialog
       DEF PROCspriteinserthandler(c%)
-      LOCAL done%,shift%,C%,SP%,NS%,OS%,SX%,SY%,F%,F$
+      LOCAL done%,shift%,ctrl%,C%,SP%,NS%,OS%,SX%,SY%,F%,F$
 
       IF c%=1 PROCchangemode(6,0)
 
-      REM reset / adjust frame controls
+      REM reset / adjust frame control
+      insertsave%=insertoptions{(insertmode%)}.s%
+
       IF insertsave%=0 THEN
         insertrepflag%=0     : REM multiple frames flag
         insertskipcount%=0   : REM multiple frames skip count
@@ -6048,28 +5987,48 @@
         insertfrmindex%=1    : REM animation frame start index
         inserttransparent%=0 : REM transparent flag
         insertshape%=0       : REM shape path flag
+        insertpanspeed%=10   : REM insert panned frames max speed
+        insertpanacc%=10     : REM insert panned frames accelerate frame count
+        insertpandec%=10     : REM insert panned frames decelerate frame count
         IF menufrom%=M_moviemode% insertrelflag%=1 ELSE insertrelflag%=0  : REM sprite relative position flag
       ELSE
-        IF insertmode%=1 THEN
-          IF insertfrmindex%>sprani{(insertset%)}.c% insertfrmindex%=1
-        ENDIF
-        IF insertmode%=2 THEN
-          IF insertfrmindex%=>sprlrg_set{(lrgsetcur%)}.c% insertfrmindex%=1
-        ENDIF
+        insertrepflag%=insertoptions{(insertmode%)}.o%(0)     : REM multiple frames flag
+        insertskipcount%=insertoptions{(insertmode%)}.o%(1)   : REM multiple frames skip count
+        insertfrmrep%=insertoptions{(insertmode%)}.o%(2)      : REM animation frame repeat count
+        insertfrmindex%=insertoptions{(insertmode%)}.o%(3)    : REM animation frame start index
+        inserttransparent%=insertoptions{(insertmode%)}.o%(5) : REM transparent flag
+        insertshape%=insertoptions{(insertmode%)}.o%(6)       : REM shape path flag
+        insertrelflag%=insertoptions{(insertmode%)}.o%(7)     : REM sprite relative position flag
+        insertpanspeed%=insertoptions{(insertmode%)}.o%(8)   : REM insert panned frames max speed
+        insertpanacc%=insertoptions{(insertmode%)}.o%(9)     : REM insert panned frames accelerate frame count
+        insertpandec%=insertoptions{(insertmode%)}.o%(10)     : REM insert panned frames decelerate frame count
+
       ENDIF
+      IF insertmode%=1 THEN
+        IF insertfrmindex%>sprani{(insertset%)}.c% insertfrmindex%=1
+      ENDIF
+      IF insertmode%=2 THEN
+        IF insertfrmindex%=>sprlrg_set{(lrgsetcur%)}.c% insertfrmindex%=1
+      ENDIF
+
       PROCspriteinsertupdate(1)
 
       REPEAT
         PROCREADMOUSE
         IF MB%=4 THEN
           shift%=INKEY(-1)
+          ctrl%=INKEY(-2)
           PROCWAITMOUSE(0)
           C%=-1
           C%=FNgetcontrol
 
           CASE C% OF
             WHEN 0 : REM go button
-              done%=1
+              IF insertmode%=5 THEN
+                IF movieframeadd%>0 done%=1
+              ELSE
+                done%=1
+              ENDIF
             WHEN 1 : REM save settings
               insertsave%=1-insertsave%
             WHEN 2 : REM toggle multiple frames flag
@@ -6092,10 +6051,6 @@
               ELSE
                 IF insertfrmindex%<sprani{(insertset%)}.c% insertfrmindex%+=1
               ENDIF
-            WHEN 10 : REM decrement panned max speed
-              IF insertpanspeed%>1 insertpanspeed%-=1
-            WHEN 11 : REM increment panned max speed
-              IF insertpanspeed%<20 insertpanspeed%+=1
             WHEN 12 : REM decrement insert panned accelerate frame count
               insertpanacc%-=1
               IF shift% insertpanacc%-=9
@@ -6103,7 +6058,8 @@
             WHEN 13 : REM increment panned accelerate frame count
               insertpanacc%+=1
               IF shift% insertpanacc%+=9
-              IF insertpanacc%>100 insertpanacc%=100
+              IF insertpanacc%>200 insertpanacc%=200
+              IF insertpanacc%>movieframeadd% insertpanacc%=movieframeadd%
             WHEN 14 : REM decrement panned decelerate frame count
               insertpandec%-=1
               IF shift% insertpandec%-=9
@@ -6111,13 +6067,31 @@
             WHEN 15 : REM increment panned decelerate frame count
               insertpandec%+=1
               IF shift% insertpandec%+=9
-              IF insertpandec%>100 insertpandec%=100
+              IF insertpandec%>200 insertpandec%=200
+              IF insertpandec%>movieframeadd% insertpandec%=movieframeadd%
             WHEN 16 : REM transparent flag
               inserttransparent%=1-inserttransparent%
             WHEN 17 : REM shape dec
               IF insertshape%>0 insertshape%-=1
             WHEN 18 : REM shape inc
               IF insertshape%<1 insertshape%+=1
+            WHEN 19 : REM frame dec ++
+              movieframeadd%-=1
+              IF ctrl% THEN
+                movieframeadd%-=9
+              ELSE
+                IF shift% movieframeadd%-=99
+              ENDIF
+              IF movieframeadd%<0 movieframeadd%=0
+            WHEN 20 : REM frame dec
+              movieframeadd%+=1
+              IF ctrl% THEN
+                movieframeadd%+=9
+              ELSE
+                IF shift% movieframeadd%+=99
+              ENDIF
+              IF movieframeadd%>2000 movieframeadd%=2000
+
           ENDCASE
 
           IF C%>0 PROCspriteinsertupdate(1) : REM normally 0
@@ -6147,6 +6121,22 @@
           PROCshapehandler
         ENDIF
 
+        REM save insert options
+        IF insertsave% THEN
+          insertoptions{(insertmode%)}.s%=1
+          insertoptions{(insertmode%)}.o%(0)=insertrepflag%     : REM multiple frames flag
+          insertoptions{(insertmode%)}.o%(1)=insertskipcount%   : REM multiple frames skip count
+          insertoptions{(insertmode%)}.o%(2)=insertfrmrep%      : REM animation frame repeat count
+          insertoptions{(insertmode%)}.o%(3)=insertfrmindex%    : REM animation frame start index
+          insertoptions{(insertmode%)}.o%(5)=inserttransparent% : REM transparent flag
+          insertoptions{(insertmode%)}.o%(6)=insertshape%       : REM shape path flag
+          insertoptions{(insertmode%)}.o%(7)=insertrelflag%     : REM sprite relative position flag
+          insertoptions{(insertmode%)}.o%(8)=insertpanspeed%    : REM insert panned frames max speed
+          insertoptions{(insertmode%)}.o%(9)=insertpanacc%      : REM insert panned frames accelerate frame count
+          insertoptions{(insertmode%)}.o%(10)=insertpandec%     : REM insert panned frames decelerate frame count
+        ELSE
+          insertoptions{(insertmode%)}.s%=0
+        ENDIF
       ELSE
         PROCWAITNOKEY(-113,0)
         esccodes%=1
@@ -6156,6 +6146,7 @@
           spritedupe%=-1
           insertrepeat%=0
           insertphase%=0
+          insertmode%=insertold%
         ENDIF
       ENDIF
 
@@ -6188,17 +6179,17 @@
 
         CASE insertmode% OF
           WHEN 0 : REM spr
-            t$="Insert Sprite Options"
+            t$=" Insert Sprite Options"
           WHEN 1 : REM ani
-            t$="Insert Animation Options"
+            t$=" Insert Animation Options"
           WHEN 2 : REM lrg
-            t$="Insert Large Ani Options"
+            t$=" Insert Large Ani Options"
           WHEN 3 : REM frm
-            t$="Insert Frame Options"
+            t$=" Insert Frame Options"
           WHEN 4 : REM text
-            t$="Insert Text Options"
+            t$=" Insert Text Options"
           WHEN 5 : REM panned frames
-            t$="Insert Panned Frames"
+            t$=" Insert Frames"
         ENDCASE
 
         REM title
@@ -6283,11 +6274,12 @@
           PROCdrawcustomspr(2,4+insertrepflag%,dx%+36,dt%-126,10)
           IF menufrom%=M_moviemode% PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-186,10)
 
-        WHEN 5 : REM panned frames
+        WHEN 5 : REM insert frames to movie mode
           IF r%=1 THEN
-            PROCgtext("Max Speed:",dx%+36,dt%-160,7,0,0)
-            PROCanimcontrol(10,"<",dx%+564,dt%-160,0,7,10,8)
-            PROCanimcontrol(11,">",dx%+624,dt%-160,0,7,10,8)
+            menuadd%=dx%+192
+            PROCgtext("Frame Count:",dx%+36,dt%-160,7,0,0)
+            PROCanimcontrol(19,"<",dx%+564,dt%-160,0,7,10,8)
+            PROCanimcontrol(20,">",dx%+624,dt%-160,0,7,10,8)
             PROCgtext("Accelerate:",dx%+36,dt%-220,7,0,0)
             PROCanimcontrol(12,"<",dx%+564,dt%-220,0,7,10,8)
             PROCanimcontrol(13,">",dx%+624,dt%-220,0,7,10,8)
@@ -6295,7 +6287,7 @@
             PROCanimcontrol(14,"<",dx%+564,dt%-280,0,7,10,8)
             PROCanimcontrol(15,">",dx%+624,dt%-280,0,7,10,8)
           ENDIF
-          PROCgtext(RIGHT$("0"+STR$(insertpanspeed%),2),dx%+484,dt%-160,11,8,0)
+          PROCgtext(RIGHT$("0000"+STR$(movieframeadd%),4),dx%+420,dt%-160,15,4,0)
           PROCgtext(RIGHT$("00"+STR$(insertpanacc%),3),dx%+452,dt%-220,11,8,0)
           PROCgtext(RIGHT$("00"+STR$(insertpandec%),3),dx%+452,dt%-280,11,8,0)
       ENDCASE
@@ -10858,9 +10850,11 @@
                       IF col%<coltop% col%=0
                     ENDIF
                     col%=SGN(col%)
-                    IF px%<320 AND py%>0 THEN
-                      GCOL 0,col%*15
-                      RECTANGLE FILL 952+px%,992-py%,8
+                    IF (X%-x%)<40 AND (Y%-y%)<48 THEN
+                      IF px%<320 AND py%>0 THEN
+                        GCOL 0,col%*15
+                        RECTANGLE FILL 952+px%,992-py%,8
+                      ENDIF
                     ENDIF
                     IF lrg%=0 THEN
                       spr_tmp&(ST%)=col%
@@ -10911,15 +10905,15 @@
                 IF INKEY(-58) THEN
                   IF (shift%+ctrl%=0) AND MY%<998 MY%+=2
                   IF lrg%=1 THEN
-                    IF shift% GY%=8
-                    IF ctrl% GY%=64
+                    IF shift% GY%=64
+                    IF ctrl% GY%=8
                   ENDIF
                 ENDIF
                 IF INKEY(-42) THEN
                   IF (shift%+ctrl%=0) AND MY%>0 MY%-=2
                   IF lrg%=1 THEN
-                    IF shift% GY%=-8
-                    IF ctrl% GY%=-64
+                    IF shift% GY%=-64
+                    IF ctrl% GY%=-8
                   ENDIF
                 ENDIF
 
@@ -12536,6 +12530,11 @@
       ENDPROC
 
       REM ##########################################################
+      REM return atan2 polar angle of x,y coordinates
+      DEF FNatan2(y,x) : ON ERROR LOCAL = SGN(y)*PI/2
+      IF x>0 THEN = ATN(y/x) ELSE IF y>0 THEN = ATN(y/x)+PI ELSE = ATN(y/x)-PI
+
+      REM ##########################################################
       REM return date for file operations
       DEF FNgetdate
       LOCAL D$,M$,T$,TMP$
@@ -12973,6 +12972,8 @@
       REM drop down sub menu locations, X,TOP - W,H  (Y=TOP-W)
       REM 0-4 Paint, Dither, Copy, Fill, Special
       REM 5-8 object select, obj properties, frm properties, movie options
+      REM first value in submenu count-1
+      DATA 8
       DATA 448,960,460,908
       DATA 480,960,460,636
       DATA 512,960,460,908
