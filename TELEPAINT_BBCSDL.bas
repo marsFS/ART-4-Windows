@@ -54,7 +54,7 @@
       INSTALL @lib$+"sortlib"
       INSTALL @lib$+"imglib"
 
-      version$="v0.39"
+      version$="v0.40"
 
       DEBUG%=0 : REM for displaying mouse and other debug details, F12 toggles debug mode while running Telepaint
 
@@ -252,6 +252,8 @@
       aniset_max%=48       : REM animation set sprite count max
       aniset_scroll%=0     : REM set scroll counter for animation screen
       anispr_scroll%=0     : REM sprite scroll counter for animation screen
+      anifrm_scroll%=0     : REM frame scroll counter for animation screen
+      aniselect%=0         : REM sprite scroll counter for animation screen
       insertphase%=0       : REM current animation click phase for selecting first and last animation frames
       inserttextcol%=6     : REM text insert colour -1
       insertsave%=0        : REM insert options save flag
@@ -2726,7 +2728,7 @@
                     WHEN 4 : REM text
                   ENDCASE
                   PROCspriteinserthandler(1)
-                  PROCspritemoveinit(1)
+                  IF spritemoving%>-1 PROCspritemoveinit(1)
                 ENDIF
 
               WHEN 136 : REM left cursor
@@ -3203,7 +3205,7 @@
                 IF spritemoving%=-1 THEN
                   spritemoving%=spriteold%
                   PROCspriteinserthandler(1)
-                  PROCspritemoveinit(1)
+                  IF spritemoving%>-1 PROCspritemoveinit(1)
                 ENDIF
                 PROCWAITNOKEY(-90,0)
 
@@ -4465,31 +4467,31 @@
         WHEN 0 : REM paint
           IF redraw%=-1 THEN
             PROCgtext("P",SX%+32,menuYadd%,10,0,-64)
-            PROCmenutext(0,"PAINT        ",SX%+20,menuYadd%,14,(toolsel%=T_paint&)*-4,-48)
-            PROCmenutext(1,"LINE         ",SX%+20,menuYadd%,14,(toolsel%=T_line&)*-4,-48)
-            PROCmenutext(2,"BOX          ",SX%+20,menuYadd%,14,(toolsel%=T_box&)*-4,-48)
-            PROCmenutext(3,"CIRCLE       ",SX%+20,menuYadd%,14,(toolsel%=T_circle&)*-4,-48)
-            PROCmenutext(4,"SYMMETRY     ",SX%+20,menuYadd%,14,(toolsel%=T_symmetry&)*-4,-48)
-            PROCmenutext(5,"TEXT         ",SX%+20,menuYadd%,14,(toolsel%=T_text&)*-4,-48)
+            PROCbuttoncontrol(0,"PAINT        ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_paint&)*-4,-48,0)
+            PROCbuttoncontrol(1,"LINE         ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_line&)*-4,-48,0)
+            PROCbuttoncontrol(2,"BOX          ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_box&)*-4,-48,0)
+            PROCbuttoncontrol(3,"CIRCLE       ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_circle&)*-4,-48,0)
+            PROCbuttoncontrol(4,"SYMMETRY     ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_symmetry&)*-4,-48,0)
+            PROCbuttoncontrol(5,"TEXT         ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_text&)*-4,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
-            PROCmenutext(6,"ANIM8 LINES  ",SX%+20,menuYadd%,11,0,-48)
+            PROCbuttoncontrol(6,"ANIM8 LINES  ",SX%+20,menuYadd%,0,11,0,0,-48,0)
             PROCgtext("GAP",SX%+20,menuYadd%,14,0,0)
-            PROCmenutext(7," - ",SX%+128,menuYadd%,14,4,0)
-            PROCmenutext(8," + ",SX%+332,menuYadd%,14,4,-48)
+            PROCbuttoncontrol(7," - ",SX%+128,menuYadd%,0,14,0,4,0,0)
+            PROCbuttoncontrol(8," + ",SX%+332,menuYadd%,0,14,0,4,-48,0)
             PROCgtext("LEN",SX%+20,menuYadd%,14,0,0)
-            PROCmenutext(9," - ",SX%+128,menuYadd%,14,4,0)
-            PROCmenutext(10," + ",SX%+332,menuYadd%,14,4,-48)
+            PROCbuttoncontrol(9," - ",SX%+128,menuYadd%,0,14,0,4,0,0)
+            PROCbuttoncontrol(10," + ",SX%+332,menuYadd%,0,14,0,4,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
             PROCgtext("SHAPE OPTIONS",SX%+20,menuYadd%,8,0,-48)
-            PROCmenutext(11,"OUTLINE      ",SX%+20,menuYadd%,11,0,-48)
-            PROCmenutext(12,"FILLED       ",SX%+20,menuYadd%,11,0,-48)
-            PROCmenutext(13,"EMPTY        ",SX%+20,menuYadd%,11,0,-48)
+            PROCbuttoncontrol(11,"OUTLINE      ",SX%+20,menuYadd%,0,11,0,0,-48,0)
+            PROCbuttoncontrol(12,"FILLED       ",SX%+20,menuYadd%,0,11,0,0,-48,0)
+            PROCbuttoncontrol(13,"EMPTY        ",SX%+20,menuYadd%,0,11,0,0,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
             PROCgtext("FONT:",SX%+20,menuYadd%,14,0,0)
-            PROCmenutext(14," < ",SX%+192,menuYadd%,14,4,0)
-            PROCmenutext(15," > ",SX%+332,menuYadd%,14,4,-96)
+            PROCbuttoncontrol(14," < ",SX%+192,menuYadd%,0,14,0,4,0,0)
+            PROCbuttoncontrol(15," > ",SX%+332,menuYadd%,0,14,0,4,-96,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
-            PROCmenutext(16,"KYBRD FONTS  ",SX%+20,menuYadd%,10,0,-48)
+            PROCbuttoncontrol(16,"KYBRD FONTS  ",SX%+20,menuYadd%,0,10,0,0,-48,0)
 
           ENDIF
 
@@ -4506,49 +4508,49 @@
         WHEN 1 : REM dither
           IF redraw%=-1 THEN
             PROCgtext("B",SX%+32,menuYadd%,10,0,-64)
-            PROCmenutext(0,"DITHER 1     ",SX%+20,menuYadd%,14,(toolsel%=T_dither1&)*-4,-48)
-            PROCmenutext(1,"DITHER 2     ",SX%+20,menuYadd%,14,(toolsel%=T_dither2&)*-4,-48)
-            PROCmenutext(2,"DITHER 3     ",SX%+20,menuYadd%,14,(toolsel%=T_dither3&)*-4,-48)
-            PROCmenutext(3,"DITHER 4     ",SX%+20,menuYadd%,14,(toolsel%=T_dither4&)*-4,-48)
-            PROCmenutext(4,"SOLID BLOCK  ",SX%+20,menuYadd%,14,(toolsel%=T_dither5&)*-4,-48)
+            PROCbuttoncontrol(0,"DITHER 1     ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_dither1&)*-4,-48,0)
+            PROCbuttoncontrol(1,"DITHER 2     ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_dither2&)*-4,-48,0)
+            PROCbuttoncontrol(2,"DITHER 3     ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_dither3&)*-4,-48,0)
+            PROCbuttoncontrol(3,"DITHER 4     ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_dither4&)*-4,-48,0)
+            PROCbuttoncontrol(4,"SOLID BLOCK  ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_dither5&)*-4,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
-            PROCmenutext(5,"BRUSH       ",SX%+20,menuYadd%,14,(toolsel%=T_brush1&)*-4,-48)
+            PROCbuttoncontrol(5,"BRUSH       ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_brush1&)*-4,-48,0)
             GCOL 0,14
             LINE SX%+310,menuYadd%+42,SX%+330,menuYadd%+22
             LINE SX%+310,menuYadd%+44,SX%+332,menuYadd%+22
             LINE SX%+312,menuYadd%+44,SX%+332,menuYadd%+24
-            PROCmenutext(6,"BRUSH    /  ",SX%+20,menuYadd%,14,(toolsel%=T_brush2&)*-4,-48)
-            PROCmenutext(7,"BRUSH    -  ",SX%+20,menuYadd%,14,(toolsel%=T_brush3&)*-4,-48)
-            PROCmenutext(8,"BRUSH       ",SX%+20,menuYadd%,14,(toolsel%=T_brush4&)*-4,-48)
+            PROCbuttoncontrol(6,"BRUSH    /  ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_brush2&)*-4,-48,0)
+            PROCbuttoncontrol(7,"BRUSH    -  ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_brush3&)*-4,-48,0)
+            PROCbuttoncontrol(8,"BRUSH       ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_brush4&)*-4,-48,0)
             GCOL 0,14
             RECTANGLE FILL SX%+328,menuYadd%+22,2,24
-            PROCmenutext(9,"BRUSH   * 1 ",SX%+20,menuYadd%,14,(toolsel%=T_brush5&)*-4,-48)
-            PROCmenutext(10,"BRUSH   * 2 ",SX%+20,menuYadd%,14,(toolsel%=T_brush6&)*-4,-48)
-            PROCmenutext(11,"BRUSH   * 3 ",SX%+20,menuYadd%,14,(toolsel%=T_brush7&)*-4,-48)
+            PROCbuttoncontrol(9,"BRUSH   * 1 ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_brush5&)*-4,-48,0)
+            PROCbuttoncontrol(10,"BRUSH   * 2 ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_brush6&)*-4,-48,0)
+            PROCbuttoncontrol(11,"BRUSH   * 3 ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_brush7&)*-4,-48,0)
           ENDIF
 
         WHEN 2 : REM copy paste
           IF redraw%=-1 THEN
             PROCgtext("C",SX%+32,menuYadd%,10,0,-64)
-            PROCmenutext(0,"COPY/SELECT  ",SX%+20,menuYadd%,14,(toolsel%=T_copy&)*-4,-48)
-            PROCmenutext(1,"PASTE        ",SX%+20,menuYadd%,14,(toolsel%=T_paste&)*-4,-48)
+            PROCbuttoncontrol(0,"COPY/SELECT  ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_copy&)*-4,-48,0)
+            PROCbuttoncontrol(1,"PASTE        ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_paste&)*-4,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
-            PROCmenutext(2,"PASTE TO ALL ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(3,"CPY CODES ALL",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(4,"COPY FRAME > ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(5,"COPY FRAME < ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(6,"MIRROR SEL   ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(7,"MIRROR LEFT  ",SX%+20,menuYadd%,13,0,-48)
-            PROCmenutext(8,"REFLECT SEL  ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(9,"REFLECT TOP  ",SX%+20,menuYadd%,13,0,-48)
-            PROCmenutext(10,"FLIP HORZ    ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(11,"FLIP VERT    ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(12,"NEGATIVE     ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(13,"ERASE        ",SX%+20,menuYadd%,10,0,-48)
+            PROCbuttoncontrol(2,"PASTE TO ALL ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(3,"CPY CODES ALL",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(4,"COPY FRAME > ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(5,"COPY FRAME < ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(6,"MIRROR SEL   ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(7,"MIRROR LEFT  ",SX%+20,menuYadd%,0,13,0,0,-48,0)
+            PROCbuttoncontrol(8,"REFLECT SEL  ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(9,"REFLECT TOP  ",SX%+20,menuYadd%,0,13,0,0,-48,0)
+            PROCbuttoncontrol(10,"FLIP HORZ    ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(11,"FLIP VERT    ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(12,"NEGATIVE     ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(13,"ERASE        ",SX%+20,menuYadd%,0,10,0,0,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
-            PROCmenutext(14,"PASTE FIX X  ",SX%+20,menuYadd%,11,0,-48)
-            PROCmenutext(15,"PASTE FIX Y  ",SX%+20,menuYadd%,11,0,-48)
-            PROCmenutext(16,"TRANSPARENT  ",SX%+20,menuYadd%,11,0,-48)
+            PROCbuttoncontrol(14,"PASTE FIX X  ",SX%+20,menuYadd%,0,11,0,0,-48,0)
+            PROCbuttoncontrol(15,"PASTE FIX Y  ",SX%+20,menuYadd%,0,11,0,0,-48,0)
+            PROCbuttoncontrol(16,"TRANSPARENT  ",SX%+20,menuYadd%,0,11,0,0,-48,0)
           ENDIF
 
           REM redraw dynamic values
@@ -4561,15 +4563,15 @@
         WHEN 3 : REM fill
           IF redraw%=-1 THEN
             PROCgtext("F",SX%+32,menuYadd%,10,0,-64)
-            PROCmenutext(0,"FILL SOLID   ",SX%+20,menuYadd%,14,(toolsel%=T_fill&)*-4,-48)
-            PROCmenutext(1,"GRAD LEFT    ",SX%+20,menuYadd%,14,(toolsel%=T_gradl&)*-4,-48)
-            PROCmenutext(2,"GRAD RIGHT   ",SX%+20,menuYadd%,14,(toolsel%=T_gradr&)*-4,-48)
-            PROCmenutext(3,"GRAD TOP     ",SX%+20,menuYadd%,14,(toolsel%=T_gradt&)*-4,-48)
-            PROCmenutext(4,"GRAD BOTTOM  ",SX%+20,menuYadd%,14,(toolsel%=T_gradb&)*-4,-48)
-            PROCmenutext(5,"GRAD TOP-L   ",SX%+20,menuYadd%,14,(toolsel%=T_gradtl&)*-4,-48)
-            PROCmenutext(6,"GRAD TOP-R   ",SX%+20,menuYadd%,14,(toolsel%=T_gradtr&)*-4,-48)
-            PROCmenutext(7,"GRAD BOT-R   ",SX%+20,menuYadd%,14,(toolsel%=T_gradbr&)*-4,-48)
-            PROCmenutext(8,"GRAD BOT-L   ",SX%+20,menuYadd%,14,(toolsel%=T_gradbl&)*-4,-48)
+            PROCbuttoncontrol(0,"FILL SOLID   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_fill&)*-4,-48,0)
+            PROCbuttoncontrol(1,"GRAD LEFT    ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_gradl&)*-4,-48,0)
+            PROCbuttoncontrol(2,"GRAD RIGHT   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_gradr&)*-4,-48,0)
+            PROCbuttoncontrol(3,"GRAD TOP     ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_gradt&)*-4,-48,0)
+            PROCbuttoncontrol(4,"GRAD BOTTOM  ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_gradb&)*-4,-48,0)
+            PROCbuttoncontrol(5,"GRAD TOP-L   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_gradtl&)*-4,-48,0)
+            PROCbuttoncontrol(6,"GRAD TOP-R   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_gradtr&)*-4,-48,0)
+            PROCbuttoncontrol(7,"GRAD BOT-R   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_gradbr&)*-4,-48,0)
+            PROCbuttoncontrol(8,"GRAD BOT-L   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_gradbl&)*-4,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
 
             REM gradient fill options
@@ -4669,29 +4671,30 @@
         WHEN 4 : REM special
           IF redraw%=-1 THEN
             PROCgtext("S",SX%+32,menuYadd%,10,0,-64)
-            PROCmenutext(0,"FLSH (136)   ",SX%+20,menuYadd%,14,(toolsel%=T_flash&)*-4,-48)
-            PROCmenutext(1,"DBLH (141)   ",SX%+20,menuYadd%,14,(toolsel%=T_double&)*-4,-48)
-            PROCmenutext(2,"SEPR (154)   ",SX%+20,menuYadd%,14,(toolsel%=T_separate&)*-4,-48)
-            PROCmenutext(3,"HOLD (158)   ",SX%+20,menuYadd%,14,(toolsel%=T_hold&)*-4,-48)
+            PROCbuttoncontrol(0,"FLSH (136)   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_flash&)*-4,-48,0)
+            PROCbuttoncontrol(1,"DBLH (141)   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_double&)*-4,-48,0)
+            PROCbuttoncontrol(2,"SEPR (154)   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_separate&)*-4,-48,0)
+            PROCbuttoncontrol(3,"HOLD (158)   ",SX%+20,menuYadd%,0,14,0,(toolsel%=T_hold&)*-4,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
-            PROCmenutext(4,"SHOW GRID    ",SX%+20,menuYadd%,11,0,-48)
-            PROCmenutext(5,"COLUMN MODE  ",SX%+20,menuYadd%,11,0,-48)
+            PROCbuttoncontrol(4,"SHOW GRID    ",SX%+20,menuYadd%,0,11,0,0,-48,0)
+            PROCbuttoncontrol(5,"COLUMN MODE  ",SX%+20,menuYadd%,0,11,0,0,-48,0)
             PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
-            PROCmenutext(6,"SPRITES      ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(7,"MOVIE MODE   ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(8,"EDIT.TF      ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(9,"ZXNET        ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(10,"SAVE LINK    ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(11,"KYBRD FONTS  ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(12,"GIF TO BMP   ",SX%+20,menuYadd%,10,0,-48)
-            PROCmenutext(13,"HELP         ",SX%+20,menuYadd%,10,0,-48)
+            PROCbuttoncontrol(6,"SPRITES      ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(7,"MOVIE MODE   ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(8,"EDIT.TF      ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(9,"ZXNET        ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(10,"SAVE LINK    ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(11,"KYBRD FONTS  ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(12,"IMPORT BMP   ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(13,"GIF TO BMP   ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(14,"MENU EDITOR  ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            PROCbuttoncontrol(15,"HELP         ",SX%+20,menuYadd%,0,10,0,0,-48,0)
           ENDIF
 
           REM redraw dynamic values
           menuYadd%=716
           PROCgtext(CHR$(78+11*gridshow%),SX%+404,menuYadd%,9+gridshow%,0,-48)
           PROCgtext(CHR$(78+11*colmode%),SX%+404,menuYadd%,9+colmode%,0,0)
-
 
         WHEN 5 : REM insert sprite, ani, large spr, frame, text layout
           IF redraw%=-1 THEN
@@ -4703,13 +4706,12 @@
           ENDIF
 
           REM insert menu has standard controls 0,1,2,3 = tab selector, 4 = main panel selector, 5 = scrollbar
-          menuXadd%=SX%+16
           menuYadd%=908
-          PROCmenucontrol(0,"SPR",menuXadd%,menuYadd%,12,(insertmode%=0)*2+8,4)
-          PROCmenucontrol(1,"ANI",SX%+128,menuYadd%,12,(insertmode%=1)*2+8,4)
-          PROCmenucontrol(2,"LRG",SX%+240,menuYadd%,12,(insertmode%=2)*2+8,4)
-          PROCmenucontrol(3,"FRM",SX%+352,menuYadd%,12,(insertmode%=3)*2+8,4)
-          PROCmenucontrol(4,"TXT",SX%+464,menuYadd%,12,(insertmode%=4)*2+8,4)
+          PROCbuttoncontrol(0,"SPR",SX%+16,menuYadd%,0,(insertmode%=0)*2+8,12,4,0,1)
+          PROCbuttoncontrol(1,"ANI",SX%+128,menuYadd%,0,(insertmode%=1)*2+8,12,4,0,1)
+          PROCbuttoncontrol(2,"LRG",SX%+240,menuYadd%,0,(insertmode%=2)*2+8,12,4,0,1)
+          PROCbuttoncontrol(3,"FRM",SX%+352,menuYadd%,0,(insertmode%=3)*2+8,12,4,0,1)
+          PROCbuttoncontrol(4,"TXT",SX%+464,menuYadd%,0,(insertmode%=4)*2+8,12,4,0,1)
 
           GCOL 0,0
           RECTANGLE FILL SX%+16,menuYadd%-824,580,784
@@ -4857,12 +4859,12 @@
               menuYadd%=932
 
               REM              PROCgtext("@",SX%+20,menuYadd%,14,0)
-              PROCmenutext(0," < ",SX%+256,menuYadd%,14,4,0)
-              PROCmenutext(1," > ",SX%+354,menuYadd%,14,4,-104)
+              PROCbuttoncontrol(0," < ",SX%+256,menuYadd%,0,14,0,4,0,0)
+              PROCbuttoncontrol(1," > ",SX%+354,menuYadd%,0,14,0,4,-104,0)
               PROCaddcontrange(2,SX%+162,menuYadd%+12,SX%+320,menuYadd%+48)
 
               IF spritechange%=-1 THEN
-                PROCmenutext(3,"REMOVE",SX%+232,116,14,4,0)
+                PROCbuttoncontrol(3,"REMOVE",SX%+232,116,0,14,0,4,0,0)
 
                 PROCgtext("WX:",SX%+20,menuYadd%,14,0,-48)
                 PROCdrawcustomspr(-1,0,SX%+374,menuYadd%-22,COL%)
@@ -4882,10 +4884,7 @@
                     F$=" UNDO "
                     COL%=11
                   ENDIF
-                  PROCmenutext(6,F$,SX%+20,menuYadd%,COL%,4,-48)
-
-                ELSE
-                  REM PROCmenutext(4,"      ",SX%+20,menuYadd%-288,7,8,0)
+                  PROCbuttoncontrol(6,F$,SX%+20,menuYadd%,0,COL%,0,4,-48,0)
                 ENDIF
 
                 CASE objlist{(obj_lstcur%)}.type% OF
@@ -4915,7 +4914,6 @@
 
                 menuYadd%-=160
                 PROCaddcontrange(4,SX%+18,menuYadd%-552,SX%+400,menuYadd%+116)
-
 
                 PROCdrawscrollbar(5,SX%+412,menuYadd%-552,50,666,7)
 
@@ -4961,8 +4959,8 @@
               IF I%<>ABS(COL%) RECTANGLE FILL SX%+872+I%*48,SY%+136,32,40
               IF I%<>frmlist{(movieframe%)}.b% RECTANGLE FILL SX%+872+I%*48,SY%+80,32,40
             NEXT
-            PROCanimcontrol(15,"CopyAll",704,56,8,7,14,4)
-            PROCanimcontrol(16,"RsetAll",1000,56,8,7,14,4)
+            PROCbuttoncontrol(15,"CopyAll",704,56,8,7,14,4,0,2)
+            PROCbuttoncontrol(16,"RsetAll",1000,56,8,7,14,4,0,2)
           ENDIF
           PROCaddcontrange(0,SX%+872,SY%+136,SX%+1240,SY%+176)
           PROCaddcontrange(1,SX%+872,SY%+80,SX%+1240,SY%+120)
@@ -4978,21 +4976,20 @@
           NEXT
 
           REM add frames controls
-          menuadd%=32
-          PROCanimcontrol(2,"ADD FRAMES",menuadd%,100,0,7,14,4)
+          PROCbuttoncontrol(2,"ADD FRAMES",32,100,0,7,14,4,0,2)
 
         WHEN 8 : REM movie mode menu
           PROCgtext("M",SX%+128,menuYadd%,10,0,-64)
 
-          PROCmenutext(0,"LOAD MOVIE   ",SX%+20,menuYadd%,14,0,-48)
-          PROCmenutext(1,"SAVE MOVIE   ",SX%+20,menuYadd%,14,0,-96)
-          PROCmenutext(2,"RESET OBJECTS",SX%+20,menuYadd%,11,0,-48)
-          PROCmenutext(3,"RESET FRAMES ",SX%+20,menuYadd%,11,0,-48)
-          PROCmenutext(4,"RESET MOVIE  ",SX%+20,menuYadd%,11,0,-96)
-          PROCmenutext(6,"CUSTOM PROC 1",SX%+20,menuYadd%,10,0,-48)
-          PROCmenutext(7,"CUSTOM PROC 2",SX%+20,menuYadd%,10,0,-48)
+          PROCbuttoncontrol(0,"LOAD MOVIE   ",SX%+20,menuYadd%,0,14,0,0,-48,0)
+          PROCbuttoncontrol(1,"SAVE MOVIE   ",SX%+20,menuYadd%,0,14,0,0,-96,0)
+          PROCbuttoncontrol(2,"RESET OBJECTS",SX%+20,menuYadd%,0,11,0,0,-48,0)
+          PROCbuttoncontrol(3,"RESET FRAMES ",SX%+20,menuYadd%,0,11,0,0,-48,0)
+          PROCbuttoncontrol(4,"RESET MOVIE  ",SX%+20,menuYadd%,0,11,0,0,-96,0)
+          PROCbuttoncontrol(6,"CUSTOM PROC 1",SX%+20,menuYadd%,0,10,0,0,-48,0)
+          PROCbuttoncontrol(7,"CUSTOM PROC 2",SX%+20,menuYadd%,0,10,0,0,-48,0)
 
-          PROCmenutext(5,"HELP SCREEN  ",SX%+20,116,11,0,0)
+          PROCbuttoncontrol(5,"HELP SCREEN  ",SX%+20,116,0,11,0,0,0,0)
 
       ENDCASE
 
@@ -5151,7 +5148,7 @@
 
             ENDCASE
 
-            IF C%>=0 AND C%<14THEN
+            IF C%>=0 AND C%<16 THEN
               PROCsubupdate(C%)
 
               REM tool selected
@@ -5224,12 +5221,9 @@
                       objlist{(obj_lstcount%)}.type%=2
                       objlist{(obj_lstcount%)}.x%=(mmWX% DIV 2)*2
                       objlist{(obj_lstcount%)}.y%=((mmWY%-3) DIV 3)*3
-                      IF movieframe%>-1 THEN
-                        objlist{(obj_lstcount%)}.f%=movieframe%
-                      ELSE
-                        objlist{(obj_lstcount%)}.f%=-1
-                      ENDIF
+                      objlist{(obj_lstcount%)}.f%=movieframe%
                       objlist{(obj_lstcount%)}.parent%=-1
+                      objlist{(obj_lstcount%)}.c%=-insertrepflag%
 
                       done%=1
                     ELSE
@@ -5739,11 +5733,21 @@
                 menuext%=M_keyboard%
                 PROCkeyboardmenu(1)
 
-              WHEN 12: REM gif to bmp
+              WHEN 12: REM import bmp to frame
+                PROCmenudraw
+                PROCimportimage
+                PROCmenudraw
+
+              WHEN 13: REM gif to bmp
                 PROCmenudraw
                 PROCexportgif
 
-              WHEN 13: REM help screen
+              WHEN 14: REM menu editor
+                REM PROCmenudraw
+                PROCmenueditor
+                PROCmenurestore
+
+              WHEN 15: REM help screen
                 PROCmenudraw
                 PROCshowhelp
 
@@ -6140,14 +6144,14 @@
       ELSE
         PROCWAITNOKEY(-113,0)
         esccodes%=1
-        IF spritemoving%>-1 THEN
-          spritemoving%=-1
-          spriterelocate%=0
-          spritedupe%=-1
-          insertrepeat%=0
-          insertphase%=0
-          insertmode%=insertold%
-        ENDIF
+        REM        IF spritemoving%>-1 THEN
+        spritemoving%=-1
+        spriterelocate%=0
+        spritedupe%=-1
+        insertrepeat%=0
+        insertphase%=0
+        insertmode%=insertold%
+        REM      ENDIF
       ENDIF
 
       IF c%=1 THEN
@@ -6196,7 +6200,7 @@
         GCOL 0,8
         RECTANGLE FILL dx%+12,dt%-54,dw%-24,44
         PROCgtext(t$,dx%+16,dt%-20,10,8,0)
-        PROCanimcontrol(0,"  GO!  ",dx%+(dw%/2)-120,dy%+72,0,7,14,4)
+        PROCbuttoncontrol(0,"  GO!  ",dx%+(dw%/2)-120,dy%+72,0,14,7,4,0,2)
       ENDIF
 
       CASE insertmode% OF
@@ -6205,13 +6209,13 @@
             menuYadd%=dt%-100
             PROCgtext("Multiple Frames?",dx%+84,menuYadd%,7,0,-60)
             IF insertrepflag%=1 THEN
-              PROCanimcontrol(17,"<",dx%+664,menuYadd%,0,7,10,8)
-              PROCanimcontrol(18,">",dx%+724,menuYadd%,0,7,10,8)
+              PROCbuttoncontrol(17,"<",dx%+664,menuYadd%,0,10,7,8,0,2)
+              PROCbuttoncontrol(18,">",dx%+724,menuYadd%,0,10,7,8,0,2)
               PROCgtext("Shape:",dx%+36,menuYadd%,7,0,-60)
             ENDIF
             IF menufrom%=M_moviemode% PROCgtext("Relative To Frame?",dx%+84,menuYadd%,7,0,-60)
-            PROCanimcontrol(4,"<",dx%+564,menuYadd%,0,7,10,8)
-            PROCanimcontrol(5,">",dx%+624,menuYadd%,0,7,10,8)
+            PROCbuttoncontrol(4,"<",dx%+564,menuYadd%,0,10,7,8,0,2)
+            PROCbuttoncontrol(5,">",dx%+624,menuYadd%,0,10,7,8,0,2)
             PROCgtext("Skip Frames:",dx%+36,menuYadd%,7,0,-60)
             PROCgtext("Transparent",dx%+84,menuYadd%,7,0,-60)
 
@@ -6233,19 +6237,19 @@
         WHEN 1,2 : REM ani or large sprite
           IF r%=1 THEN
             IF menufrom%=M_moviemode% PROCgtext("Relative To Frame?",dx%+84,dt%-100,7,0,0)
-            PROCanimcontrol(17,"<",dx%+664,dt%-160,0,7,10,8)
-            PROCanimcontrol(18,">",dx%+724,dt%-160,0,7,10,8)
+            PROCbuttoncontrol(17,"<",dx%+664,dt%-160,0,10,7,8,0,2)
+            PROCbuttoncontrol(18,">",dx%+724,dt%-160,0,10,7,8,0,2)
             PROCgtext("Shape:",dx%+36,dt%-160,7,0,-60)
 
             PROCgtext("Skip Frames:",dx%+36,dt%-220,7,0,0)
-            PROCanimcontrol(4,"<",dx%+564,dt%-220,0,7,10,8)
-            PROCanimcontrol(5,">",dx%+624,dt%-220,0,7,10,8)
+            PROCbuttoncontrol(4,"<",dx%+564,dt%-220,0,10,7,8,0,2)
+            PROCbuttoncontrol(5,">",dx%+624,dt%-220,0,10,7,8,0,2)
             PROCgtext("Frame Repeat:",dx%+36,dt%-280,7,0,0)
-            PROCanimcontrol(6,"<",dx%+564,dt%-280,0,7,10,8)
-            PROCanimcontrol(7,">",dx%+624,dt%-280,0,7,10,8)
+            PROCbuttoncontrol(6,"<",dx%+564,dt%-280,0,10,7,8,0,2)
+            PROCbuttoncontrol(7,">",dx%+624,dt%-280,0,10,7,8,0,2)
             PROCgtext("First Sprite:",dx%+36,dt%-340,7,0,0)
-            PROCanimcontrol(8,"<",dx%+564,dt%-340,0,7,10,8)
-            PROCanimcontrol(9,">",dx%+624,dt%-340,0,7,10,8)
+            PROCbuttoncontrol(8,"<",dx%+564,dt%-340,0,10,7,8,0,2)
+            PROCbuttoncontrol(9,">",dx%+624,dt%-340,0,10,7,8,0,2)
           ENDIF
           IF menufrom%=M_moviemode% PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-126,10)
           PROCgtext(insertshape$(insertshape%),dx%+234,dt%-160,11,8,-26)
@@ -6276,16 +6280,15 @@
 
         WHEN 5 : REM insert frames to movie mode
           IF r%=1 THEN
-            menuadd%=dx%+192
             PROCgtext("Frame Count:",dx%+36,dt%-160,7,0,0)
-            PROCanimcontrol(19,"<",dx%+564,dt%-160,0,7,10,8)
-            PROCanimcontrol(20,">",dx%+624,dt%-160,0,7,10,8)
+            PROCbuttoncontrol(19,"<",dx%+564,dt%-160,0,10,7,8,0,2)
+            PROCbuttoncontrol(20,">",dx%+624,dt%-160,0,10,7,8,0,2)
             PROCgtext("Accelerate:",dx%+36,dt%-220,7,0,0)
-            PROCanimcontrol(12,"<",dx%+564,dt%-220,0,7,10,8)
-            PROCanimcontrol(13,">",dx%+624,dt%-220,0,7,10,8)
+            PROCbuttoncontrol(12,"<",dx%+564,dt%-220,0,10,7,8,0,2)
+            PROCbuttoncontrol(13,">",dx%+624,dt%-220,0,10,7,8,0,2)
             PROCgtext("Decelerate:",dx%+36,dt%-280,7,0,0)
-            PROCanimcontrol(14,"<",dx%+564,dt%-280,0,7,10,8)
-            PROCanimcontrol(15,">",dx%+624,dt%-280,0,7,10,8)
+            PROCbuttoncontrol(14,"<",dx%+564,dt%-280,0,10,7,8,0,2)
+            PROCbuttoncontrol(15,">",dx%+624,dt%-280,0,10,7,8,0,2)
           ENDIF
           PROCgtext(RIGHT$("0000"+STR$(movieframeadd%),4),dx%+420,dt%-160,15,4,0)
           PROCgtext(RIGHT$("00"+STR$(insertpanacc%),3),dx%+452,dt%-220,11,8,0)
@@ -6560,10 +6563,10 @@
         GCOL 0,14
         RECTANGLE 156,120,960,750
         PROCgtext("Shape:         C:    PX:    PY:",0,994,7,0,0)
-        PROCanimcontrol(0,"Apply",540,40,8,7,14,4)
-        PROCanimcontrol(1,"CLS",1128,990,0,7,14,4)
-        PROCanimcontrol(2,"<",340,990,0,7,14,4)
-        PROCanimcontrol(3,">",396,990,0,7,14,4)
+        PROCbuttoncontrol(0,"Apply",540,40,8,14,7,4,0,2)
+        PROCbuttoncontrol(1,"CLS",1128,990,0,14,7,4,0,2)
+        PROCbuttoncontrol(2,"<",340,990,0,14,7,4,0,2)
+        PROCbuttoncontrol(3,">",396,990,0,14,7,4,0,2)
 
         IF animshape{(shapeindex%)}.c%>-1 THEN
           GCOL 0,10
@@ -6641,9 +6644,8 @@
                   WX%=(WX%+(SGN(WX%)=-1)) DIV 2
                   WY%=mmWY%-Y%
                   WY%=(WY%+(SGN(WY%)=-1)*2) DIV 3
-
                   IF WX%>-81 AND WX%<80 AND WY%<75 AND WY%>-75 THEN
-                    PROCbuffertoframe(SP%,WX%,WY%)
+                    PROCframetobuffer(SP%,WX%,WY%,objlist{(L%)}.c%)
                   ENDIF
 
                 WHEN 3 : REM text
@@ -7828,37 +7830,45 @@
       ENDPROC
 
       REM ##########################################################
-      REM copy sprite buffer to frame
-      DEF PROCbuffertoframe(f%,sx%,sy%)
-      LOCAL D%,S%,U%,X%,Y%,C%,CS%
+      REM copy frame buffer to movie buffer
+      DEF PROCframetobuffer(f%,sx%,sy%,lx%)
+      LOCAL D%,S%,U%,X%,Y%,C%,CS%,LC%
       FOR U%=0 TO 959
-        X%=sx%+U% MOD 40
+        LC%=U% MOD 40
+        X%=sx%+LC%
         Y%=sy%+U% DIV 40
-        IF U% MOD 40=0 THEN
+
+        IF LC%=0 THEN
           C%=-1
           CS%=0
         ENDIF
 
-        S%=frame_buffer&(f%,U%)
-        IF S%>144 AND S%<152 AND CS%=0 THEN
-          C%=S%
-        ENDIF
-
-        IF X%>0 AND X%<40 AND Y%>0 AND Y%<25 THEN
-          IF CS%=0 AND C%<>-1 THEN
-            movie_buffer&((Y%-1)*40)=C%
-            CS%=1
+        IF lx%=0 AND LC%=0 THEN
+          REM skip first column
+        ELSE
+          S%=frame_buffer&(f%,U%)
+          IF S%>128 AND S%<160 AND CS%=0 THEN
+            C%=S%
           ENDIF
-          IF spr_trns%=1 THEN
-            REM IF S%<>32 AND S%<>160 THEN movie_buffer&(X%+(Y%-1)*40)=S%
-            IF S%<>32 THEN
-              D%=0
-              IF S%>159 D%=movie_buffer&(X%+(Y%-1)*40)
 
-              movie_buffer&(X%+(Y%-1)*40)=S% OR D%
+          IF X%>lx% AND X%<40 AND Y%>0 AND Y%<25 THEN
+            IF spr_trns%=1 THEN
+              REM IF S%<>32 AND S%<>160 THEN movie_buffer&(X%+(Y%-1)*40)=S%
+              IF S%<>32 THEN
+                D%=0
+                IF S%>159 D%=movie_buffer&(X%+(Y%-1)*40)
+
+                movie_buffer&(X%+(Y%-1)*40)=S% OR D%
+              ENDIF
+            ELSE
+              movie_buffer&(X%+(Y%-1)*40)=S%
             ENDIF
-          ELSE
-            movie_buffer&(X%+(Y%-1)*40)=S%
+
+            IF CS%=0 AND C%<>-1 AND X%<1 THEN
+              movie_buffer&((Y%-1)*40)=C%
+              CS%=1
+            ENDIF
+
           ENDIF
         ENDIF
       NEXT
@@ -9475,7 +9485,7 @@
       CASE loadtype% OF
         WHEN 0 :
           M%=2
-          maxy%=M%+20
+          maxy%=M%+22
 
         OTHERWISE
           M%=3
@@ -9803,14 +9813,19 @@
           IF F%<>-1 THEN
             IF GT%=0 THEN
               IF INSTR(n$(SEL%),"M7_") OR F%=-2 THEN
-
-                IF F%>0 THEN F$=curdir$+LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
-                FOR canvasframe%=1 TO frame_max%
-                  PROCloadbinaryfile(F$ + STR$(canvasframe%)+".BIN")
+                IF opt1%=1 THEN
+                  PROCloadbinaryfile(curdir$+n$(SEL%))
                   PROCframesave(canvasframe%)
-                  REM WAIT 10
-                NEXT
-                PROCloadnextframe(1,0)
+                ELSE
+                  IF F%>0 THEN F$=curdir$+LEFT$(n$(SEL%),LEN(n$(SEL%))-5)
+                  FOR canvasframe%=1 TO frame_max%
+                    PROCloadbinaryfile(F$ + STR$(canvasframe%)+".BIN")
+                    PROCframesave(canvasframe%)
+                    REM WAIT 10
+                  NEXT
+                  PROCloadnextframe(1,0)
+                ENDIF
+
               ELSE
                 IF RIGHT$(FNUPPER(n$(SEL%)),3)="BIN" THEN
                   PROCloadbinaryfile(curdir$+n$(SEL%))
@@ -10077,7 +10092,7 @@
         RECTANGLE SX%+10,SY%+10,SW%-20,SH%-20
         PROCgtext(" SAVE FILE OPTIONS ",SX%+236,menuYadd%,10,0,-60)
         PROCgtext("PROJECT NAME: ",SX%+40,menuYadd%,11,0,-48)
-        PROCmenucontrol(6,"X",SX%+820,menuYadd%,0,9,0)
+        PROCbuttoncontrol(6,"X",SX%+820,menuYadd%,0,9,0,0,0,1)
         PROCgtext(D$,SX%+40,menuYadd%,11,4,-80)
         PROCgtext("FILES TO SAVE:",SX%+40,menuYadd%,11,0,-48)
         PROCgtext("BIN:",SX%+40,menuYadd%,15,0,0)
@@ -10088,15 +10103,15 @@
         PROCgtext("(ALL SPRITE DATA)",SX%+340,menuYadd%,4,0,-48)
         PROCgtext("TXT:",SX%+40,menuYadd%,15,0,0)
         PROCgtext("(SPR DATA STATEMENTS)",SX%+340,menuYadd%,4,0,0)
-        PROCmenucontrol(0,"  SAVE  ",SX%+100,SY%+100,12,10,4)
-        PROCmenucontrol(1," CANCEL ",SX%+700,SY%+100,9,11,1)
+        PROCbuttoncontrol(0,"  SAVE  ",SX%+100,SY%+100,0,10,12,4,0,1)
+        PROCbuttoncontrol(1," CANCEL ",SX%+700,SY%+100,0,11,9,1,0,1)
       ENDIF
 
       menuYadd%=624
-      PROCmenucontrol(2," "+CHR$(78+save_bin%*11)+" ",SX%+180,menuYadd%,8,11+4*save_bin%,1+save_bin%)
-      PROCmenucontrol(3," "+CHR$(78+save_bmp%*11)+" ",SX%+180,menuYadd%-48,8,11+4*save_bmp%,1+save_bmp%)
-      PROCmenucontrol(4," "+CHR$(78+save_spr%*11)+" ",SX%+180,menuYadd%-96,8,11+4*save_spr%,1+save_spr%)
-      PROCmenucontrol(5," "+CHR$(78+save_dat%*11)+" ",SX%+180,menuYadd%-144,8,11+4*save_dat%,1+save_dat%)
+      PROCbuttoncontrol(2," "+CHR$(78+save_bin%*11)+" ",SX%+180,menuYadd%,0,11+4*save_bin%,8,1+save_bin%,0,1)
+      PROCbuttoncontrol(3," "+CHR$(78+save_bmp%*11)+" ",SX%+180,menuYadd%-48,0,11+4*save_bmp%,8,1+save_bmp%,0,1)
+      PROCbuttoncontrol(4," "+CHR$(78+save_spr%*11)+" ",SX%+180,menuYadd%-96,0,11+4*save_spr%,8,1+save_spr%,0,1)
+      PROCbuttoncontrol(5," "+CHR$(78+save_dat%*11)+" ",SX%+180,menuYadd%-144,0,11+4*save_dat%,8,1+save_dat%,0,1)
 
       ENDPROC
 
@@ -10363,7 +10378,7 @@
         REM t$,x%,y%,tc%,bc%
         PROCgtext(" SAVE MOVIE OPTIONS ",SX%+236,menuYadd%,10,0,-60)
         PROCgtext("MOVIE NAME: ",SX%+40,menuYadd%,15,0,-48)
-        PROCmenucontrol(9,"X",SX%+820,menuYadd%,0,9,0)
+        PROCbuttoncontrol(9,"X",SX%+820,menuYadd%,0,9,0,0,0,1)
         PROCgtext(D$,SX%+40,menuYadd%,11,4,-80)
         PROCgtext("FILES TO SAVE:",SX%+40,menuYadd%,15,0,-48)
         PROCgtext("MOV:",SX%+40,menuYadd%,15,0,0)
@@ -10381,18 +10396,18 @@
         PROCgtext("TXT:",SX%+40,menuYadd%,15,0,0)
         PROCgtext("(TEXT DATA FILE)",SX%+340,menuYadd%,4,0,-48)
 
-        PROCmenucontrol(0,"  SAVE  ",SX%+100,SY%+100,12,10,4)
-        PROCmenucontrol(1," CANCEL ",SX%+700,SY%+100,9,11,1)
+        PROCbuttoncontrol(0,"  SAVE  ",SX%+100,SY%+100,0,10,12,4,0,1)
+        PROCbuttoncontrol(1," CANCEL ",SX%+700,SY%+100,0,11,9,1,0,1)
 
       ENDIF
       menuYadd%=624
-      PROCmenucontrol(2," "+CHR$(78+mov_frm%*11)+" ",SX%+180,menuYadd%,8,11+4*mov_frm%,1+mov_frm%)
-      PROCmenucontrol(3," "+CHR$(78+mov_dat%*11)+" ",SX%+180,menuYadd%-48,8,11+4*mov_dat%,1+mov_dat%)
-      PROCmenucontrol(4," "+CHR$(78+mov_bin%*11)+" ",SX%+180,menuYadd%-96,8,11+4*mov_bin%,1+mov_bin%)
-      PROCmenucontrol(5," "+CHR$(78+mov_bmp%*11)+" ",SX%+180,menuYadd%-144,8,11+4*mov_bmp%,1+mov_bmp%)
-      PROCmenucontrol(6," "+CHR$(78+mov_spr%*11)+" ",SX%+180,menuYadd%-192,8,11+4*mov_spr%,1+mov_spr%)
-      PROCmenucontrol(7," "+CHR$(78+mov_lrg%*11)+" ",SX%+180,menuYadd%-240,8,11+4*mov_lrg%,1+mov_lrg%)
-      PROCmenucontrol(8," "+CHR$(78+mov_txt%*11)+" ",SX%+180,menuYadd%-288,8,11+4*mov_txt%,1+mov_txt%)
+      PROCbuttoncontrol(2," "+CHR$(78+mov_frm%*11)+" ",SX%+180,menuYadd%,0,11+4*mov_frm%,8,1+mov_frm%,0,1)
+      PROCbuttoncontrol(3," "+CHR$(78+mov_dat%*11)+" ",SX%+180,menuYadd%-48,0,11+4*mov_dat%,8,1+mov_dat%,0,1)
+      PROCbuttoncontrol(4," "+CHR$(78+mov_bin%*11)+" ",SX%+180,menuYadd%-96,0,11+4*mov_bin%,8,1+mov_bin%,0,1)
+      PROCbuttoncontrol(5," "+CHR$(78+mov_bmp%*11)+" ",SX%+180,menuYadd%-144,0,11+4*mov_bmp%,8,1+mov_bmp%,0,1)
+      PROCbuttoncontrol(6," "+CHR$(78+mov_spr%*11)+" ",SX%+180,menuYadd%-192,0,11+4*mov_spr%,8,1+mov_spr%,0,1)
+      PROCbuttoncontrol(7," "+CHR$(78+mov_lrg%*11)+" ",SX%+180,menuYadd%-240,0,11+4*mov_lrg%,8,1+mov_lrg%,0,1)
+      PROCbuttoncontrol(8," "+CHR$(78+mov_txt%*11)+" ",SX%+180,menuYadd%-288,0,11+4*mov_txt%,8,1+mov_txt%,0,1)
 
       ENDPROC
 
@@ -10635,9 +10650,9 @@
       ENDCASE
       PROCWAITMOUSE(0)
       PROCchangemode(7,1)
+      menuext%=M_canvasmode%
       canvasframe%=0
       PROCloadnextframe(1,0)
-      menuext%=M_canvasmode%
 
       ENDPROC
 
@@ -11803,32 +11818,6 @@
       =done%
 
       REM ##########################################################
-      REM display a control button, Title, X, Y, border col, text col, fill col
-      DEF PROCanimcontrol(n%,t$,x%,y%,ya%,bc%,tc%,fc%)
-      LOCAL l%,sx%,sy%
-
-      l%=LEN(t$)
-      sx%=l%*32+20
-      REM sx%=l%*32+16
-      sy%=38+ya%
-
-      GCOL 0,fc%
-      RECTANGLE FILL x%+2,y%-sy%+6,sx%-4,sy%
-
-      GCOL 0,bc%
-
-      RECTANGLE x%,y%-sy%+4,sx%,sy%+4
-      RECTANGLE x%+2,y%-sy%+6,sx%-4,sy%
-      PROCgprint(t$,x%+12,y%+2,tc%)
-
-      REM save control range
-      PROCaddcontrange(n%,x%-2,y%-sy%+2,x%+sx%,y%+8)
-
-      menuadd%=menuadd%+sx%+16
-
-      ENDPROC
-
-      REM ##########################################################
       REM update animation screen details
       DEF PROCanimupdate(c%)
       LOCAL I%,S%,X%,Y%,DX%,DY%,tc%,bc%
@@ -11907,7 +11896,7 @@
       lc%=6 : REM label text colour
 
       REM header
-      A$="Sprite Animation"
+      A$="Animation Sets"
       VDU 5
       FOR X%=0 TO LEN(A$)-1
         GCOL 0,4
@@ -11922,29 +11911,29 @@
       PROCresetcontrols
 
       REM anim set scroll buttons
-      menuadd%=1164
-      PROCanimcontrol(41,"<",menuadd%,876,0,8,bc%,0)
-      menuadd%=1164
-      PROCanimcontrol(42,">",menuadd%,822,0,8,bc%,0)
+      PROCbuttoncontrol(41,"<",1164,876,0,bc%,8,0,0,2)
+      PROCbuttoncontrol(42,">",1164,822,0,bc%,8,0,0,2)
 
-      REM anim spr scroll buttons
-      menuadd%=1164
-      PROCanimcontrol(43,"<",menuadd%,436,0,8,bc%,0)
-      menuadd%=1164
-      PROCanimcontrol(44,">",menuadd%,382,0,8,bc%,0)
+      REM anim spr / frm scroll buttons
+      PROCbuttoncontrol(43,"<",1164,436,0,bc%,8,0,0,2)
+      PROCbuttoncontrol(44,">",1164,382,0,bc%,8,0,0,2)
+
+      REM spr / frm selector
+      PROCbuttoncontrol(4,"SPR",900,496,0,(aniselect%=0)*2+8,12,4,0,1)
+      PROCbuttoncontrol(5,"FRM",1028,496,0,(aniselect%=1)*2+8,12,4,0,1)
 
       REM menu
       PROCgtext("SET:",0,940,tc%,0,0)
       PROCgtext("COUNT:",618,940,lc%,0,0)
 
-      menuadd%=272
-      PROCanimcontrol(0,"<<",menuadd%,940,0,8,bc%,0)
-      PROCanimcontrol(1,"<",menuadd%,940,0,8,bc%,0)
-      PROCanimcontrol(2,">",menuadd%,940,0,8,bc%,0)
-      PROCanimcontrol(3,">>",menuadd%,940,0,8,bc%,0)
+      menuXadd%=272
+      PROCbuttoncontrol(0,"<<",menuXadd%,940,0,bc%,8,0,0,2)
+      PROCbuttoncontrol(1,"<",menuXadd%,940,0,bc%,8,0,0,2)
+      PROCbuttoncontrol(2,">",menuXadd%,940,0,bc%,8,0,0,2)
+      PROCbuttoncontrol(3,">>",menuXadd%,940,0,bc%,8,0,0,2)
 
-      PROCanimcontrol(37,"CLR",974,940,0,7,1,0)
-      PROCanimcontrol(35,"EXIT",1120,940,0,9,11,1)
+      PROCbuttoncontrol(37,"CLR",974,940,0,1,7,0,0,2)
+      PROCbuttoncontrol(35,"EXIT",1120,940,0,11,9,1,0,2)
 
       REM play controls
       GCOL 0,15
@@ -11960,7 +11949,6 @@
       DIM X%,Y%,S%
 
       REM calc height based on grid size
-      REM take out references to menuadd%
       REM work out position based on grid size rather than additional x,y manual adjustments
 
       REM scrolLbar
@@ -12024,7 +12012,6 @@
         NEXT
       NEXT
       ENDPROC
-
 
       REM ##########################################################
       REM draw pixel version of sprite for animation creator
@@ -12171,7 +12158,6 @@
         PRINTTAB(34,18)"low"
       ENDIF
 
-
       FOR Y%=12 TO 18 STEP 2
         FOR I%=1 TO 37 STEP 2
           IF fontcur%>0 THEN
@@ -12184,7 +12170,6 @@
         NEXT
       NEXT
 
-
       PROCprint40(20,"TEXT:"+tg$+text$)
       PRINTTAB(36,20)tr$;"< X";
 
@@ -12195,6 +12180,23 @@
       ENDIF
 
       IF R% PROCmenudraw
+      ENDPROC
+
+      REM ##########################################################
+      REM INITIALISE THE SCREEN
+      DEF PROCGR(F%,B%,C%)
+      LOCAL Y%
+
+      REM CLS
+      IF C% THEN VDU 12
+
+      REM ADD GRAPHICS CODE TO LEFT SIDE OF CANVAS
+      FOR Y%=1 TO 24
+        VDU 31,0,Y%
+        IF B% THEN VDU 144+B%,157
+        VDU 144+F%
+      NEXT
+
       ENDPROC
 
       REM ##########################################################
@@ -12272,55 +12274,41 @@
       ENDPROC
 
       REM ##########################################################
-      REM print menu text at graphics pos x,y, text col, bg col, save control range
-      DEF PROCmenutext(n%,t$,x%,y%,tc%,bc%,ma%)
-      LOCAL L%,sx%,sy%
+      REM print menu / button - control number, text, pos x,y + height add, text col, border col, fill col, menuYadd, button type
+      DEF PROCbuttoncontrol(n%,t$,x%,y%,ha%,tc%,bc%,fc%,ya%,bt%)
+      LOCAL sx%,sy%
 
-      L%=LEN(t$)
-      sx%=L%*32-2
-      sy%=38
-
-      GCOL 0,bc%
-      RECTANGLE FILL x%,y%-32,sx%,sy%
-      PROCgprint(t$,x%+4,y%,tc%)
-      menuYadd%+=ma%
-
-      REM save control range
-      PROCaddcontrange(n%,x%-2,y%-sy%+2,x%+sx%,y%+8)
-
-      ENDPROC
-
-      REM ##########################################################
-      REM display a control button, Title, X, Y, border col, text col, fill col
-      DEF PROCmenucontrol(n%,t$,x%,y%,bc%,tc%,fc%)
-      LOCAL l%,sx%,sy%
-
-      l%=LEN(t$)
-      sx%=l%*32+16
-      sy%=36
+      sx%=LEN(t$)*32
+      sy%=38+ha%
 
       GCOL 0,fc%
-      RECTANGLE FILL x%+2,y%-sy%+6,sx%-4,sy%
 
-      GCOL 0,bc%
+      CASE bt% OF
+        WHEN 0 : REM menu tool text button with highlight
+          sx%-=2
+          RECTANGLE FILL x%,y%-32,sx%,sy%
+          PROCgprint(t$,x%+4,y%,tc%)
 
-      RECTANGLE x%,y%-sy%+4,sx%,sy%+4
-      RECTANGLE x%+2,y%-sy%+6,sx%-4,sy%
-      PROCgprint(t$,x%+12,y%+2,tc%)
 
+        WHEN 1,2 : REM menu / gui button with border
+          sx%+=16
+          IF bt%=2 sx%+=4 ELSE sy%-=2
+
+          RECTANGLE FILL x%+2,y%-sy%+6,sx%-4,sy%
+
+          GCOL 0,bc%
+
+          RECTANGLE x%,y%-sy%+4,sx%,sy%+4
+          RECTANGLE x%+2,y%-sy%+6,sx%-4,sy%
+          PROCgprint(t$,x%+12,y%+2,tc%)
+
+          menuXadd%=menuXadd%+sx%+16
+
+      ENDCASE
       REM save control range
       PROCaddcontrange(n%,x%-2,y%-sy%+2,x%+sx%,y%+8)
 
-      menuXadd%=menuXadd%+sx%+16
-
-      ENDPROC
-
-      REM ##########################################################
-      REM display a menu line separator X, Y, W, col, menuyadd
-      DEF PROCmenuline(x%,y%,w%,c%,ma%)
-      GCOL 0,c%
-      RECTANGLE x%,y%,w%,2
-      menuYadd%+=ma%
+      menuYadd%+=ya%
 
       ENDPROC
 
@@ -12338,19 +12326,11 @@
       ENDPROC
 
       REM ##########################################################
-      REM INITIALISE THE SCREEN
-      DEF PROCGR(F%,B%,C%)
-      LOCAL Y%
-
-      REM CLS
-      IF C% THEN VDU 12
-
-      REM ADD GRAPHICS CODE TO LEFT SIDE OF CANVAS
-      FOR Y%=1 TO 24
-        VDU 31,0,Y%
-        IF B% THEN VDU 144+B%,157
-        VDU 144+F%
-      NEXT
+      REM display a menu line separator X, Y, W, col, menuyadd
+      DEF PROCmenuline(x%,y%,w%,c%,ma%)
+      GCOL 0,c%
+      RECTANGLE x%,y%,w%,2
+      menuYadd%+=ma%
 
       ENDPROC
 
@@ -12477,6 +12457,34 @@
 
       ENDPROC
 
+      REM ##########################################################
+      REM menu editor screen
+      DEF PROCmenueditor
+      LOCAL done%,C%,CO%,X%,Y%,S%,SP%,DP%
+      CLS
+
+      REM PROCgtext("P",SX%+32,menuYadd%,10,0,-64)
+      REM PROCmenutext(0,"PAINT        ",SX%+20,menuYadd%,14,(toolsel%=T_paint&)*-4,-48)
+      REM PROCbuttoncontrol(n%,t$,x%,y%,ha%,tc%,bc%,fc%,ya%,bt%)
+      REM PROCmenuline(SX%+20,menuYadd%,SW%-40,8,-24)
+      REM PROCanimcontrol(0,"  GO!  ",dx%+(dw%/2)-120,dy%+72,0,7,14,4)
+      REM PROCdrawcustomspr(2,4+insertrepflag%,dx%+36,menuYadd%,10)
+
+      GCOL 0,0
+      REM RECTANGLE FILL 240,300,800,400
+      REM RECTANGLE FILL dx%,dy%,dw%,dh%
+
+      GCOL 0,15
+      REM RECTANGLE dx%+8,dy%+8,dw%-16,dh%-16
+      REM RECTANGLE dx%+10,dy%+10,dw%-20,dh%-20
+
+      PRINTTAB(0,0)"1.LBL 2.MTX 3.MLN 4.ATX 5.CHK 6.SCR"
+      REPEAT
+        PROCREADMOUSE
+      UNTIL MB%=4
+      PROCWAITMOUSE(0)
+
+      ENDPROC
 
       REM ##########################################################
       REM load screen
@@ -12978,7 +12986,7 @@
       DATA 480,960,460,636
       DATA 512,960,460,908
       DATA 544,960,460,740
-      DATA 576,960,460,760
+      DATA 576,960,460,860
       DATA 672,960,608,908
       DATA 800,960,480,908
       DATA 0,400,1278,400
