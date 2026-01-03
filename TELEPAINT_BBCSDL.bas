@@ -382,6 +382,7 @@
 
       REM sprite variables
       sprite_max%=100
+      sprani_max%=100
       sprite_old%=0
       sprite_cur%=0
       spr_lstcount%=0
@@ -4734,16 +4735,19 @@
                       WHEN 0
                         S%=objsprscroll%*5+X%+Y%*5
                       WHEN 1
-                        S%=sprani{(objaniscroll%*5+X%+Y%*5)}.s%(0)
+                        S%=objaniscroll%*5+X%+Y%*5
+                        IF S%<sprani_max% S%=sprani{(S%)}.s%(0)
                     ENDCASE
 
                     DX%=SX%+X%*96+12
                     DY%=menuYadd%-Y%*112
-                    PROCdrawsprbitmap(S%,DX%+14,DY%+14)
-                    COL%=8
-                    IF S%>-1 COL%=8-(sprlist{(S%)}.m%*4)
-                    GCOL 0,COL%
-                    RECTANGLE DX%+8,DY%+8,90,106
+                    IF S%<sprite_max% THEN
+                      PROCdrawsprbitmap(S%,DX%+14,DY%+14)
+                      COL%=8
+                      IF S%>-1 COL%=8-(sprlist{(S%)}.m%*4)
+                      GCOL 0,COL%
+                      RECTANGLE DX%+8,DY%+8,90,106
+                    ENDIF
                   NEXT
                 NEXT
               WHEN 2 : REM large sprites
@@ -4919,7 +4923,7 @@
 
                 FOR Y%=0 TO 5
                   FOR X%=0 TO 3
-                    S%=objsprscroll%*4+X%+Y%*4
+                    S%=objsprscroll%*5+X%+Y%*5
 
                     DX%=SX%+X%*96+12
                     DY%=menuYadd%-Y%*112
@@ -5176,22 +5180,24 @@
               WHEN 5 : REM insert sprite, animation, large sprite, frame or text into world map
                 CASE insertmode% OF
                   WHEN 0 : REM spr insert
-                    SP%=objsprscroll%*4+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*4
+                    SP%=objsprscroll%*5+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*5
                     spritemoving%=SP%
                     PROCspriteinserthandler(0)
                     done%=1
 
                   WHEN 1 : REM spr set insert
-                    SP%=objaniscroll%*4+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*4
-                    IF sprani{(SP%)}.s%(0)>-1 THEN
-                      insertrepeat%=1
-                      insertset%=SP%
-                      insertani%=0
-                      insertphase%=0
-                      spritemoving%=sprani{(SP%)}.s%(0)
-                      PROCspriteinserthandler(0)
+                    SP%=objaniscroll%*5+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*5
+                    IF SP%>-1 AND SP%<sprani_max% THEN
+                      IF sprani{(SP%)}.s%(0)>-1 THEN
+                        insertrepeat%=1
+                        insertset%=SP%
+                        insertani%=0
+                        insertphase%=0
+                        spritemoving%=sprani{(SP%)}.s%(0)
+                        PROCspriteinserthandler(0)
 
-                      done%=1
+                        done%=1
+                      ENDIF
                     ENDIF
                   WHEN 2 : REM lrg insert
                     SP%=objlrgscroll%+((controlrange{(C%)}.y2%-MY%) DIV 172)
@@ -5255,7 +5261,7 @@
                     OS%=objsprscroll%
                     objsprscroll%+=NS%
                     IF objsprscroll%<0 THEN objsprscroll%=0
-                    IF objsprscroll%>19 THEN objsprscroll%=19
+                    IF objsprscroll%>18 THEN objsprscroll%=18
                     IF OS%<>objsprscroll% PROCsubupdate(-1)
 
                   WHEN 1 : REM ani select
@@ -5267,7 +5273,7 @@
                     OS%=objaniscroll%
                     objaniscroll%+=NS%
                     IF objaniscroll%<0 THEN objaniscroll%=0
-                    IF objaniscroll%>19 THEN objaniscroll%=19
+                    IF objaniscroll%>18 THEN objaniscroll%=18
                     IF OS%<>objaniscroll% PROCsubupdate(-1)
 
                   WHEN 2 : REM lrg select
@@ -5358,7 +5364,7 @@
                   ENDIF
                 ELSE
                   REM select new sprite
-                  SP%=objsprscroll%*4+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*4
+                  SP%=objsprscroll%*5+(MX%-controlrange{(C%)}.x1%) DIV 96+((controlrange{(C%)}.y2%-MY%) DIV 112)*5
                   objlist{(obj_lstcur%)}.obj%=SP%
                   spritechange%=-1
                   PROCsubupdate(-1)
@@ -5415,7 +5421,7 @@
                   OS%=objsprscroll%
                   objsprscroll%+=NS%
                   IF objsprscroll%<0 THEN objsprscroll%=0
-                  IF objsprscroll%>19 THEN objsprscroll%=19
+                  IF objsprscroll%>18 THEN objsprscroll%=18
                   REM IF OS%<>objsprscroll% PROCsubupdate(-1)
                 ENDIF
 
@@ -7970,7 +7976,7 @@
             IF EX1%<(b%+1)*2 EX1%=(b%+1)*2
             IF EX2%>79 EX2%=79
             FOR TX%=EX1% TO EX2%
-              PROCpoint_movbuf(TX%, YC%, 0)
+              REM PROCpoint_movbuf(TX%, YC%, 0)
             NEXT
           ENDIF
         NEXT
@@ -9307,7 +9313,7 @@
               FOR l%=0 TO obj_lstcount%
                 INPUT#f%,line$
                 c% = FN_split(line$, ",", a$())
-                IF c%=13 THEN
+                IF c%=12 THEN
                   objlist{(l%)}.obj%=VAL(a$(0))
                   objlist{(l%)}.type%=VAL(a$(1))
                   objlist{(l%)}.f%=VAL(a$(2))
@@ -9317,9 +9323,9 @@
                   objlist{(l%)}.x%=VAL(a$(6))
                   objlist{(l%)}.y%=VAL(a$(7))
                   objlist{(l%)}.t%=VAL(a$(8))
-                  objlist{(l%)}.m%=VAL(a$(10))
-                  objlist{(l%)}.c%=VAL(a$(11))
-                  objlist{(l%)}.u%=VAL(a$(12))
+                  objlist{(l%)}.m%=VAL(a$(9))
+                  objlist{(l%)}.c%=VAL(a$(10))
+                  objlist{(l%)}.u%=VAL(a$(11))
                 ENDIF
               NEXT
             ENDIF
