@@ -54,7 +54,7 @@
       INSTALL @lib$+"sortlib"
       INSTALL @lib$+"imglib"
 
-      version$="v0.40"
+      version$="v0.41"
 
       DEBUG%=0 : REM for displaying mouse and other debug details, F12 toggles debug mode while running Telepaint
 
@@ -236,9 +236,9 @@
       movieframeadd%=0     : REM add control for new frames
       movieframeaddh%=0    : REM h increment for new frames
       movieframeaddv%=0    : REM v increment for new frames
-      insertmode%=0        : REM movie mode insert mode 0=sprite, 1=animation, 3=large, 3=frame, 4=text, 5=panned frames
+      insertmode%=0        : REM insert mode 0=sprite, 1=animation, 3=large, 3=frame, 4=text, 5=panned frames
       insertold%=0         : REM keep track of previous state of insertmode
-      insertrepeat%=0      : REM flag for inserting animation or sprite on multiple frames 1=animation, 2=sprite, 3=text, 4=frames, 5=panned frames, ???
+      insertrepeat%=0      : REM flag for inserting animation or sprite on multiple frames 1=animation, 2=sprite, 3=text, 4=panned frames, ???
       insertani%=0         : REM animation counter for inserting sprites
       insertset%=0         : REM current animation set
       lrgx%=77             : REM large sprite width
@@ -261,6 +261,7 @@
       inserttransparent%=0 : REM sprite transparency flag
       insertshape%=0       : REM insert shape, 0=line, 1=freehand... others / presets ????
       shapeindex%=0        : REM curently selected shape
+      shapeindmax%=99      : REM max shape objects
       insertrelflag%=1     : REM sprite relative position to frame
       insertskipcount%=0   : REM multiple frames skip count
       insertfrmrep%=0      : REM animation frame repeat count
@@ -435,7 +436,7 @@
       DIM sprbuf&(sprite_max%-1,319)
       DIM sprname$(sprite_max%-1)
       DIM sprlist{(sprite_max%-1) w%,h%,m%}
-      DIM animshape{(99) px%(999),py%(999),c%}
+      DIM animshape{(shapeindmax%) px%(999),py%(999),c%}
       DIM spr_tmp&(2000)
 
       REM new large sprite flat array and key objects
@@ -550,7 +551,7 @@
         NEXT
       NEXT
 
-      FOR S%=0 TO 99
+      FOR S%=0 TO shapeindmax%
         animshape{(S%)}.c%=-1
       NEXT
 
@@ -771,12 +772,13 @@
         REM PRINTTAB(0,22)SPC(20)
         REM PRINTTAB(0,23)SPC(20)
         REM PRINTTAB(0,20)"A:";STR$(GET(TX%,TY%));"  ";"SM:";STR$(spritemoving%);gw$;
-        PRINTTAB(0,20)"SM:";STR$(spritemoving%);" ME:";STR$(menuext%);"  ";
+        PRINTTAB(0,20)"SM:";STR$(spritemoving%);" ME:";STR$(menuext%);"  ";gw$;
         PRINTTAB(0,21)"MX:";STR$(MX%);" MY:";STR$(MY%);gw$;
-        PRINTTAB(0,22)"SC";STR$(spritechange%);" ";
+        PRINTTAB(0,22)"IM:";STR$(insertmode%);" ";gw$;
         REM PRINTTAB(0,21)"TX:";STR$(TX%);" TY:";STR$(TY%);gw$;
         REM PRINTTAB(0,23)"PX:";STR$(PX%);" PY:";STR$(PY%);gw$;
         PRINTTAB(0,23)"IP:";STR$(insertphase%);" IR:";STR$(insertrepeat%);gw$;
+        PRINTTAB(0,24)"IR:";STR$(insertrelflag%);" IR:";STR$(insertrepflag%);gw$;
 
       ENDIF
       ENDPROC
@@ -1987,7 +1989,7 @@
       PROCWAITMOUSE(0)
 
       REM skip inserting object on background frame if animated or relative objects selected
-      IF insertrepeat%<4 AND movieframe%=-1 AND (insertrepeat%>0 OR insertrelflag%=1) skip%=1
+      IF ((insertrepeat%>0 AND insertrepeat%<4) OR insertrelflag%=1) AND movieframe%=-1 skip%=1
 
       IF skip%=0 THEN
 
@@ -1997,12 +1999,8 @@
           REM select starting sprite
           IF insertrepeat%=1 THEN
             SP%=insertfrmrep%
-            IF insertset%>-1 THEN
-              insertani%=insertfrmindex%-1
-              spritemoving%=sprani{(insertset%)}.s%(insertani%)
-            ELSE
-              insertani%=insertfrmindex%-1
-            ENDIF
+            insertani%=insertfrmindex%-1
+            IF insertset%>-1 spritemoving%=sprani{(insertset%)}.s%(insertani%)
           ENDIF
 
           RS%=spritemoving%
@@ -2010,25 +2008,9 @@
           FOR F%=0 TO animshape{(shapeindex%)}.c%
             IF movieframe%+F%<=movieframetotal% THEN
               IF obj_lstcount%<obj_lstmax% obj_lstcount%+=1
-              obj_lstcur%=obj_lstcount%
 
-              IF insertrepeat%=1 THEN
-                IF SP%=0 THEN
-                  SP%=insertfrmrep%
-                  IF insertset%>-1 THEN
-                    insertani%=(insertani%+1) MOD sprani{(insertset%)}.c%
-                    spritemoving%=sprani{(insertset%)}.s%(insertani%)
-                  ELSE
-                    insertani%=(insertani%+1) MOD sprlrg_set{(lrgsetcur%)}.c%
-                    spritemoving%=insertani%
-                  ENDIF
-                ELSE
-                  SP%-=1
-                ENDIF
-              ENDIF
-
-              X%=mmWX%+animshape{(shapeindex%)}.px%(F%)-sprlist{(RS%)}.w%
-              Y%=mmWY%-animshape{(shapeindex%)}.py%(F%)+(sprlist{(RS%)}.h%*3 DIV 2)
+              X%=mmWX%+animshape{(shapeindex%)}.px%(F%)
+              Y%=mmWY%-animshape{(shapeindex%)}.py%(F%)
               IF insertrelflag%=1 THEN
                 X%=X%-frmlist{(movieframe%)}.x%
                 Y%=Y%-frmlist{(movieframe%)}.y%
@@ -2036,29 +2018,48 @@
 
               CASE insertmode% OF
                 WHEN 0,1 : REM sprite,ani
+                  X%=X%-sprlist{(RS%)}.w%
+                  Y%=Y%+(sprlist{(RS%)}.h%*3 DIV 2)
                   objlist{(obj_lstcount%)}.type%=1
                 WHEN 2 : REM large
                   objlist{(obj_lstcount%)}.type%=4
+                  objlist{(obj_lstcount%)}.obj%=lrgsetcur%
+                  objlist{(obj_lstcount%)}.aux%=spritemoving%
+                WHEN 3 : REM frame
+                  objlist{(obj_lstcount%)}.type%=2
                 WHEN 4 : REM text
+                  REM X%=X%-(LEN(txtlist$(spritemoving%)+1) DIV 2)*2
                   objlist{(obj_lstcount%)}.type%=3
                   objlist{(obj_lstcount%)}.c%=inserttextcol%
               ENDCASE
 
-              IF insertmode%=2 THEN
-                objlist{(obj_lstcount%)}.obj%=lrgsetcur%
-                objlist{(obj_lstcount%)}.aux%=spritemoving%
-              ELSE
-                objlist{(obj_lstcount%)}.obj%=spritemoving%
-              ENDIF
+              IF insertmode%<>2 objlist{(obj_lstcount%)}.obj%=spritemoving%
               objlist{(obj_lstcount%)}.x%=X%
               objlist{(obj_lstcount%)}.y%=Y%
               objlist{(obj_lstcount%)}.parent%=-1
               objlist{(obj_lstcount%)}.rel%=insertrelflag%
               objlist{(obj_lstcount%)}.f%=movieframe%+F%
               objlist{(obj_lstcount%)}.t%=inserttransparent%
+
+              REM increment sprite set / lrgspr index
+              IF insertrepeat%=1 THEN
+                IF SP%=0 THEN
+                  SP%=insertfrmrep%
+                  IF insertset%>-1 THEN
+                    insertani%=(insertani%+1) MOD sprani{(insertset%)}.c%
+                    spritemoving%=sprani{(insertset%)}.s%(insertani%)
+                  ELSE
+                    spritemoving%=(insertani%+1) MOD sprlrg_set{(lrgsetcur%)}.c%
+                    REM spritemoving%=insertani%
+                  ENDIF
+                ELSE
+                  SP%-=1
+                ENDIF
+              ENDIF
+
             ELSE
               PRINTTAB(0,1)"FRAME COUNT EXCEEDED!"
-              A=GET
+              WAIT 300
               EXIT FOR
             ENDIF
           NEXT
@@ -2096,295 +2097,249 @@
             ENDCASE
           ENDIF
 
-          IF insertrepeat%<4 THEN
-            IF spritemoving%>-1 THEN
-              PROCobjdraw(PX%,PY%,3,13)
+          REM insertmode 1,2,3,4
+          CASE insertmode% OF
+            WHEN 1,2,3,4 : REM spr,ani,frm,txt
+              IF spritemoving%>-1 THEN
+                PROCobjdraw(PX%,PY%,3,13)
 
-              IF spriterelocate%=1 THEN
-                REM move sprite
-                objlist{(obj_lstcur%)}.obj%=spritemoving%
-                objlist{(obj_lstcur%)}.x%=X%
-                objlist{(obj_lstcur%)}.y%=Y%
+                IF spriterelocate%=1 THEN
+                  REM move sprite
+                  objlist{(obj_lstcur%)}.obj%=spritemoving%
+                  objlist{(obj_lstcur%)}.x%=X%
+                  objlist{(obj_lstcur%)}.y%=Y%
 
-                spriterelocate%=0
-              ELSE
+                  spriterelocate%=0
+                ELSE
 
-                IF insertphase%=0 THEN
-                  IF obj_lstcount%<obj_lstmax% obj_lstcount%+=1
-                  obj_lstcur%=obj_lstcount%
+                  IF insertphase%=0 THEN
+                    IF obj_lstcount%<obj_lstmax% obj_lstcount%+=1
+                    obj_lstcur%=obj_lstcount%
 
-                  REM add sprite to spritelist
-                  IF spritedupe%=-1 THEN
-                    spriteselect%=-1
-                    spriteselectold%=-1
-                  ELSE
-                    IF objlist{(spritedupe%)}.f%>-1 shift%=0
-                  ENDIF
-
-                  CASE insertmode% OF
-                    WHEN 0,1 : REM sprite,ani
-                      objlist{(obj_lstcount%)}.type%=1
-                    WHEN 2 : REM large sprite
-                      objlist{(obj_lstcount%)}.type%=4
-                    WHEN 4 : REM text
-                      objlist{(obj_lstcount%)}.type%=3
-                      objlist{(obj_lstcount%)}.c%=inserttextcol%
-                  ENDCASE
-
-                  IF insertmode%=2 THEN
-                    objlist{(obj_lstcount%)}.obj%=lrgsetcur%
-                    objlist{(obj_lstcount%)}.aux%=spritemoving%
-                  ELSE
-                    objlist{(obj_lstcount%)}.obj%=spritemoving%
-                  ENDIF
-
-                  objlist{(obj_lstcount%)}.x%=X%
-                  objlist{(obj_lstcount%)}.y%=Y%
-                  objlist{(obj_lstcount%)}.parent%=-1
-                  objlist{(obj_lstcount%)}.rel%=insertrelflag%
-                  objlist{(obj_lstcount%)}.f%=movieframe%
-                  objlist{(obj_lstcount%)}.t%=inserttransparent%
-                  spriteold%=spritemoving%
-
-                ENDIF
-              ENDIF
-
-              REM reset flags if single object being inserted
-              IF spritedupe%=-1 AND insertrepeat%=0 THEN
-                spritemoving%=-1
-              ENDIF
-
-              IF insertrepeat%>0 THEN
-                insertphase%+=1
-                IF insertphase%=2 THEN
-                  REM add remaining animation sprites to selected frames
-                  REM calc difference between start frame and end frame and create a delta step variable for x and y to move animation
-                  REM
-                  insertphase%=0
-                  framestart%=objlist{(obj_lstcur%)}.f%
-                  frameskip%=insertskipcount%
-                  C%=movieframe%-framestart%
-                  IF C%>0 THEN
-                    XS%=objlist{(obj_lstcur%)}.x%
-                    YS%=objlist{(obj_lstcur%)}.y%
-                    XF%=X%
-                    YF%=Y%
-
-                    deltax=(XF%-XS%) / C%
-                    deltay=(YF%-YS%) / C%
-
-                    XC=XS%+deltax
-                    YC=YS%+deltay
-
-                    REM select starting sprite
-                    IF insertrepeat%=1 THEN
-                      SP%=insertfrmrep%
-                      IF insertset%>-1 THEN
-                        insertani%=insertfrmindex%-1
-                        spritemoving%=sprani{(insertset%)}.s%(insertani%)
-                      ELSE
-                        insertani%=insertfrmindex%-1
-                      ENDIF
+                    REM add sprite to spritelist
+                    IF spritedupe%=-1 THEN
+                      spriteselect%=-1
+                      spriteselectold%=-1
+                    ELSE
+                      IF objlist{(spritedupe%)}.f%>-1 shift%=0
                     ENDIF
 
-                    REM loop through frames and insert sprites
-                    FOR F%=1 TO C%
+                    CASE insertmode% OF
+                      WHEN 0,1 : REM sprite,ani
+                        objlist{(obj_lstcount%)}.type%=1
+                      WHEN 2 : REM large sprite
+                        objlist{(obj_lstcount%)}.type%=4
+                      WHEN 4 : REM text
+                        objlist{(obj_lstcount%)}.type%=3
+                        objlist{(obj_lstcount%)}.c%=inserttextcol%
+                    ENDCASE
+
+                    IF insertmode%=2 THEN
+                      objlist{(obj_lstcount%)}.obj%=lrgsetcur%
+                      objlist{(obj_lstcount%)}.aux%=spritemoving%
+                    ELSE
+                      objlist{(obj_lstcount%)}.obj%=spritemoving%
+                    ENDIF
+
+                    objlist{(obj_lstcount%)}.x%=X%
+                    objlist{(obj_lstcount%)}.y%=Y%
+                    objlist{(obj_lstcount%)}.parent%=-1
+                    objlist{(obj_lstcount%)}.rel%=insertrelflag%
+                    objlist{(obj_lstcount%)}.f%=movieframe%
+                    objlist{(obj_lstcount%)}.t%=inserttransparent%
+                    spriteold%=spritemoving%
+
+                  ENDIF
+                ENDIF
+
+                REM reset flags if single object being inserted
+                IF spritedupe%=-1 AND insertrepeat%=0 THEN
+                  spritemoving%=-1
+                ENDIF
+
+                IF insertrepeat%>0 THEN
+                  insertphase%+=1
+                  IF insertphase%=2 THEN
+                    REM add remaining animation sprites to selected frames
+                    REM calc difference between start frame and end frame and create a delta step variable for x and y to move animation
+                    REM
+                    insertphase%=0
+                    framestart%=objlist{(obj_lstcur%)}.f%
+                    frameskip%=insertskipcount%
+                    C%=movieframe%-framestart%
+                    IF C%>0 THEN
+                      XS%=objlist{(obj_lstcur%)}.x%
+                      YS%=objlist{(obj_lstcur%)}.y%
+                      XF%=X%
+                      YF%=Y%
+
+                      deltax=(XF%-XS%) / C%
+                      deltay=(YF%-YS%) / C%
+
+                      XC=XS%+deltax
+                      YC=YS%+deltay
+
+                      REM select starting sprite
                       IF insertrepeat%=1 THEN
-                        IF SP%=0 THEN
-                          SP%=insertfrmrep%
-                          IF insertset%>-1 THEN
-                            insertani%=(insertani%+1) MOD sprani{(insertset%)}.c%
-                            spritemoving%=sprani{(insertset%)}.s%(insertani%)
+                        SP%=insertfrmrep%
+                        insertani%=insertfrmindex%-1
+                        IF insertset%>-1 spritemoving%=sprani{(insertset%)}.s%(insertani%)
+                      ENDIF
+
+                      REM loop through frames and insert sprites
+                      FOR F%=1 TO C%
+                        IF insertrepeat%=1 THEN
+                          IF SP%=0 THEN
+                            SP%=insertfrmrep%
+                            IF insertset%>-1 THEN
+                              insertani%=(insertani%+1) MOD sprani{(insertset%)}.c%
+                              spritemoving%=sprani{(insertset%)}.s%(insertani%)
+                            ELSE
+                              spritemoving%=(insertani%+1) MOD sprlrg_set{(lrgsetcur%)}.c%
+                            ENDIF
                           ELSE
-                            insertani%=(insertani%+1) MOD sprlrg_set{(lrgsetcur%)}.c%
-                            spritemoving%=insertani%
+                            SP%-=1
                           ENDIF
-                        ELSE
-                          SP%-=1
                         ENDIF
-                      ENDIF
 
-                      REM normalise end point
-                      IF F%=C% THEN
-                        XC=XF%
-                        YC=YF%
-                      ENDIF
+                        REM normalise end point
+                        IF F%=C% THEN
+                          XC=XF%
+                          YC=YF%
+                        ENDIF
 
-                      IF frameskip%=0 THEN
-                        IF obj_lstcount%<obj_lstmax% obj_lstcount%+=1
-                        obj_lstcur%=obj_lstcount%
-                        objlist{(obj_lstcount%)}.parent%=-1
+                        IF frameskip%=0 THEN
+                          IF obj_lstcount%<obj_lstmax% obj_lstcount%+=1
+                          obj_lstcur%=obj_lstcount%
+                          objlist{(obj_lstcount%)}.parent%=-1
 
-                        IF insertmode%=2 THEN
-                          objlist{(obj_lstcount%)}.obj%=lrgsetcur%
-                          objlist{(obj_lstcount%)}.aux%=spritemoving%
-                        ELSE
                           objlist{(obj_lstcount%)}.obj%=spritemoving%
-                        ENDIF
 
-                        IF insertrepeat%=3 THEN
-                          objlist{(obj_lstcount%)}.type%=3
-                          objlist{(obj_lstcount%)}.c%=inserttextcol%
-                        ELSE
                           CASE insertmode% OF
                             WHEN 0,1 : REM sprite,ani
                               objlist{(obj_lstcount%)}.type%=1
+
                             WHEN 2 : REM large sprite
                               objlist{(obj_lstcount%)}.type%=4
+                              objlist{(obj_lstcount%)}.obj%=lrgsetcur%
+                              objlist{(obj_lstcount%)}.aux%=spritemoving%
+
                             WHEN 4 : REM text
                               objlist{(obj_lstcount%)}.type%=3
                               objlist{(obj_lstcount%)}.c%=inserttextcol%
                           ENDCASE
 
+                          objlist{(obj_lstcount%)}.x%=INT(XC+0.5)
+                          objlist{(obj_lstcount%)}.y%=INT(YC+0.5)
+                          objlist{(obj_lstcount%)}.f%=framestart%+F%
+                          objlist{(obj_lstcount%)}.rel%=insertrelflag%
+                          objlist{(obj_lstcount%)}.t%=inserttransparent%
+                          frameskip%=insertskipcount%
+                        ELSE
+                          frameskip%-=1
                         ENDIF
-                        objlist{(obj_lstcount%)}.x%=INT(XC+0.5)
-                        objlist{(obj_lstcount%)}.y%=INT(YC+0.5)
-                        objlist{(obj_lstcount%)}.f%=framestart%+F%
-                        objlist{(obj_lstcount%)}.rel%=insertrelflag%
-                        objlist{(obj_lstcount%)}.t%=inserttransparent%
-                        frameskip%=insertskipcount%
-                      ELSE
-                        frameskip%-=1
-                      ENDIF
-                      XC+=deltax
-                      YC+=deltay
+                        XC+=deltax
+                        YC+=deltay
 
-                    NEXT
+                      NEXT
+                    ENDIF
+                    spritemoving%=-1
+                    insertrepeat%=0
+                    spriteselect%=-1
+                    spriteselectold%=-1
                   ENDIF
-                  spritemoving%=-1
-                  insertrepeat%=0
-                  spriteselect%=-1
-                  spriteselectold%=-1
                 ENDIF
               ENDIF
 
-            ENDIF
-          ELSE
-            REM handle panning position
-            REM what I want here is to select 50 frames with a start x,y and an end x,y smoothly move between the points
-            REM prompt and adjust movement variables and movement profile
-            REM max speed, accelerate, coast, decelerate ratios in frames
-            REM * accelerate, coast, decelerate
-            REM * accelerate, coast
-            REM * coast
-            REM * coast, decelerate
-            insertphase%+=1
-            IF insertphase%=1 THEN
-              insertstartx%=mmWX%
-              insertstarty%=mmWY%
-            ELSE
+            WHEN 5 : REM insertmode 5
 
-              fa%=insertpanacc%
-              fd%=insertpandec%
+              REM handle panning position
+              REM start x,y and an end x,y smoothly move between the points
+              REM prompt and adjust movement variables and movement profile
+              REM max speed, accelerate, coast, decelerate ratios in frames
+              REM * accelerate, coast, decelerate
+              REM * accelerate, coast
+              REM * coast
+              REM * coast, decelerate
+              insertphase%+=1
+              IF insertphase%=1 THEN
+                insertstartx%=mmWX%
+                insertstarty%=mmWY%
+              ELSE
 
-              insertendx%=mmWX%
-              insertendy%=mmWY%
+                fa%=insertpanacc%
+                fd%=insertpandec%
 
-              REM distance and angle of frame movement
-              distance=SQR((insertstartx%-insertendx%)*(insertstartx%-insertendx%)+(insertstarty%-insertendy%)*(insertstarty%-insertendy%))
-              angle=FNatan2(insertstarty%-insertendy%,insertstartx%-insertendx%)
-              distmoved=0
+                insertendx%=mmWX%
+                insertendy%=mmWY%
 
-              XC=insertstartx%
-              YC=insertstarty%
+                REM distance and angle of frame movement
+                distance=SQR((insertstartx%-insertendx%)*(insertstartx%-insertendx%)+(insertstarty%-insertendy%)*(insertstarty%-insertendy%))
+                angle=FNatan2(insertstarty%-insertendy%,insertstartx%-insertendx%)
+                distmoved=0
 
-              REM set acc and dec to 0 if start and end positions are the same
-              IF insertstartx%=insertendx% AND insertstarty%=insertendy% THEN
-                fa%=0
-                fd%=0
-              ENDIF
+                XC=insertstartx%
+                YC=insertstarty%
 
-              REM accelerate and decelerate need to be based on the distance for each section
-              IF fa%>0 THEN
-                accelerate=1
-                coastspeed=0
-                coastdist=0
+                REM set acc and dec to 0 if start and end positions are the same
+                IF insertstartx%=insertendx% AND insertstarty%=insertendy% THEN
+                  fa%=0
+                  fd%=0
+                ENDIF
 
-                REM FOR D%=0 TO 3
-                REPEAT
-                  accdist=0
+                REM accelerate and decelerate need to be based on the distance for each section
+                IF fa%>0 THEN
+                  accelerate=1
+                  coastspeed=0
+                  coastdist=0
+
+                  REM FOR D%=0 TO 3
+                  REPEAT
+                    accdist=0
+                    accspeed=0
+                    accelerate-=.01
+
+                    FOR F%=1 TO fa%
+                      accspeed=accspeed+accelerate
+                      accdist=accdist+accspeed
+                    NEXT
+                    coastdist=distance-accdist*2
+                    coastspeed=coastdist/(movieframeadd%-fa%-fd%)
+
+                  UNTIL accspeed<coastspeed
+                  REM NEXT
+
                   accspeed=0
-                  accelerate-=.01
 
                   FOR F%=1 TO fa%
-                    accspeed=accspeed+accelerate
-                    accdist=accdist+accspeed
+                    REM add frame
+                    movieframetotal%+=1
+                    frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
+                    frmlist{(movieframetotal%)}.y%=INT(YC+0.5)
+                    frmlist{(movieframetotal%)}.b%=0
+                    frmlist{(movieframetotal%)}.f%=7
+
+                    accspeed+=accelerate
+                    distmoved+=accspeed
+
+                    XC=insertstartx%-distmoved*COS(angle)
+                    YC=insertstarty%-distmoved*SIN(angle)
+
                   NEXT
-                  coastdist=distance-accdist*2
-                  coastspeed=coastdist/(movieframeadd%-fa%-fd%)
-
-                UNTIL accspeed<coastspeed
-                REM NEXT
-
-                accspeed=0
-
-                FOR F%=1 TO fa%
-                  REM add frame
-                  movieframetotal%+=1
-                  frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
-                  frmlist{(movieframetotal%)}.y%=INT(YC+0.5)
-                  frmlist{(movieframetotal%)}.b%=0
-                  frmlist{(movieframetotal%)}.f%=7
-
-                  accspeed+=accelerate
-                  distmoved+=accspeed
-
-                  XC=insertstartx%-distmoved*COS(angle)
-                  YC=insertstarty%-distmoved*SIN(angle)
-
-                NEXT
-              ELSE
-                coastspeed=distance/movieframeadd%
-              ENDIF
-
-              FOR F%=fa%+1 TO movieframeadd%-fd%
-                REM normalise end point
-                IF F%=movieframeadd% THEN
-                  XC=insertendx%
-                  YC=insertendy%
+                ELSE
+                  coastspeed=distance/movieframeadd%
                 ENDIF
 
-                IF fd%=0 THEN
-                  IF INT(XC+0.5)=insertendx% AND INT(YC+0.5)=insertendy% coastspeed=0
-                ENDIF
-
-                REM add frame
-                movieframetotal%+=1
-                frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
-                frmlist{(movieframetotal%)}.y%=INT(YC+0.5)
-                frmlist{(movieframetotal%)}.b%=0
-                frmlist{(movieframetotal%)}.f%=7
-
-                REM update position if moving
-                IF coastspeed<>0 THEN
-                  distmoved+=coastspeed
-                  XC=insertstartx%-distmoved*COS(angle)
-                  YC=insertstarty%-distmoved*SIN(angle)
-                ENDIF
-
-              NEXT
-
-              IF fd%>0 THEN
-                decelerate = 2 * ((distance-distmoved) - (coastspeed * fd%)) / (fd%*fd%)
-                FOR F%=1 TO fd%
+                FOR F%=fa%+1 TO movieframeadd%-fd%
                   REM normalise end point
-                  IF F%=fd% THEN
+                  IF F%=movieframeadd% THEN
                     XC=insertendx%
                     YC=insertendy%
                   ENDIF
-                  IF INT(XC+0.5)=insertendx% AND INT(YC+0.5)=insertendy% THEN
-                    coastspeed=0
-                    decelerate=0
+
+                  IF fd%=0 THEN
+                    IF INT(XC+0.5)=insertendx% AND INT(YC+0.5)=insertendy% coastspeed=0
                   ENDIF
-
-                  REM PRINTTAB(0,2) "FRAME    :";STR$(movieframetotal%+1);"  ";
-                  REM PRINTTAB(0,3) "DISTANCE :";STR$(distmoved);"  ";
-                  REM PRINTTAB(0,4) "DEC      :";STR$(decelerate);"  ";
-                  REM PRINTTAB(0,5) "DEC SPEED: ";STR$(coastspeed);"  ";
-                  REM PRINTTAB(0,6) "XC : ";STR$(XC);"    ";
-                  REM PRINTTAB(0,7) "YC : ";STR$(YC);"    ";
-
-                  REM A=GET
 
                   REM add frame
                   movieframetotal%+=1
@@ -2393,28 +2348,70 @@
                   frmlist{(movieframetotal%)}.b%=0
                   frmlist{(movieframetotal%)}.f%=7
 
-                  coastspeed+=decelerate
-                  distmoved+=coastspeed
+                  REM update position if moving
                   IF coastspeed<>0 THEN
+                    distmoved+=coastspeed
                     XC=insertstartx%-distmoved*COS(angle)
                     YC=insertstarty%-distmoved*SIN(angle)
                   ENDIF
 
                 NEXT
 
+                IF fd%>0 THEN
+                  decelerate = 2 * ((distance-distmoved) - (coastspeed * fd%)) / (fd%*fd%)
+                  FOR F%=1 TO fd%
+                    REM normalise end point
+                    IF F%=fd% THEN
+                      XC=insertendx%
+                      YC=insertendy%
+                    ENDIF
+                    IF INT(XC+0.5)=insertendx% AND INT(YC+0.5)=insertendy% THEN
+                      coastspeed=0
+                      decelerate=0
+                    ENDIF
+
+                    REM PRINTTAB(0,2) "FRAME    :";STR$(movieframetotal%+1);"  ";
+                    REM PRINTTAB(0,3) "DISTANCE :";STR$(distmoved);"  ";
+                    REM PRINTTAB(0,4) "DEC      :";STR$(decelerate);"  ";
+                    REM PRINTTAB(0,5) "DEC SPEED: ";STR$(coastspeed);"  ";
+                    REM PRINTTAB(0,6) "XC : ";STR$(XC);"    ";
+                    REM PRINTTAB(0,7) "YC : ";STR$(YC);"    ";
+
+                    REM A=GET
+
+                    REM add frame
+                    movieframetotal%+=1
+                    frmlist{(movieframetotal%)}.x%=INT(XC+0.5)
+                    frmlist{(movieframetotal%)}.y%=INT(YC+0.5)
+                    frmlist{(movieframetotal%)}.b%=0
+                    frmlist{(movieframetotal%)}.f%=7
+
+                    coastspeed+=decelerate
+                    distmoved+=coastspeed
+                    IF coastspeed<>0 THEN
+                      XC=insertstartx%-distmoved*COS(angle)
+                      YC=insertstarty%-distmoved*SIN(angle)
+                    ENDIF
+
+                  NEXT
+
+                ENDIF
+
+                movieframe%=movieframetotal%
+
+                insertphase%=0
+                spritemoving%=-1
+                insertrepeat%=0
+                spriteselect%=-1
+                spriteselectold%=-1
+                insertrelflag%=1
+                insertmode%=insertold%
+
               ENDIF
 
-              movieframe%=movieframetotal%
+          ENDCASE
 
-              insertphase%=0
-              spritemoving%=-1
-              insertrepeat%=0
-              spriteselect%=-1
-              spriteselectold%=-1
-              insertmode%=insertold%
 
-            ENDIF
-          ENDIF
         ENDIF
         PROCmenurestore
 
@@ -3123,11 +3120,10 @@
               WHEN 82,114 : REM R repeat current sprite to multiple frames
                 IF spritemoving%=-1 THEN
                   IF spriteselect%>-1 obj_lstcur%=spriteselect%
-                  IF objlist{(obj_lstcur%)}.type%=3 THEN
-                    insertrepeat%=3
-                  ELSE
-                    insertrepeat%=2
-                  ENDIF
+                  CASE objlist{(obj_lstcur%)}.type% OF
+                    WHEN 1,2,3 : REM spr,ani,txt
+                      insertrepeat%=2
+                  ENDCASE
                   insertphase%=1
                   spritemoving%=objlist{(obj_lstcur%)}.obj%
                   REM PROCspriteinsertupdate(1)
@@ -4288,7 +4284,7 @@
               S%=0
             ELSE
               S%+=1
-              IF S%=sprani{(spr_lstcount%)}.c% S%=0
+              IF S%=sprani{(spr_lstcount%)}.c% OR S%>47 S%=0
             ENDIF
             IF sprani{(spr_lstcount%)}.s%(S%)>-1 THEN
               GCOL 0,0
@@ -4348,7 +4344,7 @@
                 WHEN 3 : REM inc shape
                   newindex%+=1
                   IF shift% newindex%+=9
-                  IF newindex%>99 newindex%=99
+                  IF newindex%>shapeindmax% newindex%=shapeindmax%
 
               ENDCASE
               IF newindex%<>shapeindex% THEN
@@ -5219,17 +5215,28 @@
                       REM insert frame to movie mode
                       SP%=objfrmscroll%*2+(MX%-controlrange{(C%)}.x1%) DIV 192+((controlrange{(C%)}.y2%-MY%) DIV 172)*2
                       IF obj_lstcount%<obj_lstmax% obj_lstcount%+=1
-                      obj_lstcur%=obj_lstcount%
+
                       PROCspriteinserthandler(0)
                       spriteselect%=-1
                       spriteselectold%=-1
+                      REM pixel mode
+                      SX%=mmWX%
+                      SY%=mmWY%
+                      IF insertrelflag%=0 THEN
+                        REM char mode
+                        SX%=(mmWX% DIV 2)*2
+                        SX%=((mmWY%-3) DIV 3)*3
+                      ENDIF
+
                       objlist{(obj_lstcount%)}.obj%=SP%
                       objlist{(obj_lstcount%)}.type%=2
-                      objlist{(obj_lstcount%)}.x%=(mmWX% DIV 2)*2
-                      objlist{(obj_lstcount%)}.y%=((mmWY%-3) DIV 3)*3
+                      objlist{(obj_lstcount%)}.x%=SX%
+                      objlist{(obj_lstcount%)}.y%=SY%
                       objlist{(obj_lstcount%)}.f%=movieframe%
                       objlist{(obj_lstcount%)}.parent%=-1
                       objlist{(obj_lstcount%)}.c%=-insertrepflag%
+                      objlist{(obj_lstcount%)}.t%=inserttransparent% : REM negative image
+                      objlist{(obj_lstcount%)}.rel%=insertrelflag% : REM pixel mode
 
                       done%=1
                     ELSE
@@ -5261,7 +5268,7 @@
                     OS%=objsprscroll%
                     objsprscroll%+=NS%
                     IF objsprscroll%<0 THEN objsprscroll%=0
-                    IF objsprscroll%>18 THEN objsprscroll%=18
+                    IF objsprscroll%>14 THEN objsprscroll%=14
                     IF OS%<>objsprscroll% PROCsubupdate(-1)
 
                   WHEN 1 : REM ani select
@@ -5273,7 +5280,7 @@
                     OS%=objaniscroll%
                     objaniscroll%+=NS%
                     IF objaniscroll%<0 THEN objaniscroll%=0
-                    IF objaniscroll%>18 THEN objaniscroll%=18
+                    IF objaniscroll%>14 THEN objaniscroll%=14
                     IF OS%<>objaniscroll% PROCsubupdate(-1)
 
                   WHEN 2 : REM lrg select
@@ -5421,31 +5428,48 @@
                   OS%=objsprscroll%
                   objsprscroll%+=NS%
                   IF objsprscroll%<0 THEN objsprscroll%=0
-                  IF objsprscroll%>18 THEN objsprscroll%=18
+                  IF objsprscroll%>14 THEN objsprscroll%=14
                   REM IF OS%<>objsprscroll% PROCsubupdate(-1)
                 ENDIF
 
               WHEN 6 : REM repeat button
-                REM undo repeat for this object
-                IF objlist{(obj_lstcur%)}.u%=1 THEN
-                  objlist{(obj_lstcur%)}.u%=0
-                  SP%=obj_lstcount%
-                  FOR L%=SP% TO obj_lstcur%+1 STEP -1
-                    IF objlist{(L%)}.parent%=obj_lstcur% PROCremoveobj(L%)
-                  NEXT
-
-                ELSE
-                  REM init sprite repeat
-                  IF objlist{(obj_lstcur%)}.type%=3 THEN
-                    insertrepeat%=3
-                  ELSE
-                    insertrepeat%=2
+                REM repeat frame objects to all movie frames
+                IF objlist{(obj_lstcur%)}.type%=2 THEN
+                  IF movieframetotal%>-1 AND movieframe%<movieframetotal% THEN
+                    FOR L%=movieframe%+1 TO movieframetotal%
+                      IF obj_lstcount%<obj_lstmax% obj_lstcount%+=1
+                      objlist{(obj_lstcount%)}.obj%=objlist{(obj_lstcur%)}.obj%
+                      objlist{(obj_lstcount%)}.type%=2
+                      objlist{(obj_lstcount%)}.x%=frmlist{(L%)}.x% : REM objlist{(obj_lstcur%)}.x%
+                      objlist{(obj_lstcount%)}.y%=frmlist{(L%)}.y% : REM objlist{(obj_lstcur%)}.y%
+                      objlist{(obj_lstcount%)}.f%=L%
+                      objlist{(obj_lstcount%)}.parent%=objlist{(obj_lstcur%)}.parent%
+                      objlist{(obj_lstcount%)}.c%=objlist{(obj_lstcur%)}.c%
+                      objlist{(obj_lstcount%)}.t%=objlist{(obj_lstcur%)}.t%
+                      objlist{(obj_lstcount%)}.rel%=objlist{(obj_lstcur%)}.rel%
+                    NEXT
                   ENDIF
-                  insertphase%=1
-                  spritemoving%=objlist{(obj_lstcur%)}.obj%
                   done%=1
-                ENDIF
+                ELSE
+                  REM undo repeat for this object
+                  IF objlist{(obj_lstcur%)}.u%=1 THEN
+                    objlist{(obj_lstcur%)}.u%=0
+                    SP%=obj_lstcount%
+                    FOR L%=SP% TO obj_lstcur%+1 STEP -1
+                      IF objlist{(L%)}.parent%=obj_lstcur% PROCremoveobj(L%)
+                    NEXT
 
+                  ELSE
+                    REM init sprite repeat
+                    CASE objlist{(obj_lstcur%)}.type% OF
+                      WHEN 1,2,3 : REM spr,ani,txt
+                        insertrepeat%=2
+                    ENDCASE
+                    insertphase%=1
+                    spritemoving%=objlist{(obj_lstcur%)}.obj%
+                    done%=1
+                  ENDIF
+                ENDIF
             ENDCASE
             IF (C%>-1 AND C%<3) OR C%>4 THEN PROCsubupdate(-1)
 
@@ -5471,6 +5495,7 @@
                 insertrepeat%=4
                 insertphase%=0
                 insertmode%=5
+                insertrelflag%=0
                 PROCspriteinserthandler(0)
                 done%=1
 
@@ -6014,12 +6039,14 @@
         insertpandec%=insertoptions{(insertmode%)}.o%(10)     : REM insert panned frames decelerate frame count
 
       ENDIF
-      IF insertmode%=1 THEN
-        IF insertfrmindex%>sprani{(insertset%)}.c% insertfrmindex%=1
-      ENDIF
-      IF insertmode%=2 THEN
-        IF insertfrmindex%=>sprlrg_set{(lrgsetcur%)}.c% insertfrmindex%=1
-      ENDIF
+      CASE insertmode% OF
+        WHEN 1
+          IF insertfrmindex%>sprani{(insertset%)}.c% insertfrmindex%=1
+        WHEN 2
+          IF insertfrmindex%=>sprlrg_set{(lrgsetcur%)}.c% insertfrmindex%=1
+        WHEN 5
+          insertrelflag%=0
+      ENDCASE
 
       PROCspriteinsertupdate(1)
 
@@ -6118,10 +6145,8 @@
 
         IF insertrepflag%=1 AND insertmode%<5 THEN
           CASE insertmode% OF
-            WHEN 0,1 : REM spr, ani
+            WHEN 0,1,4 : REM spr, ani, txt
               insertrepeat%=2
-            WHEN 4 : REM text
-              insertrepeat%=3
           ENDCASE
           insertphase%=0
         ENDIF
@@ -6278,11 +6303,13 @@
 
         WHEN 3 : REM frame
           IF r%=1 THEN
-            PROCgtext("Left Column?",dx%+84,dt%-100,7,0,0)
-            PROCgtext("Pixel Mode?",dx%+84,dt%-160,7,0,0)
+            PROCgtext("Left Column",dx%+84,dt%-100,7,0,0)
+            PROCgtext("Pixel Mode",dx%+84,dt%-160,7,0,0)
+            PROCgtext("Negative Image",dx%+84,dt%-220,7,0,0)
           ENDIF
           PROCdrawcustomspr(2,4+insertrepflag%,dx%+36,dt%-126,10)
           IF menufrom%=M_moviemode% PROCdrawcustomspr(3,4+insertrelflag%,dx%+36,dt%-186,10)
+          PROCdrawcustomspr(16,4+inserttransparent%,dx%+36,dt%-246,10)
 
         WHEN 5 : REM insert frames to movie mode
           IF r%=1 THEN
@@ -6646,12 +6673,21 @@
                   ENDIF
 
                 WHEN 2 : REM frame
+                  REM .t% = negative image
+                  REM .rel% = pixel mode
+
                   WX%=X%-mmWX%
-                  WX%=(WX%+(SGN(WX%)=-1)) DIV 2
                   WY%=mmWY%-Y%
-                  WY%=(WY%+(SGN(WY%)=-1)*2) DIV 3
+                  IF objlist{(obj_lstcount%)}.rel%=0 THEN
+                    WX%=(WX%+(SGN(WX%)=-1)) DIV 2
+                    WY%=(WY%+(SGN(WY%)=-1)*2) DIV 3
+                  ENDIF
                   IF WX%>-81 AND WX%<80 AND WY%<75 AND WY%>-75 THEN
-                    PROCframetobuffer(SP%,WX%,WY%,objlist{(L%)}.c%)
+                    IF objlist{(obj_lstcount%)}.rel%=0 THEN
+                      PROCframetobuffer(SP%,WX%,WY%,objlist{(L%)}.c%)
+                    ELSE
+                      PROCframepixeltobuffer(SP%,WX%,WY%,objlist{(L%)}.t%)
+                    ENDIF
                   ENDIF
 
                 WHEN 3 : REM text
@@ -7878,6 +7914,25 @@
           ENDIF
         ENDIF
       NEXT
+      ENDPROC
+
+      REM ##########################################################
+      REM copy frame buffer pixels to movie frame
+      DEF PROCframepixeltobuffer(f%,sx%,sy%,n%)
+      LOCAL D%,S%,U%,X%,Y%,C%,CS%,LC%
+      FOR Y%=3 TO 74
+        IF Y%+sy%>2 AND Y%+sy%<75 THEN
+          FOR X%=2 TO 79
+            IF X%+sx%>1 AND X%+sx%<80 THEN
+              C%=FNpoint_buf(X%,Y%,f%+1)
+              IF C% THEN
+                PROCpoint_movbuf(X%+sx%, Y%+sy%, 1-n%)
+              ENDIF
+            ENDIF
+          NEXT
+        ENDIF
+      NEXT
+
       ENDPROC
 
       REM ##########################################################
