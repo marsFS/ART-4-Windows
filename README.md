@@ -34,7 +34,7 @@ Current TelePaint features:
 * Movie Mode - Up to 99999 insertable objects, including sprites, animated sprites, text
 * Import sprites and BMP files (specific format required 640x480 24bpp BMP)
 * Import sprites from GIF files, step through GIF frames to grab specific sequences of sprites
-* Import GIF includes a special mode for 12 extra large sprites
+* Import GIF includes a dynamic buffer allowing for multiple extra large GIF sequences to be imported and used in animations
 * Added Fonts, requires download of M7_FONTS folder
 * Added Transformation tools
 * Implemented gradients correctly
