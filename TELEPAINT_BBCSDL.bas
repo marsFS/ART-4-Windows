@@ -54,7 +54,7 @@
       INSTALL @lib$+"sortlib"
       INSTALL @lib$+"imglib"
 
-      version$="v0.41"
+      version$="v0.43"
 
       DEBUG%=0 : REM for displaying mouse and other debug details, F12 toggles debug mode while running Telepaint
 
@@ -2117,8 +2117,8 @@
 
                 IF insertfrmpix%=0 THEN
                   REM char mode
-                  SX%=(mmWX% DIV 2)*2
-                  SX%=((mmWY%-3) DIV 3)*3
+                  X%=(mmWX% DIV 2)*2
+                  Y%=((mmWY%-3) DIV 3)*3
                 ENDIF
 
               WHEN 4 : REM text
@@ -4755,7 +4755,7 @@
             PROCbuttoncontrol(11,"KYBRD FONTS  ",SX%+20,menuYadd%,0,10,0,0,-48,0)
             PROCbuttoncontrol(12,"IMPORT BMP   ",SX%+20,menuYadd%,0,10,0,0,-48,0)
             PROCbuttoncontrol(13,"GIF TO BMP   ",SX%+20,menuYadd%,0,10,0,0,-48,0)
-            PROCbuttoncontrol(14,"MENU EDITOR  ",SX%+20,menuYadd%,0,10,0,0,-48,0)
+            IF DEBUG% PROCbuttoncontrol(14,"MENU EDITOR  ",SX%+20,menuYadd%,0,10,0,0,-48,0)
             PROCbuttoncontrol(15,"HELP         ",SX%+20,menuYadd%,0,10,0,0,-48,0)
           ENDIF
 
