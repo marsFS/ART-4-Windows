@@ -55,7 +55,7 @@
       INSTALL @lib$+"sortlib"
       INSTALL @lib$+"imglib"
 
-      version$="v0.44"
+      version$="v0.45"
 
       DEBUG%=0 : REM for displaying mouse and other debug details, F12 toggles debug mode while running Telepaint
 
@@ -457,7 +457,7 @@
       REM lists for movie mode
       REM obj% = sprite, large sprite set, frame number, -1 = inactive
       REM type% = type, 0 = sprite, 1 = frame, 3 = text
-      REM f% = movie start frame
+      REM frame% = object frame -1 = all frames
       REM x%,y% = world x,y position
       REM t% = transparent flag
       REM rel% = plot sprite relative to frame coords
@@ -466,7 +466,7 @@
       REM m% object modes 0=pixel, 2=char
       REM c% text colour, frame negative pixels
       REM u% = toggle undo repeat action, will remove any objs with matching parent=obj number
-      DIM objlist{(obj_lstmax%) obj%,type%,f%,rel%,aux%,parent%,x%,y%,t%,m%,c%,u%}
+      DIM objlist{(obj_lstmax%) obj%,type%,frame%,rel%,aux%,parent%,x%,y%,t%,m%,c%,u%}
       DIM frmlist{(9999) x%,y%,b%,f%}
 
       REM animation set - st% 0=spr 1=frm
@@ -2067,7 +2067,7 @@
               objlist{(obj_lstcount%)}.y%=Y%
               objlist{(obj_lstcount%)}.parent%=-1
               objlist{(obj_lstcount%)}.rel%=insertrelflag%
-              objlist{(obj_lstcount%)}.f%=movieframe%+F%
+              objlist{(obj_lstcount%)}.frame%=movieframe%+F%
               objlist{(obj_lstcount%)}.t%=inserttransparent%
 
               REM increment sprite set / lrgspr index
@@ -2167,7 +2167,7 @@
                       spriteselect%=-1
                       spriteselectold%=-1
                     ELSE
-                      IF objlist{(spritedupe%)}.f%>-1 shift%=0
+                      IF objlist{(spritedupe%)}.frame%>-1 shift%=0
                     ENDIF
 
                     CASE insertmode% OF
@@ -2199,7 +2199,7 @@
                     objlist{(obj_lstcount%)}.y%=Y%
                     objlist{(obj_lstcount%)}.parent%=-1
                     objlist{(obj_lstcount%)}.rel%=insertrelflag%
-                    objlist{(obj_lstcount%)}.f%=movieframe%
+                    objlist{(obj_lstcount%)}.frame%=movieframe%
                     objlist{(obj_lstcount%)}.t%=inserttransparent%
 
                     insertfrmlast%=movieframe%
@@ -2219,7 +2219,7 @@
                     REM add remaining animation sprites to selected frames
                     REM calc difference between start frame and end frame and create a delta step variable for x and y to move animation
 
-                    framestart%=objlist{(obj_lstcur%)}.f%
+                    framestart%=objlist{(obj_lstcur%)}.frame%
                     frameskip%=insertskipcount%
                     C%=movieframe%-framestart%
                     IF C%<>0 THEN
@@ -2295,7 +2295,7 @@
 
                           objlist{(obj_lstcount%)}.x%=INT(XC+0.5)
                           objlist{(obj_lstcount%)}.y%=INT(YC+0.5)
-                          objlist{(obj_lstcount%)}.f%=framestart%
+                          objlist{(obj_lstcount%)}.frame%=framestart%
                           objlist{(obj_lstcount%)}.rel%=insertrelflag%
                           objlist{(obj_lstcount%)}.t%=inserttransparent%
                           frameskip%=insertskipcount%
@@ -2707,9 +2707,10 @@
 
       REM ##########################################################
       REM check keyboard
+      REM REPEAT:K%=INKEY(0):PRINTTAB(0,10)STR$(K%);"   ";:WAIT 5:UNTIL 0
       DEF PROCkeyboardhandler
       LOCAL done%,nf%,ctrl%,shift%,OWX%,OWY%,OMF%,SX%,SY%,first%,selectnew%,oldselect%
-      LOCAL newWX%,newWY%
+      LOCAL newWX%,newWY%,OS%,NS%
 
       shift%=INKEY(-1)
       ctrl%=INKEY(-2)
@@ -2745,6 +2746,7 @@
       ENDIF
 
       CASE menuext% OF
+
         WHEN M_canvasmode% : REM keyboard handler
 
           REM TEXT AT CURSOR HANDLER, IF MOUSE IS MOVED, NEW TEXT POS IS SET
@@ -3073,7 +3075,7 @@
                 IF obj_lstcount%>-1 THEN
                   FOR L%=0 TO obj_lstcount%
                     IF objlist{(L%)}.type%=1 OR objlist{(L%)}.type%=3 THEN
-                      IF objlist{(L%)}.f%=movieframe% OR objlist{(L%)}.f%=-1 THEN
+                      IF objlist{(L%)}.frame%=movieframe% OR objlist{(L%)}.frame%=-1 THEN
                         X%=objlist{(L%)}.x%
                         Y%=objlist{(L%)}.y%
                         IF objlist{(L%)}.type%=1 THEN
@@ -3404,6 +3406,63 @@
           IF K%=134 THEN
             PROCmenurestore
             PROCWAITNOKEY(-62,0)
+          ELSE
+
+            OS%=0 : NS%=0
+            REM detect scroll wheel
+            IF K%=141 THEN
+              CASE insertmode% OF
+                WHEN 0 : REM spr
+                  OS%=objsprscroll%
+                  IF objsprscroll%>0 objsprscroll%-=1
+                  NS%=objsprscroll%
+                  PRINTTAB(0,1)STR$(objsprscroll%);"  ";
+                WHEN 1 : REM spr set
+                  OS%=objaniscroll%
+                  IF objaniscroll%>0 objaniscroll%-=1
+                  NS%=objaniscroll%
+                WHEN 2 : REM lrg spr
+                  OS%=objlrgscroll%
+                  IF objlrgscroll%>0 objlrgscroll%-=1
+                  NS%=objlrgscroll%
+                WHEN 3 : REM frame
+                  OS%=objfrmscroll%
+                  IF objfrmscroll%>0 objfrmscroll%-=1
+                  NS%=objfrmscroll%
+                WHEN 4 : REM text
+                  OS%=objtxtscroll%
+                  IF objtxtscroll%>0 objtxtscroll%-=1
+                  NS%=objtxtscroll%
+
+              ENDCASE
+            ENDIF
+            IF K%=140 THEN
+              CASE insertmode% OF
+                WHEN 0 : REM spr
+                  OS%=objsprscroll%
+                  IF objsprscroll%<14 objsprscroll%+=1
+                  NS%=objsprscroll%
+                  PRINTTAB(0,1)STR$(objsprscroll%);"  ";
+                WHEN 1 : REM spr set
+                  OS%=objaniscroll%
+                  IF objaniscroll%<14 objaniscroll%+=1
+                  NS%=objaniscroll%
+                WHEN 2 : REM lrg spr
+                  OS%=objlrgscroll%
+                  IF objlrgscroll%<lrgset%-3 objlrgscroll%+=1
+                  NS%=objlrgscroll%
+                WHEN 3 : REM frame
+                  OS%=objfrmscroll%
+                  IF objfrmscroll%<(frame_max%-8) DIV 2 objfrmscroll%+=1
+                  NS%=objfrmscroll%
+                WHEN 4 : REM text
+                  OS%=objtxtscroll%
+                  IF objtxtscroll%<(obj_txtcur%-16) objtxtscroll%+=1
+                  NS%=objtxtscroll%
+
+              ENDCASE
+            ENDIF
+            IF OS%<>NS% PROCsubupdate(-1)
           ENDIF
 
         OTHERWISE
@@ -4952,7 +5011,7 @@
             ENDCASE
 
             F$="ALL"
-            IF objlist{(obj_lstcur%)}.f%>-1 F$=STR$(objlist{(obj_lstcur%)}.f%+1)
+            IF objlist{(obj_lstcur%)}.frame%>-1 F$=STR$(objlist{(obj_lstcur%)}.frame%+1)
 
             PROCgtext(" "+RIGHT$("0000"+STR$(obj_lstcur%+1),5)+" ",SX%+20,menuYadd%,10,8,-56)
             PROCgtext(T$,SX%+20,menuYadd%,14,0,0)
@@ -4986,7 +5045,7 @@
                 PROCgtext("FS:",SX%+20,menuYadd%,14,0,-48)
                 PROCgtext("PA:",SX%+20,menuYadd%,14,0,-96)
 
-                IF objlist{(obj_lstcur%)}.f%>-1 THEN
+                IF objlist{(obj_lstcur%)}.frame%>-1 THEN
                   F$="REPEAT"
                   COL%=14
                   IF objlist{(obj_lstcur%)}.u%=1 THEN
@@ -5095,6 +5154,7 @@
           PROCbuttoncontrol(2,"RESET OBJECTS",SX%+20,menuYadd%,0,11,0,0,-48,0)
           PROCbuttoncontrol(3,"RESET FRAMES ",SX%+20,menuYadd%,0,11,0,0,-48,0)
           PROCbuttoncontrol(4,"RESET MOVIE  ",SX%+20,menuYadd%,0,11,0,0,-96,0)
+          PROCbuttoncontrol(8,"OBJECT LIST  ",SX%+20,menuYadd%,0,11,0,0,-96,0)
           PROCbuttoncontrol(6,"CUSTOM PROC 1",SX%+20,menuYadd%,0,10,0,0,-48,0)
           PROCbuttoncontrol(7,"CUSTOM PROC 2",SX%+20,menuYadd%,0,10,0,0,-48,0)
 
@@ -5471,7 +5531,7 @@
                   SX%=controlrange{(C%)}.x1%
                   F%=0
                   F$="ALL"
-                  IF objlist{(obj_lstcur%)}.f%>-1 F$=STR$(objlist{(obj_lstcur%)}.f%+1)
+                  IF objlist{(obj_lstcur%)}.frame%>-1 F$=STR$(objlist{(obj_lstcur%)}.frame%+1)
                   PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-200,15,0,0)
                   OS%=LEN(F$)*32
                   REPEAT
@@ -5499,7 +5559,7 @@
                       PROCgtext(RIGHT$("     "+F$,6),SX%,SY%-200,15,0,0)
                     ENDIF
                   UNTIL K%=13 OR K%=27
-                  IF K%=13 objlist{(obj_lstcur%)}.f%=VAL(F$)-1
+                  IF K%=13 objlist{(obj_lstcur%)}.frame%=VAL(F$)-1
                   GCOL 0,0
                   LINE SX%+160-OS%,SY%-228,SX%+192-OS%,SY%-228
                 ELSE
@@ -5530,7 +5590,7 @@
                       objlist{(obj_lstcount%)}.type%=2
                       objlist{(obj_lstcount%)}.x%=frmlist{(L%)}.x% : REM objlist{(obj_lstcur%)}.x%
                       objlist{(obj_lstcount%)}.y%=frmlist{(L%)}.y% : REM objlist{(obj_lstcur%)}.y%
-                      objlist{(obj_lstcount%)}.f%=L%
+                      objlist{(obj_lstcount%)}.frame%=L%
                       objlist{(obj_lstcount%)}.parent%=objlist{(obj_lstcur%)}.parent%
                       objlist{(obj_lstcount%)}.c%=objlist{(obj_lstcur%)}.c%
                       objlist{(obj_lstcount%)}.t%=objlist{(obj_lstcur%)}.t%
@@ -5615,18 +5675,22 @@
               WHEN 1 : REM save
                 done%=1
               WHEN 2 : REM reset obj
+                IF FNmsgbox("RESET ALL OBJECT DATA?",""," YES "," NO ")=1 PROCresetmovie(1,0)
+                done%=1
 
               WHEN 3 : REM reset frm
                 IF FNmsgbox("RESET ALL MOVIE FRAME","DATA? "," YES "," NO ")=1 PROCresetmovie(0,1)
-
                 done%=1
 
               WHEN 4,5 : REM reset all, help screen
-                IF FNmsgbox("RESET ALL MOVIE DATA",""," YES "," NO ")=1 PROCresetmovie(1,1)
-
+                IF FNmsgbox("RESET ALL MOVIE DATA?",""," YES "," NO ")=1 PROCresetmovie(1,1)
                 done%=1
 
               WHEN 6,7 : REM custom procs
+                done%=1
+
+              WHEN 8 : REM show object list
+                PROCshowobjectlist
                 done%=1
 
             ENDCASE
@@ -5961,17 +6025,12 @@
                 done%=0
                 menuext%=M_moviemode%
                 PROCmenudraw
-
-
                 PROCmenurestore
 
               WHEN 4 : REM reset movie
                 done%=0
                 menuext%=M_moviemode%
                 REM PROCmenudraw
-
-
-
 
                 PROCmenurestore
 
@@ -5987,6 +6046,12 @@
               WHEN 7 : REM custom proc 2
                 menuext%=M_moviemode%
                 PROCCUSTOMPROC2
+                PROCmenurestore
+
+              WHEN 8 : REM object list
+                done%=0
+                menuext%=M_moviemode%
+                PROCmenudraw
                 PROCmenurestore
 
             ENDCASE
@@ -6013,7 +6078,7 @@
           objlist{(L%)}.type%=objlist{(L%+1)}.type%
           objlist{(L%)}.x%=objlist{(L%+1)}.x%
           objlist{(L%)}.y%=objlist{(L%+1)}.y%
-          objlist{(L%)}.f%=objlist{(L%+1)}.f%
+          objlist{(L%)}.frame%=objlist{(L%+1)}.frame%
           objlist{(L%)}.parent%=objlist{(L%+1)}.parent%
           objlist{(L%)}.rel%=objlist{(L%+1)}.rel%
           objlist{(L%)}.aux%=objlist{(L%+1)}.aux%
@@ -6172,11 +6237,11 @@
             WHEN 3 : REM toggle relative flag
               insertrelflag%=1-insertrelflag%
             WHEN 4 : REM decrement frame skip count
-              IF insertrepflag%=1 THEN
+              IF insertrepflag%=1  OR (insertmode%<>0 AND insertmode%<>4) THEN
                 IF insertskipcount%>0 insertskipcount%-=1
               ENDIF
             WHEN 5 : REM increment frame skip count
-              IF insertrepflag%=1 THEN
+              IF insertrepflag%=1 OR (insertmode%<>0 AND insertmode%<>4) THEN
                 IF insertskipcount%<12 insertskipcount%+=1
               ENDIF
             WHEN 6 : REM decrement repeat frames
@@ -6216,11 +6281,11 @@
             WHEN 16 : REM transparent flag
               inserttransparent%=1-inserttransparent%
             WHEN 17 : REM shape dec
-              IF insertrepflag%=1 THEN
+              IF insertrepflag%=1  OR (insertmode%<>0 AND insertmode%<>4)THEN
                 IF insertshape%>0 insertshape%-=1
               ENDIF
             WHEN 18 : REM shape inc
-              IF insertrepflag%=1 THEN
+              IF insertrepflag%=1  OR (insertmode%<>0 AND insertmode%<>4)THEN
                 IF insertshape%<1 insertshape%+=1
               ENDIF
             WHEN 19 : REM frame dec ++
@@ -6332,15 +6397,15 @@
 
         CASE insertmode% OF
           WHEN 0 : REM spr
-            t$=" Insert Sprite Options"
+            t$=" Insert Sprite"
           WHEN 1 : REM ani
-            t$=" Insert Animation Options"
+            t$=" Insert Animation"
           WHEN 2 : REM lrg
-            t$=" Insert Large Ani Options"
+            t$=" Insert Large Animation"
           WHEN 3 : REM frm
-            t$=" Insert Frame Options"
+            t$=" Insert Frame"
           WHEN 4 : REM text
-            t$=" Insert Text Options"
+            t$=" Insert Text"
           WHEN 5 : REM panned frames
             t$=" Insert Frames"
         ENDCASE
@@ -6531,8 +6596,8 @@
               IF canvasframe%=spritestartframe% C%=1
               X%=ABS(canvasframe%-spritestartframe%)
             ELSE
-              IF movieframe%=objlist{(obj_lstcur%)}.f% C%=1
-              X%=ABS(objlist{(obj_lstcur%)}.f%-movieframe%)
+              IF movieframe%=objlist{(obj_lstcur%)}.frame% C%=1
+              X%=ABS(objlist{(obj_lstcur%)}.frame%-movieframe%)
             ENDIF
 
           ENDIF
@@ -6707,7 +6772,7 @@
           ELSE
             IF insertrepeat%>0 AND insertphase%=1 THEN
               IF menuext%=M_moviemode% THEN
-                IF movieframe%=objlist{(obj_lstcount%)}.f% C%=1
+                IF movieframe%=objlist{(obj_lstcount%)}.frame% C%=1
 
                 A$=A$+"SX:"+STR$(objlist{(obj_lstcount%)}.x%)+" SY:"+STR$(objlist{(obj_lstcount%)}.y%)
                 A$=A$+"  EX:"+STR$(X%)+" EY:"+STR$(Y%)
@@ -6782,7 +6847,7 @@
             Y%=objlist{(L%)}.y%
             SP%=objlist{(L%)}.obj%
             TR%=objlist{(L%)}.t%
-            IF objlist{(L%)}.f%=-1 OR objlist{(L%)}.f%=movieframe% THEN
+            IF objlist{(L%)}.frame%=-1 OR objlist{(L%)}.frame%=movieframe% THEN
               B%=0
               CASE objlist{(L%)}.type% OF
                 WHEN 1 : REM sprite
@@ -6883,7 +6948,7 @@
             X%=objlist{(L%)}.x%
             Y%=objlist{(L%)}.y%
             SP%=objlist{(L%)}.obj%
-            IF objlist{(L%)}.f%=-1 OR objlist{(L%)}.f%=movieframe% THEN
+            IF objlist{(L%)}.frame%=-1 OR objlist{(L%)}.frame%=movieframe% THEN
 
               CASE objlist{(L%)}.type% OF
                 WHEN 1 : REM sprite
@@ -6980,6 +7045,91 @@
       ENDIF
 
       ENDPROC
+
+      REM ##########################################################
+      REM display list of movie mdoe objects
+      REM MODE 14 CHARS 160x64 (16x32) PIXELS 1280x1024 GUs 2560x2048
+
+      DEF PROCshowobjectlist
+      LOCAL I%,C%,LC%,SP%,SY%,K%,L%,shift%,scrl%,olds%,done%
+
+      MODE 14
+      PROCbuttoncontrol(0,"X",2528,2046,0,9,0,0,0,1)
+      PROCdrawscrollbar(1,2504,40,50,1920,7)
+
+      PROCgprint("OBJECT LIST",0,2046,10)
+      PROCgprint("COUNT | TYPE  | OBJID | FRAME | REL?  | XPOS  | YPOS  | ",0,2000,7)
+
+      scrl%=0
+      olds%=-1
+
+      REPEAT
+        shift%=INKEY(-1)
+        PROCREADMOUSE
+
+        IF MB%<>0 THEN
+          C%=-1
+          C%=FNgetcontrol
+
+          CASE C% OF
+            WHEN 0 : REM exit
+              done%=1
+
+            WHEN 1 : REM scrollbar
+              SP%=controlrange{(C%)}.y2%-MY%
+              SY%=controlrange{(C%)}.y2%-controlrange{(C%)}.y1%
+              L%=SY% / 2
+
+              IF SP%<64 THEN scrl%-=1
+              IF SP%>62 AND SP%<L% THEN scrl%-=48
+              IF SP%>L%-2 AND SP%<SY%-64 THEN scrl%+=48
+              IF SP%>SY%-62 THEN scrl%+=1
+
+              IF shift% PROCWAITMOUSE(0)
+          ENDCASE
+        ELSE
+          WAIT 2
+        ENDIF
+
+        REM detect scroll wheel
+        K%=INKEY(0)
+        IF K%=140 THEN
+          scrl%+=1
+        ENDIF
+        IF K%=141 THEN
+          scrl%-=1
+        ENDIF
+
+        IF scrl%<0 scrl%=0
+        IF scrl%>99951 scrl%=99951
+
+        IF scrl%<>olds% THEN
+          GCOL 0,4
+          RECTANGLE FILL 0,48,2000,1920
+          FOR I%=0 TO 47
+            LC%=8
+            IF objlist{(I%+scrl%)}.obj%>-1 LC%=15
+            REM obj%,type%,frame%,rel%,aux%,parent%,x%,y%,t%,m%,c%,u%
+            PROCgprint(RIGHT$("0000"+STR$(I%+scrl%+1),5),0,1960-I%*40,LC%)
+            PROCgprint(STR$(objlist{(I%+scrl%)}.type%),128,1960-I%*40,LC%)
+            PROCgprint(STR$(objlist{(I%+scrl%)}.obj%),256,1960-I%*40,LC%)
+            PROCgprint(STR$(objlist{(I%+scrl%)}.frame%),384,1960-I%*40,LC%)
+            PROCgprint(STR$(objlist{(I%+scrl%)}.rel%),512,1960-I%*40,LC%)
+            PROCgprint(STR$(objlist{(I%+scrl%)}.x%),640,1960-I%*40,LC%)
+            PROCgprint(STR$(objlist{(I%+scrl%)}.y%),768,1960-I%*40,LC%)
+
+            REM PRINTTAB(0,X%+1)"OBJ:";RIGHT$("0000"+STR$(X%+1),5);" TYPE:";STR$(objlist{(X%)}.obj%);
+          NEXT
+          olds%=scrl%
+          WAIT 2
+        ENDIF
+      UNTIL done%>0
+
+      PROCWAITMOUSE(0)
+      MODE 7
+
+      ENDPROC
+
 
       REM ##########################################################
       REM update sprite selection box
@@ -7667,7 +7817,7 @@
 
       REM ##########################################################
       REM UPDATE CLEARSCREEN OPTIONS
-      DEF PROCupdateCS
+      DEF PROCupdateclearscreen
       LOCAL I%
 
       PRINTTAB(5,5)"FORE  ";CHR$(234);SPC(17);CHR$(181);
@@ -7735,7 +7885,7 @@
       PRINTTAB(4,21)tr$;STRING$(29,"-")
       PRINTTAB(4,22)gg$;CHR$(157);tb$;" CUSTOM 1   ";CHR$(156);gg$;CHR$(157);tb$;" CUSTOM 2  ";CHR$(156)
 
-      PROCupdateCS
+      PROCupdateclearscreen
 
       done%=0
       col_old%=curcol%
@@ -7816,7 +7966,7 @@
 
           ENDCASE
           IF col_old%<>curcol% OR bak_old%<>bakcol% THEN
-            PROCupdateCS
+            PROCupdateclearscreen
             col_old%=curcol%
             bak_old%=bakcol%
 
@@ -9433,6 +9583,7 @@
                 INPUT#f%,sprani{(c%)}.s%(u%)
               NEXT
               INPUT#f%,sprani{(c%)}.c%
+              IF sprani{(c%)}.c%<0 sprani{(c%)}.c%=0
               IF EOF#f% EXIT FOR
             NEXT
           ENDIF
@@ -9520,7 +9671,7 @@
                 IF c%=12 THEN
                   objlist{(l%)}.obj%=VAL(a$(0))
                   objlist{(l%)}.type%=VAL(a$(1))
-                  objlist{(l%)}.f%=VAL(a$(2))
+                  objlist{(l%)}.frame%=VAL(a$(2))
                   objlist{(l%)}.rel%=VAL(a$(3))
                   objlist{(l%)}.aux%=VAL(a$(4))
                   objlist{(l%)}.parent%=VAL(a$(5))
@@ -10475,7 +10626,7 @@
             FOR I%=0 TO obj_lstcount%
               N$=STR$(objlist{(I%)}.obj%)+","
               N$+=STR$(objlist{(I%)}.type%)+","
-              N$+=STR$(objlist{(I%)}.f%)+","
+              N$+=STR$(objlist{(I%)}.frame%)+","
               N$+=STR$(objlist{(I%)}.rel%)+","
               N$+=STR$(objlist{(I%)}.aux%)+","
               N$+=STR$(objlist{(I%)}.parent%)+","
@@ -11739,7 +11890,7 @@
         IF o% THEN
           objlist{(S%)}.obj%=-1
           objlist{(S%)}.type%=0
-          objlist{(S%)}.f%=-1
+          objlist{(S%)}.frame%=-1
           objlist{(S%)}.rel%=0
           objlist{(S%)}.aux%=0
           objlist{(S%)}.parent%=-1
@@ -12293,13 +12444,11 @@
 
       FOR U%=0 TO 959
         C%=frame_buffer&(f%,U%)
-        IF C%>32 THEN
+        IF C%<>32 AND C%<>160 THEN
           IF (C%>128 AND C%<136) OR (C%>144 AND C%<152) LC%=C% MOD 8+8
-          IF LC%=8 LC%=15
           IF C%>160 THEN
             CX%=U% MOD 40
             CY%=U% DIV 40
-            IF CX%=0 LC%=15
             GCOL 0,LC%
             FOR Y%=0 TO 2
               FOR X%=0 TO 1
@@ -13158,7 +13307,7 @@
               objlist{(obj_lstcount%)}.type%=1
               objlist{(obj_lstcount%)}.x%=mmWX%+80
               objlist{(obj_lstcount%)}.y%=10-RND(85)
-              objlist{(obj_lstcount%)}.f%=MF%
+              objlist{(obj_lstcount%)}.frame%=MF%
 
               C%=15+RND(20)
 
@@ -13189,7 +13338,7 @@
                 objlist{(obj_lstcount%)}.type%=1
                 objlist{(obj_lstcount%)}.x%=INT(XC+0.5)
                 objlist{(obj_lstcount%)}.y%=INT(YC+0.5)
-                objlist{(obj_lstcount%)}.f%=MF%+F%
+                objlist{(obj_lstcount%)}.frame%=MF%+F%
 
                 XC+=deltax
                 YC+=deltay
